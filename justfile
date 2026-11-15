@@ -46,11 +46,22 @@ dev-open:
 dev-open:
     xdg-open http://localhost:{{CAST_DEV_PORT}} 2>/dev/null || echo "Open http://localhost:{{CAST_DEV_PORT}} in your browser"
 
-# Run lint, typecheck, and tests
+# Run Python/JavaScript quality gates, docs, asset verification and security audits
 check:
     just lint
     just typecheck
+    just check-collect
     just test
+    just check-javascript
+    just check-docs
+    just audit-dependencies
+    just audit-floors
+
+# Collect without dev-only packages, like tox; needs a warm uv cache or network.
+# If environment creation is blocked, report it and run the other local gates separately;
+# the dependency-compatibility tox environments remain the full test check.
+check-collect:
+    uv run --isolated --no-default-groups --group test --extra markdown pytest --collect-only -q
 
 # Run the full test suite with coverage enforcement (fail if <100%)
 test:
@@ -138,7 +149,7 @@ js-test-watch:
 js-coverage:
     cd javascript && npm run coverage
 
-# Type-check the TypeScript sources and tests (also enforced in CI)
+# Type-check the TypeScript sources and tests
 js-typecheck:
     cd javascript && npm run typecheck
 
@@ -151,7 +162,7 @@ js-build-vite:
     cd javascript && npm run build
     rm -f javascript/dist/manifest.json
     sh -c 'test -f javascript/dist/.vite/manifest.json && mv javascript/dist/.vite/manifest.json javascript/dist/manifest.json || true'
-    python -c "from pathlib import Path; p=Path('javascript/dist/manifest.json'); txt=p.read_text() if p.exists() else None; (p.write_text(txt.rstrip('\\n')+'\\n') if txt is not None else None)"
+    uv run python -c "from pathlib import Path; p=Path('javascript/dist/manifest.json'); txt=p.read_text() if p.exists() else None; (p.write_text(txt.rstrip('\\n')+'\\n') if txt is not None else None)"
     rm -rf javascript/dist/.vite
     rm -f src/cast/static/cast/vite/*
     cp javascript/dist/* src/cast/static/cast/vite/
@@ -196,3 +207,40 @@ compare-page PATH *ARGS:
 # Count lines of code in the repository (by language + by top-level folder)
 loc:
     uv run --prerelease allow --with "{{SLOPSCOPE_SPEC}}" --with rich slopscope .
+
+# The six dependency combinations previously exercised by Actions.
+check-compatibility:
+    uvx --from tox==4.61.2 --with tox-uv==1.36.0 tox p -p 2 -e py311-django52-wagtail70,py312-django60-wagtail7latest,py314-django61-wagtail80,py315-django61-wagtail80,py311-django52-wagtail81,py314-django61-wagtail81
+
+# Python 3.13 complements the 3.11/3.12/3.14/3.15 compatibility matrix.
+check-python:
+    uvx --from tox==4.61.2 --with tox-uv==1.36.0 tox -e py313-django61-wagtail81
+
+# Requires a local PostgreSQL service; configure CAST_TEST_DB_* as needed.
+check-postgres:
+    uvx --from tox==4.61.2 --with tox-uv==1.36.0 tox -e postgres,postgres-wagtail81
+
+check-javascript:
+    cd javascript && npm ci
+    just js-typecheck
+    just js-test
+    just js-build-all
+    git diff --exit-code -- src/cast/static/cast/vite src/cast/static/fluent_comments/js/ajaxcomments.js
+    cd javascript && npm audit --package-lock-only --include=dev
+
+check-docs:
+    rm -f docs/cast.api.rst docs/cast.migrations.rst docs/cast.rst docs/cast.templatetags.rst docs/modules.rst
+    uv run make -C docs clean
+    uv run make -C docs html
+
+# Audit each supported security boundary independently (Django branches conflict).
+audit-floors:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    requirement_file="$(mktemp "${TMPDIR:-/tmp}/django-cast-floor.XXXXXX")"
+    trap 'rm -f "$requirement_file"' EXIT
+    while IFS= read -r requirement; do
+        test -n "$requirement" || continue
+        printf '%s\n' "$requirement" > "$requirement_file"
+        uvx --from pip-audit==2.10.1 pip-audit --requirement "$requirement_file" --no-deps --disable-pip --strict
+    done < scripts/advisory-floors.txt

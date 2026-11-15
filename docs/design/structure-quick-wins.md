@@ -2,8 +2,13 @@
 
 Date: 2026-11-15
 
-Status: Design (concept only). Review of `develop` at commit `831a2929`; file and line references were re-checked
-against `f5863de9` (three commits later, CI still red there), measurements were not repeated. Nothing in this note is implemented;
+Status: S1 implemented on the parked implementation branch; external review and integration remain pending.
+S2–S8 remain planned. Owner overrides (2026-11-15): S1 uses soupsieve >=4.1 (requiring Python >=3.11.5),
+manual-only workflows and local checks instead of paid Actions, and branch parking without Claude invocation or merge.
+The measurements below describe the pre-implementation tree.
+
+Original design status: Review of `develop` at commit `831a2929`; file and line references were re-checked
+against `f5863de9` (three commits later, CI still red there), measurements were not repeated. The remaining slices are not implemented;
 the slices under "Implementation plan" are the work. This note does not replace
 [backlog/2026-09-15-architecture-review.md](../../backlog/2026-09-15-architecture-review.md): that review lists the
 structural findings (D1–D12, V1–V12, X1–X10, T1–T12) and stays the reference for the larger seams. This note asks a
@@ -299,8 +304,8 @@ Benefit: how much recurring cost or risk it removes. Effort: one slice of the st
   calls it before `just test`. It costs under ten seconds. It cannot see an import inside a function (collection only imports modules); for
   those a tox environment run stays the real check. `AGENTS.md:20` and `:54`, `docs/development.rst:608-610` and `:762` and the
   recipe comment at `justfile:49` list what `just check` runs and get the fourth step, together with the one exception: if `check-collect` fails only
-  because the isolated environment cannot be built (no uv cache, no network), the three other recipes plus the CI
-  tox jobs count, and the worker says so in the handoff.
+  because the isolated environment cannot be built (no uv cache, no network), the other local recipes plus the local
+  tox environments count, and the worker says so in the handoff.
 - `pyproject.toml`: add a dependency group `test` with what a test run needs (`pytest`, `pytest-django`,
   `pytest-mock`, `pytest-randomly`, `pytest-cov`, `pytz`, `factory_boy`, `feedparser`, and `django-stubs-ext`,
   which `tests/settings.py:5` imports and which today arrives only as a transitive dependency) and make `dev` include it
@@ -310,21 +315,14 @@ Benefit: how much recurring cost or risk it removes. Effort: one slice of the st
   `dependency_groups`. Sections derived from `[testenv]` inherit the key: `postgres` and `fast` should (they run tests);
   `[testenv:migrations-{oldest,latest}]` keeps it too (it runs only `manage.py migrate`, but that imports
   `tests.settings`); `[testenv:cleanup]` and `[testenv:pre-commit]` get an explicit empty `dependency_groups =`.
-- Raise the `soupsieve` floor to `>=4.0.0` in `pyproject.toml:58` and `workflow.yml:222`, and add a soupsieve case
-  to `test_security_release_boundaries` in `tests/dependency_policy_test.py:34` (it has none today). 4.0.0 because
-  one of the four advisories is fixed only there; a smaller floor would leave the audit red. First check that the
-  oldest supported branch (`py311-django52-wagtail70`) still resolves and passes. If another worker has already
-  raised the floor, drop this part.
-- `AGENTS.md`, under "Commit & Pull Request Guidelines": after pushing to `develop`, check the CI run of the pushed
-  commit; a red run is the pusher's to fix or to revert. The rule spells out the non-interactive commands: get
-  the run with `gh run list --branch develop --event push --commit <sha> --json databaseId -q '.[0].databaseId'`,
-  wait with `gh run watch <id> --exit-status`. The workflow cancels a running run when the next push arrives
-  (`workflow.yml:9-11`, `cancel-in-progress: true`); for a cancelled run, the first completed push run on `develop`
-  that contains the commit counts. The weekly `schedule` run does not count: it runs the audit jobs only. Two
-  practical cases are part of the rule: a worker without `gh` access or network writes "CI check pending for
-  <sha>" into the handoff, and whoever integrates or picks up next confirms it; a job that is red for a reason
-  outside the repository (for example the Codecov upload, `workflow.yml:121-130`) is re-run once
-  (`gh run rerun <id> --failed`) and, if still red, named in the handoff instead of blocking the slice.
+- Raise the `soupsieve` floor to `>=4.1` in `pyproject.toml` and audit exactly 4.1 via `scripts/advisory-floors.txt` locally and in the manual workflow, with
+  boundary and audit-alignment tests in `tests/dependency_policy_test.py`. This supersedes the original 4.0.0
+  proposal at the owner's request. Soup Sieve 4.1 requires Python >=3.11.5, so align `requires-python` too.
+  Check that the oldest supported branch (`py311-django52-wagtail70`) still resolves and passes.
+- `AGENTS.md`, under "Commit & Pull Request Guidelines": qualify changes locally before pushing. The owner
+  prohibits waiting for or re-running paid Actions. Run `just check` and the relevant tox environments;
+  explicitly hand off sandbox-blocked PostgreSQL/browser checks. S1 is parked for external cross-family review
+  and integration; no Claude invocation or merge is part of this worker's scope.
 - Release-notes entry for the raised floor in `docs/releases/0.2.68.rst`. Until S3 has removed `unreleased.rst`,
   every slice writes its entries to `0.2.68.rst`, the file the rule in `AGENTS.md:58` names for an untagged
   version.
@@ -478,20 +476,16 @@ Benefit: how much recurring cost or risk it removes. Effort: one slice of the st
 - **S1, `dependency_groups` in tox.** If the pinned tox/tox-uv pair resolves the group differently from the old
   list (for example pulls `pytest-cov` into environments that did not have it), an environment could fail for a new
   reason, and derived sections inherit the key (see S1). Mitigation: run two matrix environments locally
-  (`py311-django52-wagtail70`, `py314-django61-wagtail81`) before pushing and watch the `postgres-locks` jobs; fall back to keeping `deps` and adding a test that compares the two lists.
+  (`py311-django52-wagtail70`, `py314-django61-wagtail81`) before pushing, plus `just check-postgres` where a local PostgreSQL service is available; report any blocker.
 - **S1, the collect guard needs to build an environment.** `uv run --isolated` needs a warm uv cache or network
   access, like `uv sync`. In a sandbox with neither, `just check` would fail for a reason unrelated to the code;
-  there the three other recipes (`just lint`, `just typecheck`, `just test`) are run one by one and the CI tox
-  jobs are the guard. `AGENTS.md`, the comment above the recipe in the `justfile` and the paragraph in
+  there the other local recipes are run one by one and the local tox
+  environments are the guard. `AGENTS.md`, the comment above the recipe in the `justfile` and the paragraph in
   `docs/development.rst` say so; the recipe itself does not try to tell the two kinds of failure apart.
-- **S1, "CI green" with several pushers.** Runs are cancelled by the next push and the newest run on the branch may
-  be someone else's; the rule therefore names the commit, not "the latest run" (see S1).
-- **S1, "CI green" costs a wait and needs access.** About five minutes per push, and `gh` with network. Without
-  access the check is handed over explicitly rather than skipped silently (see S1). The risk that remains is a
-  pending check nobody picks up; the handoff line makes it visible.
-- **S1, soupsieve 4 on the oldest branch.** `beautifulsoup4` has no upper bound on soupsieve, but Wagtail 7.0 could.
-  The tox run for `wagtail70` decides; if it fails, set the floor to the highest version that branch accepts and
-  record the remaining advisory with a dated ignore in the audit step.
+- **S1, local qualification cannot attest hosted CI.** The owner prohibits relying on paid Actions.
+  Run the CI-equivalent checks locally, report any environment blockers, and park S1 for external review.
+- **S1, soupsieve 4.1 on the oldest branch.** `beautifulsoup4` has no upper bound on soupsieve. The oldest
+  tox run checks Wagtail 7.0 compatibility; keep the requested >=4.1 floor and report any incompatibility.
 - **S2, stale worker databases.** Without the conftest change a model or migration edit leaves the reused worker
   databases on the old schema and the next parallel run fails with missing columns. The change is part of the
   slice and has its own acceptance check.
@@ -525,15 +519,22 @@ Benefit: how much recurring cost or risk it removes. Effort: one slice of the st
 
 ## Test and qualification plan
 
-Every slice: `just check` passes (lint, mypy, tests at 100 % coverage), and the CI run for the pushed commit on
-`develop` is green, checked as S1 defines it (the run of that commit, or after a cancellation the first completed
-push run that contains it); a slice is not done before that run has finished.
+Owner override (2026-11-15), implemented by S1: all workflows use only
+`on: workflow_dispatch`. Historical CI-green requirements in later slices are
+superseded by local qualification. `just check` includes JavaScript checks,
+asset build comparison, docs and security audits; `just check-compatibility`
+runs the six former dependency jobs, `just check-python` the additional Python
+versions, and `just check-postgres` both database environments. No Actions waits.
+S1 is parked, without merge, for external review.
+
+Every slice: `just check` passes (lint, mypy, isolated collection, tests at 100 % coverage). Run the relevant
+CI-equivalent checks locally before pushing and explicitly report sandbox-blocked checks; do not wait for or
+re-run paid Actions. S1 is parked for external review and integration.
 
 Additional checks per slice:
 
 - S1: `uvx --from tox==4.61.2 --with tox-uv==1.36.0 tox -e py311-django52-wagtail70,py314-django61-wagtail81`
-  locally, plus `tox -e postgres` where a local PostgreSQL is available (otherwise the `postgres-locks` CI jobs are
-  the check); `just check-collect` fails on the tree before the import fix and passes after it; on CI all six `dependency-compatibility` jobs and `dependency-audit-advisory-floors` are green.
+  locally, plus `tox -e postgres` where a local PostgreSQL is available (otherwise hand off both PostgreSQL environments as blocked); `just check-collect` fails on the tree before the import fix and passes after it; run the six `dependency-compatibility` environments and the advisory-floor audit locally.
   `CAST_RUN_BROWSER=1 uv run pytest tests/comment_browser_test.py` still runs the browser journey where Playwright
   and Chromium are installed.
 - S2: three consecutive `just test` runs pass with 100 % coverage and each finishes in under 75 s on the
@@ -577,7 +578,7 @@ it shortens all the others.
 
 | Slice | Content | Time | Files touched | Acceptance criteria |
 | --- | --- | --- | --- | --- |
-| S1 | Green trunk, one test dependency list, collect guard, CI-green rule | 60 min | `tests/comment_browser_test.py`, `pyproject.toml`, `tox.ini`, `justfile`, `docs/development.rst`, `.github/workflows/workflow.yml`, `tests/dependency_policy_test.py`, `AGENTS.md`, release notes | CI run on `develop` fully green; two tox environments pass locally; `tox.ini` has no hand-listed test packages and `dev` names none of the `test` packages; `just check-collect` fails when the unconditional import is restored |
+| S1 | Local gates, one test dependency list, collect guard, manual workflows | 60 min | `tests/comment_browser_test.py`, `pyproject.toml`, `tox.ini`, `justfile`, `docs/development.rst`, `.github/workflows/workflow.yml`, `tests/dependency_policy_test.py`, `AGENTS.md`, release notes | Local quality/audit checks and compatibility tox environments pass; sandbox blockers are handed off; `tox.ini` has no hand-listed test packages and `dev` names none of the `test` packages; `just check-collect` fails when the unconditional import is restored |
 | S2 | Parallel tests by default | 75 min | `pyproject.toml`, `justfile`, `tests/conftest.py`, `.github/workflows/workflow.yml`, `.gitignore`, `docs/development.rst`, `AGENTS.md` | `just test` three times green at 100 % in under 75 s each; green across a throwaway schema change and back (migration-churn test deselected); `just test-serial` green; no untracked database files; CI green |
 | S3 | One release-notes file, upgrade actions first | 90 min | `docs/releases/0.2.68.rst`, `docs/releases/unreleased.rst` (deleted), `docs/releases/index.rst`, `tests/docs_paths_test.py` or a sibling, `AGENTS.md`, `docs/release.rst` | No entry lost (script); five sections; `AGENTS.md` and `docs/release.rst` name the sections; guard test for a stray `unreleased.rst`; docs build |
 | S4 | Single version source | 40 min | `src/cast/__init__.py`, `docs/conf.py`, `docs/release.rst`, one test, release notes | Release-notes entry present; version literal in no `.py` file and in `pyproject.toml` only once; wheel, `cast.__version__` and docs agree |

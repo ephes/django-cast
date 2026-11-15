@@ -1,6 +1,19 @@
 0.2.68 (unreleased)
 -------------------
 
+- Make every GitHub Actions workflow manual-only. Local ``just check`` now also
+  covers JavaScript checks/build/audit, docs and dependency audits; use
+  ``just check-compatibility``, ``just check-python`` and ``just check-postgres``
+  for the former CI matrices. No automatic Actions runs are required.
+- Fix test collection without Playwright: the opt-in comment browser journey
+  now skips when its dev-only dependency is absent. Declare test dependencies
+  once in a shared dependency group used by development and tox, and add
+  ``just check-collect`` to ``just check`` to catch dev-only imports locally.
+- Raise the runtime and audited ``soupsieve`` floor to 4.1, including the
+  CVE-2026-126190 fixes. Refresh consumer lockfiles that retain earlier versions.
+  Python 3.11 now requires at least 3.11.5, as required by Soup Sieve 4.1;
+  Python 3.12 and later remain supported.
+
 - Post detail pages build ``root_nav_links`` from the root page of the
   current site, like blog index pages, feeds and cached blog data. They used
   the children of the page tree root instead. On the usual tree, where the

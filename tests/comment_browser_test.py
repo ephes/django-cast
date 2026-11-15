@@ -4,9 +4,12 @@ import os
 from pathlib import Path
 
 import pytest
-from playwright.sync_api import expect, sync_playwright
 
 from tests.comment_author_edits_test import seed_ownership
+
+playwright_api = pytest.importorskip("playwright.sync_api", reason="Playwright is an optional dev-only dependency")
+expect = playwright_api.expect
+sync_playwright = playwright_api.sync_playwright
 
 
 @pytest.mark.django_db(transaction=True)

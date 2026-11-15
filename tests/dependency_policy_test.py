@@ -1,10 +1,12 @@
 """Check installer-facing security constraints at supported release boundaries."""
 
+import configparser
 import tomllib
 from pathlib import Path
 
 import pytest
 from packaging.requirements import Requirement
+from packaging.utils import canonicalize_name
 
 
 @pytest.mark.parametrize(
@@ -26,6 +28,11 @@ from packaging.requirements import Requirement
         ("pillow", "12.3.0", False),  # 39 advisories in the floor audit, fixed in 13.0.0.
         ("pillow", "13.0.0", True),
         ("pillow", "13.1.0", True),
+        ("soupsieve", "2.9.0", False),
+        ("soupsieve", "4.0.0", False),
+        ("soupsieve", "4.0.1", False),
+        ("soupsieve", "4.1", True),  # Security floor including CVE-2026-126190 fixes.
+        ("soupsieve", "4.1.1", True),
         ("urllib3", "2.7.0", False),
         ("urllib3", "2.8.0", True),
         ("urllib3", "2.9.0", True),
@@ -56,12 +63,12 @@ def test_vitest_security_floor_and_peer_alignment():
             assert package["version"] == version
 
 
-def test_full_javascript_audit_runs_independently_on_push_and_schedule():
+def test_full_javascript_audit_is_available_manually():
     import shlex
 
     workflow = (Path(__file__).resolve().parents[1] / ".github/workflows/workflow.yml").read_text()
     triggers = workflow.split("jobs:", 1)[0]
-    assert "\n  push:\n" in triggers and "\n  schedule:\n" in triggers
+    assert "\non: workflow_dispatch\n" in triggers
     assert "\npermissions:\n  contents: read\n" in triggers
     job = workflow.split("  javascript-audit:\n", 1)[1].split("\n  javascript:\n", 1)[0]
     job_lines = job.splitlines()
@@ -71,3 +78,46 @@ def test_full_javascript_audit_runs_independently_on_push_and_schedule():
     assert "working-directory: javascript" in job
     assert "--package-lock-only" in args and "--include=dev" in args
     assert not any(arg.startswith(("--omit", "--audit-level", "--production")) for arg in args)
+
+
+def test_test_dependencies_have_one_source():
+    root = Path(__file__).resolve().parents[1]
+    groups = tomllib.loads((root / "pyproject.toml").read_text())["dependency-groups"]
+    test_packages = {canonicalize_name(Requirement(dependency).name) for dependency in groups["test"]}
+    assert {"include-group": "test"} in groups["dev"]
+    assert "playwright" not in test_packages
+    assert all(
+        canonicalize_name(Requirement(dependency).name) not in test_packages
+        for dependency in groups["dev"]
+        if isinstance(dependency, str)
+    )
+    tox = configparser.ConfigParser(interpolation=None)
+    tox.read(root / "tox.ini")
+    assert tox["testenv"]["dependency_groups"].strip() == "test"
+    assert not any(
+        canonicalize_name(Requirement(dependency).name) in test_packages
+        for dependency in tox["testenv"]["deps"].splitlines()
+        if dependency and ":" not in dependency
+    )
+    for environment in ("cleanup", "pre-commit"):
+        assert not tox[f"testenv:{environment}"]["dependency_groups"].strip()
+
+
+def test_soupsieve_audit_checks_the_declared_floor():
+    root = Path(__file__).resolve().parents[1]
+    metadata = tomllib.loads((root / "pyproject.toml").read_text())
+    requirement = next(
+        Requirement(dependency)
+        for dependency in metadata["project"]["dependencies"]
+        if Requirement(dependency).name == "soupsieve"
+    )
+    floor = next(specifier.version for specifier in requirement.specifier if specifier.operator == ">=")
+    floors = (root / "scripts/advisory-floors.txt").read_text().splitlines()
+    assert f"soupsieve=={floor}" in floors
+
+
+def test_all_workflows_are_manual_only():
+    root = Path(__file__).resolve().parents[1]
+    for path in (root / ".github/workflows").glob("*.y*ml"):
+        workflow = path.read_text()
+        assert workflow.split("\non:", 1)[1].split("\n", 1)[0] == " workflow_dispatch", path

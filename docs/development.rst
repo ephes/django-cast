@@ -20,7 +20,7 @@ Prerequisites
 
 Before you begin, ensure you have the following installed:
 
-- Python 3.11 or higher
+- Python 3.11.5 or higher
 - Node.js 20.19 or higher (or Node.js 22.12 or higher)
 - `uv <https://github.com/astral-sh/uv>`_ for Python package management
 - `just <https://github.com/casey/just>`_ command runner
@@ -55,7 +55,7 @@ The install command will:
 
 - Create a virtual environment if one doesn't exist
 - Install django-cast in editable mode
-- Install all development dependencies
+- Install all development dependencies, including the shared ``test`` dependency group
 
 The repository intentionally does not track ``uv.lock`` because its test matrix
 resolves several supported Django and Wagtail branches. After ``uv sync``, audit
@@ -601,14 +601,47 @@ these opt-in tox environments require a running PostgreSQL server.
 Code Quality
 ============
 
-Run all quality checks (linting, type checking, and tests) in one command:
+Run all quality checks (linting, type checking, isolated collection, and tests) in one command:
 
 .. code-block:: bash
 
    $ just check
 
-This runs ``just lint``, ``just typecheck``, and ``just test`` in sequence,
-stopping on first failure.
+This runs ``just lint``, ``just typecheck``, ``just check-collect``, and ``just test``
+followed by JavaScript type checks, tests, build verification and audit, a docs
+build, and runtime/advisory-floor dependency audits, stopping on first failure.
+``just check-collect`` uses an isolated
+environment with only the ``test`` dependency group and the ``markdown`` extra,
+without changing the development ``.venv``. This catches unconditional imports
+of dev-only packages during collection, like the compatibility tox jobs. It does
+not exercise imports inside test functions; run tox for that coverage.
+
+GitHub Actions workflows are manual-only (``workflow_dispatch``); pushes and pull
+requests do not run CI. Qualify locally. In addition to ``just check``, run:
+
+.. code-block:: bash
+
+   $ just check-compatibility  # six former dependency-compatibility combinations
+   $ just check-python         # Python 3.13; other versions covered above
+   $ just check-postgres       # both locking suites; needs local PostgreSQL
+
+The matrix recipes use isolated tox environments and require the corresponding
+Python interpreters (3.11 through 3.15). ``just check`` also needs Node.js, npm,
+and ffmpeg. Advisory floors live in ``scripts/advisory-floors.txt``, shared by the
+local audit and the manual workflow. Report unavailable services explicitly;
+do not substitute hosted Actions for blocked local checks.
+
+Test dependencies are declared once in ``pyproject.toml``'s ``test`` group.
+The ``dev`` group includes it and tox installs it via ``dependency_groups``.
+Playwright remains dev-only; the optional comment browser journey skips cleanly
+when it is absent. To run it with Playwright and Chromium installed, use
+``CAST_RUN_BROWSER=1 uv run pytest tests/comment_browser_test.py``.
+
+The isolated collect check needs a warm uv cache or network access. If only
+creating that environment is blocked, run the remaining ``just check`` recipes
+separately, report that limitation, and have the integrator run
+the dependency-compatibility tox environments. Qualify locally before pushing;
+do not wait for or re-run paid GitHub Actions.
 
 Linting and Formatting
 ----------------------
@@ -759,9 +792,9 @@ Making Changes
 1. Create a feature branch from ``develop``
 2. Make your changes
 3. Add tests for new functionality
-4. Run ``just check`` (linting, type checking, and tests in one command)
+4. Run ``just check`` (linting, type checking, isolated collection, and tests in one command)
 5. Update documentation
-6. Create a pull request to ``develop``
+6. Hand off the parked branch for external review and integration into ``develop``
 
 Pull Request Guidelines
 -----------------------
