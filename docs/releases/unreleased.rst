@@ -1,6 +1,55 @@
 Unreleased
 ==========
 
+- Transcript editing (integration of the admin UX work): the episode Transcript
+  panel shows "Name the voices"/"Edit transcript and speakers" and "Preview" as
+  buttons and keeps "Generate again…" and "Upload replacement files" in a
+  collapsed section; the replacement link opens the editor's Files section,
+  which also opens on upload errors. New episodes copy the hosts of the most
+  recent episode that has hosts. Preview rows are compact with a sticky player
+  and an editing hint; corrections fold whitespace so all formats agree, and
+  errors read as plain sentences. The empty speaker choice reads "No name yet",
+  the restore button shows a formatted date, and the regeneration confirmation
+  says the current version can be restored. Search indexing no longer fails on
+  transcripts with ambiguous timestamps, and a transcript whose stored file is
+  missing can still be replaced or regenerated.
+
+- Simplify transcript editing sections and wording; allow voice samples from
+  approved contributor mappings and detach stale generation suggestions on upload.
+
+- Add paginated admin transcript preview, per-passage speaker changes and inline
+  plain-text corrections with keyboard save/cancel and consistent output formats.
+
+- Explain transcript uploads, reject empty uploads, identify misplaced formats,
+  and link duplicate audios to their existing transcripts.
+
+- Prefill previous episode hosts, synchronize contributor slugs, and configure
+  guest/host ordering per podcast (guests first by default). Apply migrations
+  0092–0094 (help texts, podcast contributor order, private previous transcript
+  version).
+
+- Keep one private previous transcript version before generation or replacement
+  upload, including text corrections and mappings, and allow swapping it back.
+
+- Show speaker detection and missing voice samples before generation, refresh
+  active admin status with bounded polling, and retain failed resubmission
+  messages instead of showing an earlier success. Add an audio-change-protected
+  status endpoint.
+
+- Paginate segment decisions in groups of 50, with Needs a decision and All
+  passages filters. Partial saves preserve other pages and omitted decisions,
+  preventing TooManyFieldsSent on long transcripts.
+
+- Name transcript editors and file save messages after the episode, link back
+  to episodes, and keep file saves on the editor. Transcript lists search episode
+  titles and show file availability and voice mapping counts.
+
+- Add a Transcript panel to saved episodes and move the open Contributors panel
+  directly after Podcast audio. Upload links preselect the saved audio.
+
+- Require confirmation before regenerating an existing transcript in the admin;
+  leave stale speaker choices empty until explicitly reviewed again.
+
 - Bound editorial transcript evidence hashing to 10 MiB per artifact and 30 MiB
   total, with bounded reads and an editorial error before signing partial
   evidence. Saving transcripts and public speaker-mapping checks still hash the

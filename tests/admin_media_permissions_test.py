@@ -6,6 +6,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.exceptions import PermissionDenied
 from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import RequestFactory
 from django.urls import reverse
 from wagtail.models import Collection, GroupCollectionPermission
@@ -220,7 +221,9 @@ def test_transcript_admin_accepts_allowed_audio_post(client, transcript_admin_ac
         transcript = Transcript.objects.create(audio=original_audio, collection=allowed_audio.collection)
     url = reverse(f"cast-transcript:{view_name}", args=(transcript.pk,) if transcript else ())
     prefix = "media-chooser-upload-" if view_name == "chooser_upload" else ""
-    response = client.post(url, {f"{prefix}audio": allowed_audio.pk})
+    response = client.post(
+        url, {f"{prefix}audio": allowed_audio.pk, f"{prefix}vtt": SimpleUploadedFile("t.vtt", b"WEBVTT\n")}
+    )
     assert response.status_code == (200 if view_name == "chooser_upload" else 302)
     saved = Transcript.objects.get(audio=allowed_audio)
     assert saved.collection_id == allowed_audio.collection_id
@@ -296,7 +299,11 @@ def test_transcript_form_allows_inherited_audio_choose_permission(transcript_adm
     child = allowed_audio.collection.add_child(instance=Collection(name="Allowed child"))
     allowed_audio.collection = child
     allowed_audio.save(duration=False, cache_file_sizes=False)
-    form = TranscriptForm({"audio": allowed_audio.pk, "collection": child.pk}, user=user)
+    form = TranscriptForm(
+        {"audio": allowed_audio.pk, "collection": child.pk},
+        {"vtt": SimpleUploadedFile("t.vtt", b"WEBVTT\n")},
+        user=user,
+    )
     assert form.is_valid(), form.errors
 
 
@@ -329,7 +336,14 @@ def test_existing_cross_collection_transcript_can_be_managed_with_audio_access(
     response = client.get(edit_url)
     assert response.status_code == 200
     assert response.context["transcript"].pk == transcript.pk
-    response = client.post(edit_url, {"audio": forbidden_audio.pk, "collection": allowed_audio.collection_id})
+    response = client.post(
+        edit_url,
+        {
+            "audio": forbidden_audio.pk,
+            "collection": allowed_audio.collection_id,
+            "vtt": SimpleUploadedFile("t.vtt", b"WEBVTT\n"),
+        },
+    )
     assert response.status_code == 302
     transcript.refresh_from_db()
     assert transcript.audio_id == forbidden_audio.pk

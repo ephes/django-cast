@@ -144,3 +144,230 @@ msgstr "Bildunterschrift"
 #: src/cast/blocks.py
 msgid "Optional plain text, up to 250 characters. No formatting or links."
 msgstr "Optionaler Klartext, bis zu 250 Zeichen. Keine Formatierung oder Links."
+
+msgid "Generate transcript again"
+msgstr "Transkript erneut erzeugen"
+
+msgid "Confirm replacement of the existing transcript first."
+msgstr "Bestätige zuerst das Ersetzen des vorhandenen Transkripts."
+
+msgid "This replaces the transcript files, speaker decisions and manual text corrections. The current version is kept: you can restore it on the transcript page."
+msgstr "Dies ersetzt die Transkriptdateien, Sprecherentscheidungen und manuellen Textkorrekturen. Die aktuelle Fassung bleibt erhalten: Du kannst sie auf der Transkriptseite wiederherstellen."
+
+msgid "Passage decisions: %(count)s."
+msgstr "Entscheidungen zu Passagen: %(count)s."
+
+msgid "Spelling corrections:"
+msgstr "Schreibkorrekturen:"
+
+msgid "No named voices"
+msgstr "Keine benannten Stimmen"
+
+msgid "Live: speaker names disappear from the public transcript until you name the voices again."
+msgstr "Veröffentlicht: Sprechernamen verschwinden aus dem öffentlichen Transkript, bis du die Stimmen erneut benennst."
+
+msgid "Draft"
+msgstr "Entwurf"
+
+msgid "Replace and generate transcript"
+msgstr "Transkript ersetzen und erzeugen"
+
+msgid "Before the transcript changed: %(name)s. Listen to the samples and choose again."
+msgstr "Vor der Änderung des Transkripts: %(name)s. Höre die Beispiele an und wähle erneut."
+
+msgid "Hosts and guests of this episode. Speaker names in the transcript can only be chosen from this list."
+msgstr "Hosts und Gäste dieser Episode. Sprechernamen im Transkript können nur aus dieser Liste gewählt werden."
+
+msgid "Choose the podcast audio and save first."
+msgstr "Wähle das Podcast-Audio und speichere zuerst."
+
+msgid "%(named)s of %(total)s voices named"
+msgstr "%(named)s von %(total)s Stimmen benannt"
+
+msgid "Edit transcript and speakers"
+msgstr "Transkript und Sprecher bearbeiten"
+
+msgid "Upload transcript files"
+msgstr "Transkriptdateien hochladen"
+
+msgid "Generate again…"
+msgstr "Erneut erzeugen…"
+
+msgid "Try again"
+msgstr "Erneut versuchen"
+
+msgid "New transcript"
+msgstr "Neues Transkript"
+
+msgid "Transcript: %(title)s"
+msgstr "Transkript: %(title)s"
+
+msgid "Episode: %(title)s"
+msgstr "Episode: %(title)s"
+
+msgid "Transcript: {0} updated."
+msgstr "Transkript: {0} aktualisiert."
+
+msgid "Transcript: {0} added."
+msgstr "Transkript: {0} hinzugefügt."
+
+msgid "Transcript: {0} could not be saved due to errors."
+msgstr "Transkript: {0} konnte wegen Fehlern nicht gespeichert werden."
+
+msgid "Episode"
+msgstr "Episode"
+
+msgid "Audio"
+msgstr "Audio"
+
+msgid "Files"
+msgstr "Dateien"
+
+msgid "Voices named"
+msgstr "Benannte Stimmen"
+
+msgid "Player"
+msgstr "Player"
+
+msgid "Transcripts"
+msgstr "Transkripte"
+
+msgid "As suggested"
+msgstr "Wie vorgeschlagen"
+
+msgid "No name"
+msgstr "Kein Name"
+
+msgid "Passages to check"
+msgstr "Zu prüfende Passagen"
+
+msgid "Show passages"
+msgstr "Passagen anzeigen"
+
+msgid "Needs a decision"
+msgstr "Entscheidung erforderlich"
+
+msgid "All passages"
+msgstr "Alle Passagen"
+
+msgid "Passage pages"
+msgstr "Passagenseiten"
+
+msgid "Page %(number)s of %(total)s"
+msgstr "Seite %(number)s von %(total)s"
+
+msgid "Speaker detection: on"
+msgstr "Sprechererkennung: an"
+
+msgid "Speaker detection: off"
+msgstr "Sprechererkennung: aus"
+
+msgid "inherited setting"
+msgstr "geerbte Einstellung"
+
+msgid "audio setting"
+msgstr "Audio-Einstellung"
+
+msgid "Change speaker detection"
+msgstr "Sprechererkennung ändern"
+
+msgid "Voice recognition is off. Voices must be named by hand."
+msgstr "Stimmerkennung ist aus. Stimmen müssen von Hand benannt werden."
+
+msgid "Voice samples to send: %(count)s of %(total)s contributors."
+msgstr "Zu sendende Sprachproben: %(count)s von %(total)s Mitwirkenden."
+
+msgid "No voice sample will be sent for:"
+msgstr "Keine Sprachprobe wird gesendet für:"
+
+msgid "These voices must be named by hand."
+msgstr "Diese Stimmen müssen von Hand benannt werden."
+
+msgid "Name the voices"
+msgstr "Stimmen benennen"
+
+msgid "Status could not be refreshed. Reload the page."
+msgstr "Der Status konnte nicht aktualisiert werden. Lade die Seite neu."
+
+msgid "Transcript generation is queued."
+msgstr "Die Transkripterzeugung ist eingereiht."
+
+msgid "Transcript generation is running."
+msgstr "Das Transkript wird erzeugt."
+
+msgid "Transcript generation completed."
+msgstr "Das Transkript wurde erzeugt."
+
+msgid "Transcript generation failed."
+msgstr "Die Transkripterzeugung ist fehlgeschlagen."
+
+msgid "Transcript generation was interrupted. Generate the transcript again."
+msgstr "Die Transkripterzeugung wurde unterbrochen. Erzeuge das Transkript erneut."
+
+msgid "Interrupted"
+msgstr "Unterbrochen"
+
+msgid "Generate again or replace files"
+msgstr "Erneut erzeugen oder Dateien ersetzen"
+
+msgid "Replace files"
+msgstr "Dateien ersetzen"
+
+msgid "Upload replacement files"
+msgstr "Ersatzdateien hochladen"
+
+msgid "No name yet"
+msgstr "Noch kein Name"
+
+msgid "Click a passage to correct its text. Enter saves, Escape cancels. Click a time to listen."
+msgstr "Klicke auf eine Passage, um ihren Text zu korrigieren. Enter speichert, Escape bricht ab. Klicke auf eine Zeit, um reinzuhören."
+
+msgid "Click to correct the text"
+msgstr "Klicken, um den Text zu korrigieren"
+
+msgid "Play from %(time)s"
+msgstr "Ab %(time)s abspielen"
+
+msgid "Passage text"
+msgstr "Text der Passage"
+
+msgid "Save text"
+msgstr "Text speichern"
+
+msgid "Saving…"
+msgstr "Speichere …"
+
+msgid "Saved"
+msgstr "Gespeichert"
+
+msgid "Could not save. Try again."
+msgstr "Speichern fehlgeschlagen. Versuche es noch einmal."
+
+msgid "Reload the transcript; it changed while you were editing."
+msgstr "Lade das Transkript neu; es wurde während deiner Bearbeitung geändert."
+
+msgid "Reload the transcript and try again."
+msgstr "Lade das Transkript neu und versuche es noch einmal."
+
+msgid "Change speaker"
+msgstr "Sprecher ändern"
+
+msgid "Save speaker"
+msgstr "Sprecher speichern"
+
+msgid "Transcript preview"
+msgstr "Transkript-Vorschau"
+
+msgid "Restore the previous transcript, including names and manual text corrections. The current version becomes the previous version."
+msgstr "Stellt das vorherige Transkript wieder her, einschließlich Namen und manueller Textkorrekturen. Die aktuelle Fassung wird zur vorherigen Fassung."
+
+msgid "Restore the version from %(date)s"
+msgstr "Fassung vom %(date)s wiederherstellen"
+
+msgid "Previous transcript version restored."
+msgstr "Vorherige Transkriptfassung wiederhergestellt."
+
+msgid "%(counter)s passage without a name"
+msgid_plural "%(counter)s passages without a name"
+msgstr[0] "%(counter)s Passage ohne Namen"
+msgstr[1] "%(counter)s Passagen ohne Namen"

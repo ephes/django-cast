@@ -1,6 +1,6 @@
 {% load i18n l10n %}
 <section class="cast-glossary-review" id="glossary-review">
-  <h2>{% trans "Glossary corrections" %}</h2>
+  <h2>{% trans "Spelling corrections" %}</h2>
   {% url 'cast-transcript:edit' transcript.id as edit_url %}
 
   {% if glossary_review.needs_episode %}

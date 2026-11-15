@@ -13,6 +13,7 @@ urlpatterns: list[Any] = [
     path("transcript", views.index, name="index"),
     path(r"transcript/add/", views.add, name="add"),
     path("transcript/edit/<int:transcript_id>/", views.edit, name="edit"),
+    path("transcript/preview/<int:transcript_id>/", views.preview, name="preview"),
     path("transcript/delete/<int:transcript_id>/", views.delete, name="delete"),
     path("transcript/chooser/", views.chooser, name="chooser"),
     path("transcript/chooser/upload/", views.chooser_upload, name="chooser_upload"),

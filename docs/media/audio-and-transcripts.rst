@@ -505,7 +505,7 @@ embeddings are owned by the transcription backend and would become stale when
 that backend changes its embedding model.
 
 Known-speaker recognition
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Enable known-speaker recognition with ``CAST_VOXHELM_KNOWN_SPEAKER_ENABLED`` or
 the site-level Voxhelm setting. When enabled, a diarized transcript-generation
@@ -1043,7 +1043,7 @@ request-specific, and draft access still requires edit permission. Explicit
 anchors continue to fail with 404 when absent, mismatched or unauthorized.
 
 Voice-reference overlap and sample grouping
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Candidate extraction subtracts speech by other labels across the complete
 source timeline, including unsorted, nested, textless and conflicting-label
@@ -1198,3 +1198,136 @@ selected start may match at most one destination in each stored format
 Segment review preflights its prospective decisions before saving the sidecar.
 No public file or private sidecar is replaced on refusal. Unambiguous application
 continues to update the stored formats together.
+
+Admin transcript replacement
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Generating again from an episode or audio with an existing transcript opens a
+confirmation showing named voices, passage decisions, spelling corrections and
+live episodes. It warns that manual text corrections are replaced too. Only an
+explicit confirmation POST queues replacement. Existing files remain until import
+completes; the import then keeps them as the private previous version, which the
+transcript page can restore (see "Previous transcript version"). After regeneration,
+old mappings that need review start empty and show the former name as a hint.
+Saving them unchanged preserves the review state and publishes no stale name.
+The editor API retains its explicit generation POST replacement contract; this admin
+confirmation does not change management commands or API clients.
+
+Episode transcript panel
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Saved episodes always show a Transcript panel below the open Contributors panel
+and Podcast audio. Without a transcript it shows the generation readiness facts,
+"Generate transcript" (when Voxhelm is configured) and "Upload transcript files"
+with the saved audio preselected. With a transcript it shows "N of M voices
+named" and two buttons: "Name the voices" while voices are unnamed (otherwise
+"Edit transcript and speakers") and "Preview". "Generate again…" and "Upload
+replacement files" sit in a collapsed "Generate again or replace files" section
+together with the readiness facts. Queued/running and failed runs remain
+visible. The panel reads saved revision state. Counts use the mapping rows
+materialized on file save/import, so opening the episode never reads transcript
+artifacts. The panel links to the transcript Preview, which shows the count of
+passages without a name.
+
+Transcript navigation
+~~~~~~~~~~~~~~~~~~~~~
+
+The transcript editor is titled ``Transcript: <episode title>`` (or the audio
+title when unused) and links back to every episode using that audio. File-form
+saves and new uploads return to the transcript editor. File save messages name
+the episode. The list shows Episode, Audio, Files and Voices named, and searches
+both episode and audio titles. Related audio/episodes and mapping counts are
+loaded in a constant number of queries for each list page. These admin template
+changes do not affect public theme templates; no existing template blocks were
+renamed.
+
+Reviewing long transcripts
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Passages to check shows at most 50 segment decisions per page. The default
+``Needs a decision`` filter includes uncertain suggestions, low-margin/no-name
+suggestions and existing editor decisions. ``All passages`` includes confident
+suggestions too. Choices are ``As suggested``, ``No name`` and speaker names.
+Saving preserves the current filter/page and changes only submitted decisions
+on that page. Other pages and omitted fields retain their decisions. The
+artifact revision check still refuses concurrent replacement. This avoids
+Django's default 1,000-field request limit without raising the site setting.
+
+Generation feedback
+~~~~~~~~~~~~~~~~~~~
+
+The episode and audio editors show the effective speaker detection setting,
+whether it is inherited, and how many contributors will supply usable approved
+voice samples. Missing contributors are named before generation. Only samples
+that the existing Voxhelm submission service would send count as available.
+Queued/running status refreshes every five seconds and ends with ``Name the
+voices`` on success. Failure messages remain visible, including a failed retry
+of an earlier successful generation. Polling stops on completion, request error,
+a hidden tab, or after 30 minutes; reload to resume. The status JSON endpoint
+requires audio change permission and returns no private sidecar contents.
+
+Transcript editing: speakers and voice samples
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The editor starts with Speakers and Passages to check, followed by collapsed
+Voice samples for next time, Spelling corrections and collapsed Files. An
+approved speaker-to-contributor mapping can supply voice samples immediately;
+names already matching assigned contributors need no second selection. Uploading
+replacement files discards suggestions from the earlier generation.
+
+Terminology for the django-chat runbook: “Known-speaker suggestions” is now
+“Suggested names” under “Speakers”; “Voice reference” becomes “Voice sample”;
+“Glossary corrections” becomes “Spelling corrections”; the empty speaker choice
+“Unmapped” becomes “No name yet”. API/model names stay stable.
+
+Preview, passage corrections and upload
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Preview is available from the transcript editor and episode panel, including
+unpublished revisions. It shows 200 passages per page, marks unnamed passages,
+and plays audio from each timestamp. Change speaker affects the same timestamp
+in every stored format and retains a decision for generated transcripts.
+
+Preview tells the editor how to edit: click a passage's text to correct it
+inline; Enter or Cmd+Enter saves, Escape cancels. A passage is one paragraph:
+line breaks and repeated spaces are folded into single spaces, so every format
+stores the same text. Saved and error states appear beside the passage without
+reloading; errors are shown as plain sentences and keep the typed text. The
+audio player stays at the top while scrolling. Manual corrections update the stored Podlove,
+DOTe and WebVTT files together, their plain text and search entry. They take
+precedence over subsequent spelling-correction review. Mismatched timestamps or
+styled WebVTT cues are refused without a partial update. Regeneration replaces
+manual corrections; restore the previous version to recover them.
+
+Uploads require at least one file. Podlove JSON is used by the web player;
+WebVTT or DOTe provides transcripts for podcast apps. Missing formats are named
+after saving. The audio chooser offers audios without a transcript and includes
+the episode title; duplicate submissions link to the existing transcript. To
+replace the files of an existing transcript, use "Upload replacement files" in
+the episode panel, which opens the editor's Files section (it also opens by
+itself when an upload has errors).
+
+New episode contributors
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+The contributor name uses Wagtail's built-in slug synchronization. A new episode
+starts with the visible hosts of the most recent episode of the same podcast
+that has any (sorted by visible date, then ID, looking at most 20 episodes back),
+using its latest saved revision, so a special or an empty draft in between does
+not leave the new episode without hosts. Guests are
+not copied, and existing or submitted contributor rows are kept. The podcast's
+Contributor order setting chooses Guests, then hosts (default) or Hosts, then
+guests for new episode saves. Order within each group is preserved; existing
+episodes retain their custom order. No theme or consumer-site change is needed;
+the added setting has a migration with a default.
+
+Previous transcript version
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Generation and replacement uploads save one private previous version containing
+all public files, both editorial sidecars and speaker mappings. Restore the
+version from the displayed date to bring them back together. The current state
+then becomes the previous version, so restoring can be undone. This is one
+previous version, not a full history. It is deleted with its transcript and has
+no public download URL. The regeneration confirmation names the loss of manual
+text corrections explicitly.

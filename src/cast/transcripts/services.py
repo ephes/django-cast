@@ -230,7 +230,7 @@ def validate_speaker_destination_times(transcript: Transcript, starts: set[int])
     podlove_data = transcript._load_transcript_json("podlove")
     records = podlove_data.get("transcripts")
     if isinstance(records, list):
-        counts = Counter(podlove.parse_start_ms(row.get("start_ms")) for row in records if isinstance(row, dict))
+        counts = Counter(podlove.segment_start_ms(row) for row in records if isinstance(row, dict))
         if any(count > 1 and start in starts for start, count in counts.items()):
             raise parsing.TranscriptArtifactError("Speaker destination has ambiguous start times. Replace and reload.")
     # Existing text correspondence checks use the same destination identities.

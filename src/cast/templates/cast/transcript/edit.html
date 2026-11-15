@@ -2,7 +2,7 @@
 {% load i18n %}
 {% load l10n %}
 {% load wagtailimages_tags wagtailadmin_tags %}
-{% block titletag %}{% blocktrans with title=transcript.pk %}Editing {{ title }}{% endblocktrans %}{% endblock %}
+{% block titletag %}{% blocktrans with title=transcript_title %}Transcript: {{ title }}{% endblocktrans %}{% endblock %}
 
 {% block extra_js %}
   {{ block.super }}
@@ -18,6 +18,11 @@
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      var files = document.getElementById('files');
+      if (files && window.location.hash === '#files') {
+        files.open = true;
+        files.scrollIntoView();
+      }
       var bindSeekButtons = function(audio, buttons, seekAttribute, endAttribute) {
         if (!audio) {
           return;
@@ -342,323 +347,30 @@
 {% endblock %}
 
 {% block content %}
-  {% trans "Editing" as editing_str %}
-  {% include "wagtailadmin/shared/header.html" with title=editing_str subtitle=transcript.pk icon="media" usage_object=transcript %}
+  {% blocktrans with title=transcript_title asvar editor_title %}Transcript: {{ title }}{% endblocktrans %}
+  {% include "wagtailadmin/shared/header.html" with title=editor_title icon="media" usage_object=transcript %}
+  <div class="nice-padding">
+    {% for episode in transcript_episodes %}<p><a href="{% url 'wagtailadmin_pages:edit' episode.pk %}">{% blocktrans with title=episode.title %}Episode: {{ title }}{% endblocktrans %}</a></p>{% endfor %}
+  </div>
 
+  <p class="nice-padding"><a href="{% url 'cast-transcript:preview' transcript.pk %}">{% trans "Preview" %}</a></p>
   {% block form_row %}
     <div class="row row-flush nice-padding">
 
       <div class="col10 divider-after">
-        <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" enctype="multipart/form-data" novalidate>
-          {% csrf_token %}
-
-          <ul class="fields">
-            {% for field in form %}
-              {% if field.name == 'file' %}
-                {% include "cast/wagtail/_file_field_as_li.html" %}
-              {% elif field.name == 'thumbnail' %}
-                {% include "cast/wagtail/_thumbnail_field_as_li.html" %}
-              {% else %}
-                <li>
-                  {% include "wagtailadmin/shared/field.html" %}
-                </li>
-              {% endif %}
-            {% endfor %}
-            <li>
-              <input class="button" type="submit" value="{% trans 'Save' %}" />
-              {% if user_can_delete %}
-                <a href="{% url 'cast-transcript:delete' transcript.id %}" class="button button-secondary no">{% trans "Delete" %}</a>
-              {% endif %}
-            </li>
-          </ul>
-        </form>
-
-        <hr />
-
-        {% if known_speaker_review.total %}
-          <h2>{% trans "Known-speaker suggestions" %}</h2>
-          <p>
-            {% blocktrans with confident=known_speaker_review.confident uncertain=known_speaker_review.uncertain total=known_speaker_review.total %}
-              Voxhelm returned {{ total }} known-speaker suggestions: {{ confident }} confident and {{ uncertain }} uncertain (needs review).
-            {% endblocktrans %}
-          </p>
-          <ul class="cast-known-speaker-review">
-            {% for name, count in known_speaker_review.by_speaker.items %}
-              <li>{{ name }}: {{ count }} {% trans "confident segments" %}</li>
-            {% endfor %}
-          </ul>
-          <p>{% trans "The bulk action applies confident known-speaker names to public Podlove, DOTe, and WebVTT output by start time and leaves uncertain segments unchanged, except that the one guest without a voice reference is named on their own diarization label when that is unambiguous. Use the segment review table to resolve or clear an uncertain segment." %}</p>
-          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
-            {% csrf_token %}
-<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
-            <input type="hidden" name="action" value="apply-known-speakers" />
-            <ul class="fields">
-              <li>
-                <input class="button" type="submit" value="{% trans 'Approve and apply confident suggestions' %}"{% if not known_speaker_review.confident %} disabled{% endif %} />
-              </li>
-            </ul>
+        {% if not contributor_assignments %}{% for episode in transcript_episodes %}<p><a href="{% url 'wagtailadmin_pages:edit' episode.pk %}#id_contributor_assignments-FORMS">{% trans "Add the episode's contributors" %}</a></p>{% endfor %}{% endif %}
+        {% include "cast/transcript/_speakers.html" %}
+        {% include "cast/transcript/_passages.html" %}
+        {% include "cast/transcript/_voice_samples.html" %}
+        {% if glossary_review.available %}{% include "cast/transcript/_glossary_review.html" %}{% endif %}
+        {% include "cast/transcript/_files.html" %}
+        {% if transcript.previous_version %}
+          <form method="post">{% csrf_token %}
+            <input type="hidden" name="action" value="restore-version">
+            <input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
+            <p>{% trans "Restore the previous transcript, including names and manual text corrections. The current version becomes the previous version." %}</p>
+            <button class="button button-secondary" type="submit">{% blocktrans with date=transcript.previous_version_date|date:"DATETIME_FORMAT" %}Restore the version from {{ date }}{% endblocktrans %}</button>
           </form>
-
-          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
-            {% csrf_token %}
-<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
-            {% for hidden_field in known_speaker_review_form.hidden_fields %}
-              {{ hidden_field }}
-            {% endfor %}
-            <table class="cast-known-speaker-segments">
-              <thead>
-                <tr>
-                  <th>{% trans "Time" %}</th>
-                  <th>{% trans "Text" %}</th>
-                  <th>{% trans "Suggestion" %}</th>
-                  <th>{% trans "Resolution" %}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for row in known_speaker_review_rows %}
-                  <tr>
-                    <td class="cast-known-speaker-segments__time">
-                      {% if row.timestamp_label %}
-                        {{ row.timestamp_label }}
-                      {% else %}
-                        —
-                      {% endif %}
-                    </td>
-                    <td class="cast-known-speaker-segments__text">
-                      {% if row.text %}
-                        {{ row.text }}
-                      {% else %}
-                        {% trans "No text available" %}
-                      {% endif %}
-                    </td>
-                    <td>
-                      {% if row.speaker %}
-                        {{ row.speaker }}
-                      {% else %}
-                        {% trans "No suggestion" %}
-                      {% endif %}
-                      <p class="cast-known-speaker-segments__metadata">
-                        {% if row.uncertain %}
-                          {% trans "Needs review" %}
-                        {% else %}
-                          {% trans "Confident" %}
-                        {% endif %}
-                        {% if row.confidence is not None %}
-                          · {% blocktrans with confidence=row.confidence %}confidence {{ confidence }}{% endblocktrans %}
-                        {% endif %}
-                        {% if row.margin is not None %}
-                          · {% blocktrans with margin=row.margin %}margin {{ margin }}{% endblocktrans %}
-                        {% endif %}
-                      </p>
-                    </td>
-                    <td class="cast-known-speaker-segments__field">
-                      {{ row.field.errors }}
-                      {{ row.field }}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-            <ul class="fields">
-              {% if known_speaker_review_form.non_field_errors %}
-                <li>{{ known_speaker_review_form.non_field_errors }}</li>
-              {% endif %}
-              <li>
-                <input class="button button-secondary" type="submit" value="{% trans 'Save segment decisions' %}" />
-              </li>
-            </ul>
-          </form>
-
-          <hr />
-        {% endif %}
-
-        {% if glossary_review.available %}
-          {% include "cast/transcript/_glossary_review.html" %}
-          <hr />
-        {% endif %}
-
-        <h2>{% trans "Map speakers to contributors" %}</h2>
-        {% if speaker_mapping_rows %}
-          <p>{% trans "Store approved speaker mappings for public transcript output without rewriting the raw Podlove, DOTe, or WebVTT files." %}</p>
-          {% if transcript_audio_sources %}
-            <div class="cast-speaker-audio">
-              <audio controls preload="metadata" data-cast-speaker-audio>
-                {% for source in transcript_audio_sources %}
-                  <source src="{{ source.url }}" type="{{ source.mimeType }}" />
-                {% endfor %}
-              </audio>
-            </div>
-          {% endif %}
-          {% if not contributor_assignments %}
-            <p>{% trans "No episode contributors are available for this transcript's audio. Use one-off display names for speakers who should not become reusable contributors." %}</p>
-          {% endif %}
-          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
-            {% csrf_token %}
-
-            {% for hidden_field in speaker_mapping_form.hidden_fields %}
-              {{ hidden_field }}
-            {% endfor %}
-            <ul class="cast-speaker-mapping">
-              {% for row in speaker_mapping_rows %}
-                <li class="cast-speaker-mapping__row">
-                  <div class="cast-speaker-mapping__field">
-                    <p>
-                      <strong>{{ row.mapping.speaker_label }}</strong><br />
-                      {{ row.mapping.get_review_state_display }}
-                      {% if not row.mapping.active %} · {% trans "inactive" %}{% endif %}
-                    </p>
-                    {% include "wagtailadmin/shared/field.html" with field=row.target_field %}
-                    {% include "wagtailadmin/shared/field.html" with field=row.display_name_field %}
-                  </div>
-                  <div class="cast-speaker-mapping__samples">
-                    {% if row.samples %}
-                      <ol class="cast-speaker-samples">
-                        {% for sample in row.samples %}
-                          <li class="cast-speaker-sample">
-                            {% if sample.has_start_time and transcript_audio_sources %}
-                              <button
-                                class="cast-speaker-sample__time"
-                                type="button"
-                                data-cast-speaker-seek="{{ sample.start_seconds|unlocalize }}"
-                              >
-                                {{ sample.timestamp_label }}
-                              </button>
-                            {% elif sample.timestamp_label %}
-                              <span class="cast-speaker-sample__time-label">{{ sample.timestamp_label }}</span>
-                            {% else %}
-                              <span class="cast-speaker-sample__time-label"></span>
-                            {% endif %}
-                            <p class="cast-speaker-sample__text">{{ sample.text }}</p>
-                          </li>
-                        {% endfor %}
-                      </ol>
-                    {% else %}
-                      <p class="cast-speaker-samples__empty">{% trans "No transcript samples found for this speaker." %}</p>
-                    {% endif %}
-                  </div>
-                </li>
-              {% endfor %}
-            </ul>
-            <ul class="fields">
-              {% if speaker_mapping_form.non_field_errors %}
-                <li>{{ speaker_mapping_form.non_field_errors }}</li>
-              {% endif %}
-              <li>
-                <input class="button" type="submit" value="{% trans 'Save speaker mappings' %}" />
-              </li>
-            </ul>
-          </form>
-
-          <h2>{% trans "Voice-reference candidates" %}</h2>
-          {% if voice_reference_candidate_groups %}
-            {% for group in voice_reference_candidate_groups %}
-              <section class="cast-voice-reference-group">
-                <h3>
-                  {% if group.contributor %}
-                    {{ group.contributor.display_name }}
-                  {% else %}
-                    {{ group.speaker_label }}
-                  {% endif %}
-                </h3>
-                {% if not group.contributor %}
-                  <p>{% trans "Map this speaker label to one contributor before creating a voice reference." %}</p>
-                {% endif %}
-                <table class="cast-voice-reference-table">
-                  <thead>
-                    <tr>
-                      <th>{% trans "Speaker" %}</th>
-                      <th>{% trans "Start" %}</th>
-                      <th>{% trans "End" %}</th>
-                      <th>{% trans "Duration" %}</th>
-                      <th>{% trans "Text" %}</th>
-                      <th>{% trans "Audition" %}</th>
-                      <th>{% trans "Reference" %}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for row in group.rows %}
-                      <tr>
-                        <td>{{ row.candidate.speaker_label }}</td>
-                        <td class="cast-voice-reference-table__time">{{ row.candidate.start_timestamp_label }}</td>
-                        <td class="cast-voice-reference-table__time">{{ row.candidate.end_timestamp_label }}</td>
-                        <td class="cast-voice-reference-table__time">{{ row.candidate.duration_label }}</td>
-                        <td class="cast-voice-reference-table__text">{{ row.candidate.text }}</td>
-                        <td>
-                          {% if transcript_audio_sources %}
-                            <button
-                              class="button button-small button-secondary"
-                              type="button"
-                              data-cast-speaker-seek="{{ row.candidate.start_seconds|unlocalize }}"
-                              data-cast-speaker-end="{{ row.candidate.end_seconds|unlocalize }}"
-                            >
-                              {% trans "Play range" %}
-                            </button>
-                          {% else %}
-                            {% trans "No playable audio" %}
-                          {% endif %}
-                        </td>
-                        <td>
-                          {% if row.duplicate_reference %}
-                            {% trans "Existing reference" %}
-                          {% elif row.contributor %}
-                            <form
-                              action="{% url 'cast-transcript:edit' transcript.id %}"
-                              method="POST"
-                              novalidate
-                              data-cast-voice-reference-form
-                            >
-                              {% csrf_token %}
-
-                              <input type="hidden" name="action" value="create-voice-reference" />
-                              <input type="hidden" name="speaker_label" value="{{ row.candidate.speaker_label }}" />
-                              <input type="hidden" name="candidate_token" value="{{ row.candidate_token }}" />
-                              <input type="hidden" name="candidate_rank" value="{{ row.candidate.rank }}" />
-                              <div class="cast-voice-reference-actions">
-                                <button
-                                  class="button button-small button-secondary"
-                                  type="submit"
-                                  name="voice_reference_status"
-                                  value="pending"
-                                >
-                                  {% trans "Save pending" %}
-                                </button>
-                                <label for="{{ row.form_id }}-consent">
-                                  <input
-                                    id="{{ row.form_id }}-consent"
-                                    type="checkbox"
-                                    name="consent_confirmed"
-                                    value="on"
-                                    data-cast-voice-reference-consent
-                                  />
-                                  {% trans "Contributor consent confirmed" %}
-                                </label>
-                                <button
-                                  class="button button-small"
-                                  type="submit"
-                                  name="voice_reference_status"
-                                  value="approved"
-                                  data-cast-voice-reference-approve
-                                  disabled
-                                >
-                                  {% trans "Create approved" %}
-                                </button>
-                              </div>
-                            </form>
-                          {% else %}
-                            {% trans "Needs contributor mapping" %}
-                          {% endif %}
-                        </td>
-                      </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </section>
-            {% endfor %}
-          {% else %}
-            <p>{% trans "No source-range candidates were found for this transcript." %}</p>
-          {% endif %}
-        {% else %}
-          <p>{% trans "No speaker labels were found in the Podlove, DOTe, or WebVTT transcript files." %}</p>
         {% endif %}
       </div>
     </div>

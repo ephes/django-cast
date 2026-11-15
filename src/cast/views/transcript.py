@@ -2,8 +2,11 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypedDict, cast
+from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
+from django.core.paginator import Page as PaginatorPage, Paginator
+from django.db.models import Count, F, Q
 from django.db.models.fields.files import FieldFile
 from django.forms.boundfield import BoundField
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
@@ -12,6 +15,7 @@ from django.template import TemplateDoesNotExist
 from django.template.loader import get_template
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.cache import never_cache
 from wagtail.admin import messages
 from wagtail.search.backends import get_search_backends
 
@@ -84,6 +88,7 @@ class SpeakerMappingRow(TypedDict):
     mapping: TranscriptSpeakerMapping
     samples: list[TranscriptSpeakerSample]
     target_field: BoundField
+    named: bool
 
 
 class VoiceReferenceCandidateRow(TypedDict):
@@ -154,7 +159,9 @@ def _render_transcript_html(
 
 
 def _search_transcripts(base_transcripts: Any, raw_query_string: str) -> tuple[Any, str]:
-    return base_transcripts.filter(audio__title__icontains=raw_query_string), raw_query_string
+    return base_transcripts.filter(
+        Q(audio__title__icontains=raw_query_string) | Q(audio__episodes__title__icontains=raw_query_string)
+    ).distinct(), raw_query_string
 
 
 def _create_transcript(user: Any) -> Transcript:
@@ -162,7 +169,30 @@ def _create_transcript(user: Any) -> Transcript:
 
 
 def _transcript_message_arg(transcript: Transcript) -> Any:
-    return transcript.pk
+    if transcript.audio_id is None:
+        return _("New transcript")
+    episodes = list(transcript.audio.episodes.all())
+    return episodes[0].title if episodes else transcript.audio.title
+
+
+def _transcript_list_queryset(queryset: Any) -> Any:
+    return (
+        queryset.select_related("audio")
+        .prefetch_related("audio__episodes")
+        .order_by("pk")
+        .annotate(
+            voices_total=Count("speaker_mappings", filter=Q(speaker_mappings__active=True), distinct=True),
+            voices_named=Count(
+                "speaker_mappings",
+                filter=Q(
+                    speaker_mappings__active=True,
+                    speaker_mappings__review_state="approved",
+                    speaker_mappings__source_artifact_fingerprint=F("source_fingerprint"),
+                ),
+                distinct=True,
+            ),
+        )
+    )
 
 
 def get_speaker_mapping_rows(
@@ -173,6 +203,7 @@ def get_speaker_mapping_rows(
         {
             "display_name_field": speaker_mapping_form[f"speaker_display_name_{index}"],
             "mapping": speaker_mapping_form.mapping_by_label[speaker_label],
+            "named": any(a.display_name == speaker_label for a in speaker_mapping_form.contributor_assignments),
             "samples": speaker_samples.get(speaker_label, []),
             "target_field": speaker_mapping_form[field_name],
         }
@@ -188,7 +219,7 @@ def get_known_speaker_text_by_start_ms(transcript: Transcript) -> dict[int, str]
         for segment in podlove_segments:
             if not isinstance(segment, dict):
                 continue
-            start_ms = podlove.parse_start_ms(segment.get("start_ms"))
+            start_ms = podlove.segment_start_ms(segment)
             text = parsing.clean_sample_text(segment.get("text"))
             if start_ms is not None and text:
                 texts.setdefault(start_ms, text)
@@ -243,6 +274,7 @@ def get_voice_reference_candidate_groups(
         contributor = resolve_voice_reference_contributor(
             candidate.speaker_label,
             speaker_mapping_context["contributor_assignments"],
+            speaker_mapping_context["speaker_mappings"],
         )
         group_key = (
             f"contributor:{contributor.pk}" if contributor is not None else f"speaker:{candidate.speaker_label}"
@@ -306,6 +338,13 @@ class EditFormState:
 EditActionHandler = Callable[[HttpRequest, Transcript, editing.SpeakerMappingContext], HttpResponse | EditFormState]
 
 
+def _applied_passage_count(transcript: Transcript) -> int:
+    names, rejected = services.prepare_speaker_application(
+        transcript, transcript.get_speaker_suggestions(), smooth=False
+    )
+    return len((set(names) | rejected) & set(get_known_speaker_text_by_start_ms(transcript)))
+
+
 def _handle_known_speaker_apply(
     request: HttpRequest,
     transcript: Transcript,
@@ -321,13 +360,32 @@ def _handle_known_speaker_apply(
         messages.success(
             request,
             _(
-                "Applied known-speaker names to {0} public transcript entries. "
-                "Uncertain segments were left unchanged for review, except for an unambiguous guest without a voice reference."
-            ).format(applied),
+                "Applied known-speaker names to {0} passages. "
+                "Uncertain segments were left unchanged for review, except for an unambiguous guest without a voice sample."
+            ).format(_applied_passage_count(transcript) if applied else 0),
         )
     else:
         messages.warning(request, _("No confident known-speaker suggestions were available to apply."))
     return redirect("cast-transcript:edit", transcript_id=transcript.id)
+
+
+def get_known_speaker_review_page(
+    request: HttpRequest, transcript: Transcript
+) -> tuple[list[dict[str, Any]], PaginatorPage, str]:
+    segments = transcript.get_speaker_suggestions()
+    review_filter = "all" if request.GET.get("review_filter") == "all" else "needs_decision"
+    positions = [
+        position
+        for position, segment in enumerate(segments)
+        if review_filter == "all"
+        or (
+            segment.get("speaker_uncertain")
+            or segment.get("low_margin")
+            or not segment.get("speaker")
+            or segment.get("editor_decision")
+        )
+    ]
+    return segments, Paginator(positions, 50).get_page(request.GET.get("review_page")), review_filter
 
 
 def _handle_known_speaker_review(
@@ -337,9 +395,11 @@ def _handle_known_speaker_review(
 ) -> HttpResponse | EditFormState:
     form = TranscriptForm(instance=transcript, user=request.user)
     speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+    segments, review_page, review_filter = get_known_speaker_review_page(request, transcript)
     known_speaker_review_form = KnownSpeakerSegmentReviewForm(
         request.POST,
-        segments=transcript.get_speaker_suggestions(),
+        segments=segments,
+        segment_positions=list(review_page),
         contributor_assignments=speaker_mapping_context["contributor_assignments"],
         multiple_episodes=speaker_mapping_context["multiple_episodes"],
     )
@@ -357,12 +417,19 @@ def _handle_known_speaker_review(
         if changed or applied:
             messages.success(
                 request,
-                _("Saved known-speaker segment decisions and applied {0} public transcript entries.").format(applied),
+                _("Saved passage decisions and applied {0} passages.").format(
+                    _applied_passage_count(transcript) if applied else 0
+                ),
             )
         else:
-            messages.warning(request, _("No known-speaker segment decisions were changed."))
-        return redirect("cast-transcript:edit", transcript_id=transcript.id)
-    messages.error(request, _("The known-speaker segment decisions could not be saved due to errors."))
+            messages.warning(request, _("No passage decisions were changed."))
+        return redirect(
+            reverse("cast-transcript:edit", args=(transcript.pk,))
+            + "?"
+            + urlencode({"review_page": review_page.number, "review_filter": review_filter})
+            + "#segment-review"
+        )
+    messages.error(request, _("The passage decisions could not be saved due to errors."))
     return EditFormState(
         form=form,
         speaker_mapping_form=speaker_mapping_form,
@@ -385,9 +452,7 @@ def _handle_voice_reference_create(
             candidate_rank=voice_reference_form.cleaned_data["candidate_rank"],
         )
         if candidate is None:
-            messages.error(
-                request, _("The selected voice-reference candidate is no longer available. Reload the transcript.")
-            )
+            messages.error(request, _("The selected voice sample is no longer available. Reload the transcript."))
         else:
             try:
                 reference, created = create_voice_reference_from_candidate(
@@ -405,17 +470,17 @@ def _handle_voice_reference_create(
                     if reference.status == ContributorVoiceReference.Status.APPROVED:
                         messages.success(
                             request,
-                            _("Created approved voice reference for {0}.").format(reference.contributor),
+                            _("Created approved voice sample for {0}.").format(reference.contributor),
                         )
                     else:
                         messages.success(
                             request,
-                            _("Saved pending voice reference for {0}.").format(reference.contributor),
+                            _("Saved pending voice sample for {0}.").format(reference.contributor),
                         )
                 else:
                     messages.warning(
                         request,
-                        _("A voice reference for {0} already exists for this source range.").format(
+                        _("A voice sample for {0} already exists for this source range.").format(
                             reference.contributor
                         ),
                     )
@@ -424,7 +489,7 @@ def _handle_voice_reference_create(
         messages.error(
             request,
             _(
-                "The voice reference could not be created due to errors. Reload the transcript and review the candidate again."
+                "The voice sample could not be created due to errors. Reload the transcript and review the candidate again."
             ),
         )
     return EditFormState(form=form, speaker_mapping_form=speaker_mapping_form)
@@ -461,14 +526,17 @@ def _handle_transcript_form_save(
         for backend in get_search_backends():
             backend.add(transcript)
 
+        _missing_format_notice(request, transcript)
         messages.success(
             request,
-            _("Transcript file '{0}' updated").format(transcript.pk),
+            _("Transcript: {0} updated.").format(_transcript_message_arg(transcript)),
             buttons=[messages.button(reverse("cast-transcript:edit", args=(transcript.id,)), _("Edit"))],
         )
-        return redirect("cast-transcript:index")
+        return redirect("cast-transcript:edit", transcript_id=transcript.id)
     else:
-        messages.error(request, _("The transcript could not be saved due to errors."))
+        messages.error(
+            request, _("Transcript: {0} could not be saved due to errors.").format(_transcript_message_arg(transcript))
+        )
     return EditFormState(form=form, speaker_mapping_form=speaker_mapping_form)
 
 
@@ -536,6 +604,21 @@ def _detach_invalid_sidecar(request: HttpRequest, transcript: Transcript) -> Htt
 
 def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
     action = request.POST.get("action")
+    if request.method == "POST" and action == "restore-version":
+        from ..transcripts.versions import restore
+
+        if request.POST.get("artifact_revision") != services.artifact_revision(transcript):
+            return HttpResponse("Reload the transcript; it changed while you were editing.", status=409)
+        try:
+            restore(transcript)
+        except ValidationError as error:
+            return HttpResponse(_error_text(error), status=400, content_type="text/plain; charset=utf-8")
+        except services.TranscriptEditConflict:
+            return HttpResponse("Reload the transcript; it changed while you were editing.", status=409)
+        for backend in get_search_backends():
+            backend.add(transcript)
+        messages.success(request, _("Previous transcript version restored."))
+        return redirect("cast-transcript:edit", transcript_id=transcript.pk)
     if request.method == "POST" and action == "detach-invalid-sidecar":
         return _detach_invalid_sidecar(request, transcript)
     if request.method == "POST" and action not in EDIT_ACTION_HANDLERS:
@@ -583,9 +666,11 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
     form = form_state.form
     speaker_mapping_form = form_state.speaker_mapping_form
     known_speaker_review_form = form_state.known_speaker_review_form
+    segments, review_page, review_filter = get_known_speaker_review_page(request, transcript)
     if known_speaker_review_form is None:
         known_speaker_review_form = KnownSpeakerSegmentReviewForm(
-            segments=transcript.get_speaker_suggestions(),
+            segments=segments,
+            segment_positions=list(review_page),
             contributor_assignments=speaker_mapping_context["contributor_assignments"],
             multiple_episodes=speaker_mapping_context["multiple_episodes"],
         )
@@ -601,6 +686,8 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
         "cast/transcript/edit.html",
         {
             "transcript": transcript,
+            "transcript_title": _transcript_message_arg(transcript),
+            "transcript_episodes": transcript.audio.episodes.all(),
             "artifact_revision": services.artifact_revision(transcript),
             "form": form,
             "speaker_mapping_rows": speaker_mapping_rows,
@@ -612,10 +699,85 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
             "known_speaker_review": transcript.known_speaker_review_summary(),
             "known_speaker_review_form": known_speaker_review_form,
             "known_speaker_review_rows": known_speaker_review_rows,
+            "review_page": review_page,
+            "review_filter": review_filter,
             "glossary_review": transcript_glossary.get_glossary_review(transcript, request.user),
             "user_can_delete": transcript_permission_policy.user_has_permission_for_instance(
                 request.user, "delete", transcript
             ),
+        },
+    )
+
+
+def _error_text(error: Exception) -> str:
+    """Plain message for the editor, without the list syntax of ``str(ValidationError)``."""
+    if isinstance(error, ValidationError):
+        return " ".join(error.messages)
+    if isinstance(error, ValueError):
+        return str(_("Reload the transcript and try again."))
+    return str(error)
+
+
+@never_cache
+def preview(request: HttpRequest, transcript_id: int) -> HttpResponse:
+    from ..transcripts.passages import get_passages
+
+    transcript = get_object_or_404(
+        transcript_permission_policy.instances_user_has_permission_for(request.user, "change"), pk=transcript_id
+    )
+    episodes = list(transcript.audio.episodes.all())
+    episode = next(
+        (e for e in episodes if str(e.pk) == request.GET.get("episode_id")), episodes[0] if episodes else None
+    )
+    episode = editing.episode_from_latest_revision(episode) if episode else None
+    if episode is not None:
+        setattr(episode, "_cast_editor_speaker_preview", True)
+    assignments = list(episode.visible_contributor_assignments) if episode else []
+    names = sorted({assignment.display_name for assignment in assignments})
+    revision = services.artifact_revision(transcript)
+    if request.method == "POST":
+        if request.POST.get("artifact_revision") != revision:
+            return HttpResponse("Reload the transcript; its artifacts changed while you were editing.", status=409)
+        try:
+            start_ms = int(request.POST.get("start_ms", ""))
+            if request.POST.get("action") == "correct-text":
+                text = transcript.correct_passage_text(start_ms, request.POST.get("text", ""))
+                for backend in get_search_backends():
+                    backend.add(transcript)
+                return JsonResponse({"text": text, "artifact_revision": services.artifact_revision(transcript)})
+            speaker = request.POST.get("speaker", "")
+            if speaker and speaker not in names:
+                raise ValidationError("Choose an episode contributor.")
+            transcript.change_passage_speaker(start_ms, speaker)
+        except services.TranscriptEditConflict:
+            return HttpResponse("Reload the transcript; its artifacts changed while you were editing.", status=409)
+        except (ValueError, ValidationError, parsing.TranscriptArtifactError) as error:
+            return HttpResponse(_error_text(error), status=400, content_type="text/plain; charset=utf-8")
+        return redirect(request.get_full_path())
+    try:
+        rows = get_passages(transcript)
+    except (ValidationError, parsing.TranscriptArtifactError) as error:
+        return HttpResponse(_error_text(error), status=400, content_type="text/plain; charset=utf-8")
+    data = {"transcripts": rows}
+    data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
+    rows = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))[
+        "transcripts"
+    ]
+    for row in rows:
+        row["seconds"] = row["start_ms"] / 1000
+        row["timestamp"] = parsing.format_sample_timestamp(row["seconds"])
+    return render(
+        request,
+        "cast/transcript/preview.html",
+        {
+            "transcript": transcript,
+            "transcript_title": _transcript_message_arg(transcript),
+            "passage_page": Paginator(rows, 200).get_page(request.GET.get("page")),
+            "unnamed": sum(not row.get("speaker") for row in rows),
+            "speaker_names": names,
+            "artifact_revision": revision,
+            "transcript_audio_sources": get_transcript_audio_sources(transcript),
+            "episode_id": episode.pk if episode else "",
         },
     )
 
@@ -644,11 +806,13 @@ transcript_admin_config = MediaAdminConfig(
     create_instance=_create_transcript,
     search=_search_transcripts,
     ordering=None,
+    prepare_queryset=_transcript_list_queryset,
+    add_redirect_to_edit=True,
     show_popular_tags=False,
     index_search_placeholder=_("Search transcript files"),
     index_fallback_placeholder=_("Search transcripts"),
-    added_message=_("Transcript file '{0}' added."),
-    add_error_message=_("The transcript file could not be saved due to errors."),
+    added_message=_("Transcript: {0} added."),
+    add_error_message=_("Transcript: {0} could not be saved due to errors."),
     deleted_message=_("Transcript '{0}' deleted."),
     chooser_upload_error_message=_("The transcript could not be saved due to errors."),
     message_arg=_transcript_message_arg,
@@ -664,8 +828,22 @@ index = _views.index
 chooser = _views.chooser
 
 
+def _missing_format_notice(request: HttpRequest, transcript: Transcript) -> None:
+    missing = []
+    if not transcript.podlove:
+        missing.append(str(_("web player")))
+    if not transcript.vtt and not transcript.dote:
+        missing.append(str(_("podcast apps")))
+    if missing:
+        messages.warning(request, _("No transcript yet for: {0}.").format(", ".join(missing)))
+
+
 def add(request: AuthenticatedHttpRequest) -> HttpResponse:
-    return _views.add(request)
+    response = _views.add(request, initial={"audio": request.GET.get("audio")})
+    if request.method == "POST" and response.status_code == 302:
+        transcript = Transcript.objects.get(audio_id=request.POST["audio"])
+        _missing_format_notice(request, transcript)
+    return response
 
 
 def delete(request: HttpRequest, transcript_id: int) -> HttpResponse:

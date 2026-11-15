@@ -13,7 +13,11 @@ from ..search_utils import normalize_modelsearch_query, safe_modelsearch_results
 from ..voxhelm import voxhelm_configured
 from . import AuthenticatedHttpRequest
 from .media import MediaAdminConfig, MediaAdminViews
-from .voxhelm import get_audio_transcript_status_context, user_can_generate_transcript_for_audio
+from .voxhelm import (
+    get_audio_transcript_status_context,
+    get_generation_readiness,
+    user_can_generate_transcript_for_audio,
+)
 
 
 def get_audio_data(audio: Audio) -> dict[str, Any]:
@@ -36,6 +40,8 @@ def _search_audio(base_audios: Any, raw_query_string: str) -> tuple[Any | BaseSe
 
 def _extra_audio_edit_context(request: HttpRequest, audio: Audio) -> dict[str, Any]:
     return {
+        "transcript_status_url": reverse("cast-voxhelm:status_audio", args=(audio.pk,)),
+        **get_generation_readiness(request=request, audio=audio),
         "generate_transcript_url": reverse("cast-voxhelm:generate_audio", args=(audio.pk,)),
         "user_can_generate_transcript": voxhelm_configured(request_or_site=request)
         and user_can_generate_transcript_for_audio(request=request, audio=audio),

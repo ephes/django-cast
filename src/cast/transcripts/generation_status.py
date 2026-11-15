@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.urls import reverse
+from django.utils.translation import gettext as _
 
 from cast.models.transcript_generation import TranscriptGeneration
 
@@ -45,16 +46,18 @@ def get_transcript_generation_status_context(*, audio: Audio) -> dict[str, str |
         }
 
     message_lookup = {
-        TranscriptGeneration.Status.QUEUED.value: "Transcript generation is queued.",
-        TranscriptGeneration.Status.RUNNING.value: "Transcript generation is running.",
-        TranscriptGeneration.Status.SUCCEEDED.value: "Transcript generation completed.",
-        TranscriptGeneration.Status.FAILED.value: "Transcript generation failed.",
+        TranscriptGeneration.Status.QUEUED.value: _("Transcript generation is queued."),
+        TranscriptGeneration.Status.RUNNING.value: _("Transcript generation is running."),
+        TranscriptGeneration.Status.SUCCEEDED.value: _("Transcript generation completed."),
+        TranscriptGeneration.Status.FAILED.value: _("Transcript generation failed."),
     }
     if generation.is_stale:
         return {
             "transcript_generation_active": False,
-            "transcript_generation_status": "Interrupted",
-            "transcript_generation_message": "Transcript generation was interrupted. Generate the transcript again.",
+            "transcript_generation_status": _("Interrupted"),
+            "transcript_generation_message": _(
+                "Transcript generation was interrupted. Generate the transcript again."
+            ),
             "transcript_generation_error": generation.error_message,
             "transcript_generation_transcript_url": "",
         }
@@ -67,4 +70,17 @@ def get_transcript_generation_status_context(*, audio: Audio) -> dict[str, str |
         "transcript_generation_message": message_lookup[generation.status],
         "transcript_generation_error": generation.error_message,
         "transcript_generation_transcript_url": transcript_url,
+    }
+
+
+def transcript_voice_counts(transcript: Transcript) -> dict[str, int]:
+    """Count materialized label mappings without opening artifacts in list/panel requests.
+
+    Import and file saves synchronize these rows. A stale approval never counts
+    as named. Public rendering still checks episode visibility separately.
+    """
+    rows = [row for row in transcript.speaker_mappings.all() if row.active]
+    return {
+        "named": sum(row.is_current_for_fingerprint(transcript.source_fingerprint) for row in rows),
+        "total": len(rows),
     }

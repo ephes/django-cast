@@ -459,7 +459,9 @@ def corrected_texts(data: dict[str, Any], start_milliseconds: Iterable[int] | No
             for item in segment["replacements"]
             if item["state"] != STATE_REJECTED
         ]
-        texts[segment["start_ms"]] = apply_replacements(segment["raw_text"], edits)
+        texts[segment["start_ms"]] = data.get("manual_texts", {}).get(
+            str(segment["start_ms"]), apply_replacements(segment["raw_text"], edits)
+        )
     return texts
 
 
@@ -544,6 +546,7 @@ def _commit(transcript: Transcript, state: _State, *, dry_run: bool = False) -> 
     corrected = state.previously_corrected | {
         segment["start_ms"] for segment in data["segments"] if segment["replacements"]
     }
+    corrected |= {int(start) for start in data.get("manual_texts", {})}
     texts = corrected_texts(data, corrected)
     if dry_run:
         _validate_destination_times(transcript, texts)

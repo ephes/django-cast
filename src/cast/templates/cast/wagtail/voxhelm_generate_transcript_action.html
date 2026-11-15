@@ -1,4 +1,7 @@
 {% load i18n wagtailadmin_tags %}
+{% if transcript_exists %}
+<a href="{{ action_url }}" class="button{% if classname %} {{ classname }}{% endif %}">{% if icon_name %}{% icon name=icon_name %}{% endif %}{{ label }}</a>
+{% else %}
 <button
   type="submit"
   name="{{ name }}"
@@ -16,3 +19,5 @@
   {% icon name="spinner" %}
   <em data-w-progress-target="label">{{ label }}</em>
 </button>
+
+{% endif %}

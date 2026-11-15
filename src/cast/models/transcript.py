@@ -1,6 +1,7 @@
 import hashlib
 import json
 from collections.abc import Mapping
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -45,7 +46,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         null=True,
         blank=True,
         verbose_name="Podlove Transcript",
-        help_text="The transcript format for the Podlove Web Player",
+        help_text="JSON for the web player. Upload Podlove JSON here, not DOTe or WebVTT.",
     )
     vtt = models.FileField(
         upload_to="cast_transcript/",
@@ -53,7 +54,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         null=True,
         blank=True,
         verbose_name="WebVTT Transcript",
-        help_text="The WebVTT format for feed / podcatchers",
+        help_text="WebVTT for podcast apps. Starts with WEBVTT.",
     )
     dote = models.FileField(
         upload_to="cast_transcript/",
@@ -61,7 +62,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         null=True,
         blank=True,
         verbose_name="DOTe Transcript",
-        help_text="The DOTe json format for feed / podcatchers",
+        help_text="DOTe JSON for podcast apps and the plain-text transcript. Contains lines with timestamps.",
     )
     speakers = models.FileField(
         upload_to="cast_transcript_speakers/",
@@ -85,6 +86,15 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             "Private transcript glossary state: the raw segment text as received, automatic "
             "replacements, proposals and editor decisions. Never public transcript output."
         ),
+    )
+
+    previous_version = models.FileField(
+        upload_to="cast_transcript_versions/",
+        storage=get_voice_reference_storage,
+        null=True,
+        blank=True,
+        editable=False,
+        help_text="Private previous files, editorial decisions and speaker mappings, for restoration.",
     )
 
     source_fingerprint = models.CharField(
@@ -502,6 +512,38 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         if not data:
             return data
         return convert_dote_to_podcastindex_transcript(data)
+
+    @property
+    def previous_version_date(self) -> datetime | None:
+        """When the private previous version was kept, or ``None`` when it is unreadable."""
+        from ..transcripts.versions import read_previous
+
+        try:
+            return datetime.fromisoformat(read_previous(self)["saved_at"])
+        except (ValidationError, ValueError):
+            return None
+
+    @property
+    def plain_text(self) -> str:
+        """Passage text for the search index; unreadable or ambiguous files index as empty."""
+        from ..transcripts.passages import get_passages
+
+        try:
+            return "\n".join(row["text"] for row in get_passages(self))
+        except (ValidationError, parsing.TranscriptArtifactError, OSError):
+            return ""
+
+    search_fields = [index.SearchField("plain_text")]
+
+    def correct_passage_text(self, start_ms: int, text: str) -> str:
+        from ..transcripts.passages import correct_text
+
+        return correct_text(self, start_ms, text)
+
+    def change_passage_speaker(self, start_ms: int, speaker: str) -> None:
+        from ..transcripts.passages import change_speaker
+
+        change_speaker(self, start_ms, speaker)
 
     def get_speaker_labels(self) -> list[str]:
         """Return unique speaker labels used by the Podlove and DOTe transcript files."""

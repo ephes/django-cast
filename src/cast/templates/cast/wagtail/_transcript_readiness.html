@@ -1,0 +1,10 @@
+{% load i18n %}
+{% if readiness_error %}<p>{{ readiness_error }}</p>{% else %}
+<p>{% if speaker_detection_enabled %}{% trans "Speaker detection: on" %}{% else %}{% trans "Speaker detection: off" %}{% endif %}
+({% if speaker_detection_inherited %}{% trans "inherited setting" %}{% else %}{% trans "audio setting" %}{% endif %}). <a href="{{ audio_edit_url }}">{% trans "Change speaker detection" %}</a></p>
+<p>{% blocktrans with count=voice_sample_count total=voice_sample_total %}Voice samples to send: {{ count }} of {{ total }} contributors.{% endblocktrans %}</p>
+{% if speaker_detection_enabled %}
+  {% if not known_speaker_enabled %}<p>{% trans "Voice recognition is off. Voices must be named by hand." %}</p>{% endif %}
+  {% if missing_voice_samples %}<p>{% trans "No voice sample will be sent for:" %} {{ missing_voice_samples|join:", " }}. {% trans "These voices must be named by hand." %}</p>{% endif %}
+{% endif %}
+{% endif %}

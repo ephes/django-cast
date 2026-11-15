@@ -1,0 +1,111 @@
+{% load i18n l10n %}
+<details><summary>{% trans "Voice samples for next time" %}</summary>
+
+          {% if voice_reference_candidate_groups %}
+            {% for group in voice_reference_candidate_groups %}
+              <section class="cast-voice-reference-group">
+                <h3>
+                  {% if group.contributor %}
+                    {{ group.contributor.display_name }}
+                  {% else %}
+                    {{ group.speaker_label }}
+                  {% endif %}
+                </h3>
+                {% if not group.contributor %}
+                  <p>{% trans "Map this speaker label to one contributor before creating a voice sample." %}</p>
+                {% endif %}
+                <table class="cast-voice-reference-table">
+                  <thead>
+                    <tr>
+                      <th>{% trans "Speaker" %}</th>
+                      <th>{% trans "Start" %}</th>
+                      <th>{% trans "End" %}</th>
+                      <th>{% trans "Duration" %}</th>
+                      <th>{% trans "Text" %}</th>
+                      <th>{% trans "Audition" %}</th>
+                      <th>{% trans "Sample" %}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in group.rows %}
+                      <tr>
+                        <td>{{ row.candidate.speaker_label }}</td>
+                        <td class="cast-voice-reference-table__time">{{ row.candidate.start_timestamp_label }}</td>
+                        <td class="cast-voice-reference-table__time">{{ row.candidate.end_timestamp_label }}</td>
+                        <td class="cast-voice-reference-table__time">{{ row.candidate.duration_label }}</td>
+                        <td class="cast-voice-reference-table__text">{{ row.candidate.text }}</td>
+                        <td>
+                          {% if transcript_audio_sources %}
+                            <button
+                              class="button button-small button-secondary"
+                              type="button"
+                              data-cast-speaker-seek="{{ row.candidate.start_seconds|unlocalize }}"
+                              data-cast-speaker-end="{{ row.candidate.end_seconds|unlocalize }}"
+                            >
+                              {% trans "Play range" %}
+                            </button>
+                          {% else %}
+                            {% trans "No playable audio" %}
+                          {% endif %}
+                        </td>
+                        <td>
+                          {% if row.duplicate_reference %}
+                            {% trans "Existing sample" %}
+                          {% elif row.contributor %}
+                            <form
+                              action="{% url 'cast-transcript:edit' transcript.id %}"
+                              method="POST"
+                              novalidate
+                              data-cast-voice-reference-form
+                            >
+                              {% csrf_token %}
+
+                              <input type="hidden" name="action" value="create-voice-reference" />
+                              <input type="hidden" name="speaker_label" value="{{ row.candidate.speaker_label }}" />
+                              <input type="hidden" name="candidate_token" value="{{ row.candidate_token }}" />
+                              <input type="hidden" name="candidate_rank" value="{{ row.candidate.rank }}" />
+                              <div class="cast-voice-reference-actions">
+                                <button
+                                  class="button button-small button-secondary"
+                                  type="submit"
+                                  name="voice_reference_status"
+                                  value="pending"
+                                >
+                                  {% trans "Save pending" %}
+                                </button>
+                                <label for="{{ row.form_id }}-consent">
+                                  <input
+                                    id="{{ row.form_id }}-consent"
+                                    type="checkbox"
+                                    name="consent_confirmed"
+                                    value="on"
+                                    data-cast-voice-reference-consent
+                                  />
+                                  {% trans "Contributor consent confirmed" %}
+                                </label>
+                                <button
+                                  class="button button-small"
+                                  type="submit"
+                                  name="voice_reference_status"
+                                  value="approved"
+                                  data-cast-voice-reference-approve
+                                  disabled
+                                >
+                                  {% trans "Create approved" %}
+                                </button>
+                              </div>
+                            </form>
+                          {% else %}
+                            {% trans "Needs contributor mapping" %}
+                          {% endif %}
+                        </td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </section>
+            {% endfor %}
+          {% else %}
+            <p>{% trans "No source-range candidates were found for this transcript." %}</p>
+          {% endif %}
+</details>

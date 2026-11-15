@@ -38,9 +38,9 @@ class TestTranscriptEdit:
         }
         r = admin_client.post(transcript_urls.edit, post_data)
 
-        # make sure we get redirected to index
+        # Saving stays on the transcript editor
         assert r.status_code == 302
-        assert r.url == transcript_urls.index
+        assert r.url == transcript_urls.edit
 
         # make sure transcript in podlove was changes
         transcript = transcript_urls.transcript

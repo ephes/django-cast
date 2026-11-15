@@ -347,6 +347,12 @@ class Podcast(Blog):
         default=False,
         help_text=_("Assign the next podcast-scoped number to blank full episodes on their first publish."),
     )
+    contributor_order = models.CharField(
+        max_length=16,
+        default="guests_first",
+        choices=(("guests_first", _("Guests, then hosts")), ("hosts_first", _("Hosts, then guests"))),
+        help_text=_("Default contributor order for new episodes. Existing episode credits keep their order."),
+    )
     next_episode_number: models.PositiveIntegerField = models.PositiveIntegerField(
         default=1,
         validators=[MinValueValidator(1)],
@@ -369,6 +375,7 @@ class Podcast(Blog):
                 FieldPanel("keywords"),
                 FieldPanel("explicit"),
                 FieldPanel("itunes_type"),
+                FieldPanel("contributor_order"),
                 FieldPanel("automatic_episode_numbering_enabled"),
                 FieldPanel("next_episode_number"),
             ],

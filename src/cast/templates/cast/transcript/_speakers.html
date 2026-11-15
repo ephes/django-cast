@@ -1,0 +1,103 @@
+{% load i18n l10n %}
+        <h2>{% trans "Speakers" %}</h2>
+        {% if speaker_mapping_rows %}
+          <p>{% trans "Choose who is speaking. Listen to a sample before saving a name." %}</p>
+          {% if transcript_audio_sources %}
+            <div class="cast-speaker-audio">
+              <audio controls preload="metadata" data-cast-speaker-audio>
+                {% for source in transcript_audio_sources %}
+                  <source src="{{ source.url }}" type="{{ source.mimeType }}" />
+                {% endfor %}
+              </audio>
+            </div>
+          {% endif %}
+          {% if not contributor_assignments %}
+            <p>{% trans "Add contributors to the episode, or enter a name for this transcript only." %}</p>
+          {% endif %}
+          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
+            {% csrf_token %}
+
+            {% for hidden_field in speaker_mapping_form.hidden_fields %}
+              {{ hidden_field }}
+            {% endfor %}
+            <ul class="cast-speaker-mapping">
+              {% for row in speaker_mapping_rows %}
+                <li class="cast-speaker-mapping__row">
+                  <div class="cast-speaker-mapping__field">
+                    <p>
+                      <strong>{{ row.mapping.speaker_label }}</strong><br />
+                      {% if not row.named and row.mapping.review_state != "unmapped" %}{{ row.mapping.get_review_state_display }}{% endif %}
+                      {% if not row.mapping.active %} · {% trans "inactive" %}{% endif %}
+                    </p>
+                    {% if row.mapping.review_state == "stale" and row.mapping.target_display_name %}
+                      <p>{% blocktrans with name=row.mapping.target_display_name %}Before the transcript changed: {{ name }}. Listen to the samples and choose again.{% endblocktrans %}</p>
+                    {% endif %}
+                    {% if row.named %}<p>{% trans "Named" %}</p>{% else %}
+                    {% include "wagtailadmin/shared/field.html" with field=row.target_field %}
+                    {% include "wagtailadmin/shared/field.html" with field=row.display_name_field %}{% endif %}
+                  </div>
+                  <div class="cast-speaker-mapping__samples">
+                    {% if row.samples %}
+                      <ol class="cast-speaker-samples">
+                        {% for sample in row.samples %}
+                          <li class="cast-speaker-sample">
+                            {% if sample.has_start_time and transcript_audio_sources %}
+                              <button
+                                class="cast-speaker-sample__time"
+                                type="button"
+                                data-cast-speaker-seek="{{ sample.start_seconds|unlocalize }}"
+                              >
+                                {{ sample.timestamp_label }}
+                              </button>
+                            {% elif sample.timestamp_label %}
+                              <span class="cast-speaker-sample__time-label">{{ sample.timestamp_label }}</span>
+                            {% else %}
+                              <span class="cast-speaker-sample__time-label"></span>
+                            {% endif %}
+                            <p class="cast-speaker-sample__text">{{ sample.text }}</p>
+                          </li>
+                        {% endfor %}
+                      </ol>
+                    {% else %}
+                      <p class="cast-speaker-samples__empty">{% trans "No transcript samples found for this speaker." %}</p>
+                    {% endif %}
+                  </div>
+                </li>
+              {% endfor %}
+            </ul>
+            <ul class="fields">
+              {% if speaker_mapping_form.non_field_errors %}
+                <li>{{ speaker_mapping_form.non_field_errors }}</li>
+              {% endif %}
+              <li>
+                <input class="button" type="submit" value="{% trans 'Save speaker mappings' %}" />
+              </li>
+            </ul>
+          </form>
+
+        {% else %}<p>{% trans "No speakers found." %}</p>{% endif %}
+        {% if known_speaker_review.total %}
+          <h3>{% trans "Suggested names" %}</h3>
+          <p>
+            {% blocktrans with confident=known_speaker_review.confident uncertain=known_speaker_review.uncertain total=known_speaker_review.total %}
+              Voxhelm returned {{ total }} known-speaker suggestions: {{ confident }} confident and {{ uncertain }} uncertain (needs review).
+            {% endblocktrans %}
+          </p>
+          <ul class="cast-known-speaker-review">
+            {% for name, count in known_speaker_review.by_speaker.items %}
+              <li>{{ name }}: {{ count }} {% trans "confident segments" %}</li>
+            {% endfor %}
+          </ul>
+          <p>{% trans "Apply the suggested names, then check the uncertain passages below." %}</p>
+          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
+            {% csrf_token %}
+<input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
+            <input type="hidden" name="action" value="apply-known-speakers" />
+            <ul class="fields">
+              <li>
+                <input class="button" type="submit" value="{% trans 'Approve and apply confident suggestions' %}"{% if not known_speaker_review.confident %} disabled{% endif %} />
+              </li>
+            </ul>
+          </form>
+
+        {% endif %}

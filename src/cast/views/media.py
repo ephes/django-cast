@@ -68,6 +68,8 @@ class MediaAdminConfig:
     upload_in_progress_message: Any
     probe_timeout_message: Any
     probe_failed_message: Any
+    prepare_queryset: Callable[[Any], Any] = field(default=lambda queryset: queryset)
+    add_redirect_to_edit: bool = False
     lock_uploads: bool = False
     updated_message: Any = ""
     update_error_message: Any = ""
@@ -129,6 +131,7 @@ class MediaAdminViews:
         config = self.config
         user_can_add = config.permission_policy.user_has_permission(request.user, "add")
         base_items = config.permission_policy.instances_user_has_any_permission_for(request.user, ["change", "delete"])
+        base_items = config.prepare_queryset(base_items)
         if config.ordering is not None:
             base_items = base_items.order_by(config.ordering)
         if not user_can_add and not base_items.exists():
@@ -169,7 +172,7 @@ class MediaAdminViews:
             context["popular_tags"] = popular_tags_for_model(config.model)
         return render(request, f"{config.template_dir}/index.html", context)
 
-    def add(self, request: AuthenticatedHttpRequest) -> HttpResponse:
+    def add(self, request: AuthenticatedHttpRequest, *, initial: dict[str, Any] | None = None) -> HttpResponse:
         config = self.config
         if not config.permission_policy.user_has_permission(request.user, "add"):
             raise PermissionDenied
@@ -184,12 +187,14 @@ class MediaAdminViews:
                     config.added_message.format(config.message_arg(obj)),
                     buttons=[messages.button(reverse(f"{config.url_namespace}:edit", args=(obj.id,)), _("Edit"))],
                 )
+                if config.add_redirect_to_edit:
+                    return redirect(f"{config.url_namespace}:edit", obj.id)
                 return redirect(f"{config.url_namespace}:index")
             else:
-                messages.error(request, config.add_error_message)
+                messages.error(request, config.add_error_message.format(config.message_arg(obj)))
         else:
             obj = config.create_instance(request.user)
-            form = form_class(user=request.user, instance=obj)
+            form = form_class(user=request.user, instance=obj, initial=initial)
 
         return render(
             request,
@@ -266,6 +271,7 @@ class MediaAdminViews:
         if not config.permission_policy.user_has_permission(request.user, "choose"):
             raise PermissionDenied
         base_items = config.permission_policy.instances_user_has_permission_for(request.user, "choose")
+        base_items = config.prepare_queryset(base_items)
         if config.ordering is not None:
             base_items = base_items.order_by(config.ordering)
         items: models.QuerySet[Any] | BaseSearchResults = base_items

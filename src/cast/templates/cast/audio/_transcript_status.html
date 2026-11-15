@@ -1,13 +1,7 @@
 {% load i18n %}
-{% if transcript_generation_status %}
-  <p class="cast-transcript-status">
-    <strong>{% trans "Transcript status:" %}</strong> {{ transcript_generation_status }}.
-    {{ transcript_generation_message }}
-    {% if transcript_generation_error %}
-      {% blocktrans with message=transcript_generation_error %}Last error: {{ message }}{% endblocktrans %}
-    {% endif %}
-    {% if transcript_generation_transcript_url %}
-      <a href="{{ transcript_generation_transcript_url }}">{% trans "Edit transcript" %}</a>
-    {% endif %}
-  </p>
-{% endif %}
+<div data-transcript-status data-poll-error="{% trans 'Status could not be refreshed. Reload the page.' %}" data-status-url="{{ transcript_status_url }}" data-active="{{ transcript_generation_active|yesno:'true,false' }}">
+  <p class="cast-transcript-status" data-generation-message>{% if transcript_generation_status %}<strong>{% trans "Transcript status:" %}</strong> {{ transcript_generation_status }}. {{ transcript_generation_message }}{% endif %}</p>
+  <p data-generation-error>{{ transcript_generation_error }}</p>
+  <a data-generation-link{% if not transcript_generation_transcript_url %} hidden{% endif %} href="{{ transcript_generation_transcript_url }}">{% trans "Name the voices" %}</a>
+</div>
+{% include "cast/wagtail/_transcript_status_poll.html" %}

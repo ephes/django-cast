@@ -59,10 +59,22 @@ def get_speaker_mapping_context(transcript: Transcript) -> SpeakerMappingContext
 def resolve_voice_reference_contributor(
     speaker_label: str,
     contributor_assignments: list[EpisodeContributor],
+    speaker_mappings: list[TranscriptSpeakerMapping] | tuple[()] = (),
 ) -> Contributor | None:
+    mapped_ids = {
+        mapping.contributor_id
+        for mapping in speaker_mappings
+        if mapping.speaker_label == speaker_label
+        and mapping.active
+        and mapping.review_state == TranscriptSpeakerMapping.ReviewState.APPROVED
+        and mapping.source_artifact_fingerprint == mapping.transcript.mapping_fingerprint()
+        and mapping.contributor_id is not None
+    }
     contributors: dict[int, Contributor] = {}
     for assignment in contributor_assignments:
-        if assignment.display_name != speaker_label or assignment.contributor_id is None:
+        if (
+            assignment.display_name != speaker_label and assignment.contributor_id not in mapped_ids
+        ) or assignment.contributor_id is None:
             continue
         contributors[assignment.contributor_id] = assignment.contributor
     if len(contributors) == 1:
@@ -164,6 +176,7 @@ def create_voice_reference_from_candidate(
         contributor = resolve_voice_reference_contributor(
             candidate.speaker_label,
             speaker_mapping_context["contributor_assignments"],
+            speaker_mapping_context["speaker_mappings"],
         )
         if contributor is None:
             raise ValidationError(

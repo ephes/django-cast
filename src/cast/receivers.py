@@ -31,11 +31,21 @@ def clear_page_link_cache(sender: Any, **kwargs: Any) -> None:
     PageLinkHandlerWithCache.clear_cache()
 
 
+def delete_transcript_version(sender: Any, instance: Any, **kwargs: Any) -> None:
+    field = instance.previous_version
+    if field:
+        transaction.on_commit(lambda: field.storage.delete(field.name), using=kwargs.get("using"))
+
+
 def connect_receivers() -> None:
     from django.core.signals import request_finished, request_started
     from django.db.models.signals import post_delete, post_save, pre_save
     from wagtail.images import get_image_model
     from wagtail.models import PageViewRestriction
+
+    from .models.transcript import Transcript
+
+    post_delete.connect(delete_transcript_version, sender=Transcript, dispatch_uid="cast_delete_transcript_version")
 
     from .image_metadata import strip_upload_gps
 
