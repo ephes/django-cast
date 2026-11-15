@@ -428,8 +428,7 @@ Code Organization
     ├── management/                 # Django commands
     ├── quickstart.py               # django-cast-quickstart command
     ├── quickstart_templates/       # Project templates for quickstart
-    ├── devdata.py                  # Test and styleguide data builders
-    └── runner.py                   # pytest runner for manage.py test
+    └── devdata.py                  # Test and styleguide data builders
 
 ``tests/docs_paths_test.py`` fails when this tree misses a top-level module or
 a ``models/`` module, or when a module path mentioned in the docs does not exist.

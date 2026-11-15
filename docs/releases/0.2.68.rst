@@ -794,6 +794,10 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Remove the unused ``cast.runner`` module and direct ``python-dateutil``
+  dependency. Styleguide dates use standard-library calendar arithmetic.
+  Projects importing ``dateutil`` must declare it as their own dependency.
+
 - Share one frontend build script, remove obsolete apidoc cleanup and hook
   configuration, align django-upgrade with Django 5.2 and test naming with
   ``*_test.py``. Resolve styleguide pagination through the settings registry.

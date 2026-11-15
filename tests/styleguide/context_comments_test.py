@@ -578,7 +578,6 @@ def test_styleguide_comments_creates_parent_and_reply(site, comments_enabled):
 @pytest.mark.django_db
 def test_ensure_posts_updates_stale_visible_date(site):
     """When an existing styleguide post has a visible_date in the wrong month, _ensure_posts updates it."""
-    from dateutil.relativedelta import relativedelta
     from django.utils import timezone
 
     user = create_user(name="date-user", password="date-user")
@@ -599,5 +598,24 @@ def test_ensure_posts_updates_stale_visible_date(site):
     posts_again = styleguide_view._ensure_posts(blog, user, media, galleries, include_video_in_body=False)
     refreshed = Post.objects.get(pk=posts_again[1].pk)
     now = timezone.now()
-    expected_date = now - relativedelta(months=1)
-    assert refreshed.visible_date.strftime("%Y-%m") == expected_date.strftime("%Y-%m")
+    expected_year, expected_month = (now.year - 1, 12) if now.month == 1 else (now.year, now.month - 1)
+    assert (refreshed.visible_date.year, refreshed.visible_date.month) == (expected_year, expected_month)
+
+
+@pytest.mark.parametrize(
+    "now, months_back, expected",
+    [
+        ((2024, 3, 31), 1, (2024, 2, 29)),
+        ((2023, 3, 31), 1, (2023, 2, 28)),
+        ((2024, 12, 31), 1, (2024, 11, 30)),
+        ((2024, 12, 31), 12, (2023, 12, 31)),
+        ((2024, 3, 31), 0, (2024, 3, 31)),
+        ((2024, 3, 31), 3, (2023, 12, 31)),
+    ],
+)
+def test_styleguide_post_date_calendar_months(now, months_back, expected):
+    from datetime import UTC, datetime
+
+    value = datetime(*now, 12, 34, 56, 123456, tzinfo=UTC)
+    result = styleguide_view._styleguide_post_date(value, months_back)
+    assert result == datetime(*expected, 12, 34, 56, 123456, tzinfo=UTC)
