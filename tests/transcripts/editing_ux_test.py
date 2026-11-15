@@ -214,3 +214,66 @@ def test_transcript_title_falls_back_to_audio_and_links_all_episodes(admin_clien
     content = admin_client.get(url).content.decode()
     for item in (episode, unpublished_episode):
         assert reverse("wagtailadmin_pages:edit", args=(item.pk,)) in content
+
+
+def test_long_segment_review_is_paged_and_preserves_other_pages(admin_client, episode):
+    from cast.transcripts.services import artifact_revision
+    from tests.known_speaker_apply_test import make_transcript
+
+    transcript = make_transcript(
+        episode.podcast_audio,
+        podlove={
+            "transcripts": [
+                {"start_ms": index * 3000, "text": "Passage", "speaker": "Speaker 1"} for index in range(1200)
+            ]
+        },
+        speakers={
+            "segments": [{"start": index * 3.0, "speaker": None, "speaker_uncertain": True} for index in range(1200)]
+        },
+    )
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    response = admin_client.get(url)
+    assert len(response.content) < 300_000
+    form = response.context["known_speaker_review_form"]
+    assert len(form.segment_field_names) == 50
+    data = {name: field.initial for name, field in form.fields.items()}
+    data["artifact_revision"] = artifact_revision(transcript)
+    data["known_speaker_segment_0"] = "__blank__"
+    assert len(data) < 100
+    assert admin_client.post(url, data).status_code == 302
+    transcript.refresh_from_db()
+    response = admin_client.get(url, {"review_page": 2})
+    form = response.context["known_speaker_review_form"]
+    assert min(form.segment_field_names.values()) == 50
+    data = {name: field.initial for name, field in form.fields.items()}
+    data["artifact_revision"] = artifact_revision(transcript)
+    data["known_speaker_segment_50"] = "__blank__"
+    assert admin_client.post(url + "?review_page=2", data).status_code == 302
+    transcript.refresh_from_db()
+    segments = transcript.get_speaker_suggestions()
+    assert segments[0]["editor_decision"] == {"action": "reject", "speaker": ""}
+    assert segments[50]["editor_decision"] == {"action": "reject", "speaker": ""}
+    assert "editor_decision" not in segments[100]
+
+
+def test_segment_review_filter_and_missing_post_fields(admin_client, episode):
+    from cast.forms import KnownSpeakerSegmentReviewForm
+    from tests.known_speaker_apply_test import make_transcript
+
+    segments = [
+        {"start": 0, "speaker": "Host"},
+        {"start": 1, "speaker": "Host", "low_margin": True},
+        {"start": 2, "speaker": None},
+        {"start": 3, "speaker": "Host", "editor_decision": {"action": "approve", "speaker": "Host"}},
+    ]
+    transcript = make_transcript(episode.podcast_audio, speakers={"segments": segments})
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    response = admin_client.get(url)
+    assert list(response.context["known_speaker_review_form"].segment_field_names.values()) == [1, 2, 3]
+    response = admin_client.get(url, {"review_filter": "all", "review_page": "bad"})
+    assert len(response.context["known_speaker_review_form"].segment_field_names) == 4
+    form = KnownSpeakerSegmentReviewForm(
+        {"action": "review-known-speakers"}, segments=segments, contributor_assignments=[], segment_positions=[3]
+    )
+    assert form.is_valid()
+    assert form.segment_decisions == {}

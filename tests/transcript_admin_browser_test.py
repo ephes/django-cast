@@ -6,7 +6,7 @@ import pytest
 from django.urls import reverse
 from playwright.sync_api import expect, sync_playwright
 
-from cast.devdata import create_transcript
+from tests.known_speaker_apply_test import make_transcript
 
 
 @pytest.mark.django_db(transaction=True)
@@ -15,9 +15,14 @@ def test_transcript_admin_journey(client, admin_user, episode, settings, live_se
     monkeypatch.setenv("DJANGO_ALLOW_ASYNC_UNSAFE", "true")
     settings.SESSION_ENGINE = "django.contrib.sessions.backends.db"
     client.force_login(admin_user)
-    transcript = create_transcript(
-        audio=episode.podcast_audio,
-        podlove={"transcripts": [{"speaker": "Speaker 1", "start_ms": 0, "text": "Hello"}]},
+    transcript = make_transcript(
+        episode.podcast_audio,
+        podlove={
+            "transcripts": [
+                {"speaker": "Speaker 1", "start_ms": index * 3000, "text": "Hello"} for index in range(1200)
+            ]
+        },
+        speakers={"segments": [{"start": index * 3.0, "speaker_uncertain": True} for index in range(1200)]},
     )
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch(executable_path=os.environ.get("CAST_BROWSER_EXECUTABLE"))
@@ -47,6 +52,11 @@ def test_transcript_admin_journey(client, admin_user, episode, settings, live_se
             page.get_by_role("button", name="Save", exact=True).click()
             expect(page).to_have_url(live_server.url + reverse("cast-transcript:edit", args=(transcript.pk,)))
             expect(page.get_by_role("button", name="Save speaker mappings")).to_be_visible()
+            expect(page.locator(".cast-known-speaker-segments tbody tr")).to_have_count(50)
+            page.get_by_role("button", name="Save segment decisions", exact=True).click()
+            expect(page.locator(".cast-known-speaker-segments tbody tr")).to_have_count(50)
+            page.get_by_role("link", name="Next", exact=True).click()
+            expect(page.locator("select[name=known_speaker_segment_50]")).to_be_visible()
             assert errors == []
         finally:
             browser.close()

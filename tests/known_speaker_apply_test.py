@@ -652,8 +652,8 @@ def test_known_speaker_segment_review_form_cleans_segment_decisions(audio):
     )
     assert initial_form.fields["known_speaker_segment_3"].initial == "__blank__"
     assert [choice[1] for choice in initial_form.fields["known_speaker_segment_0"].choices] == [
-        "Use bulk result",
-        "Leave blank",
+        "As suggested",
+        "No name",
         "Johannes",
         "Candidate",
         "Named",
@@ -679,7 +679,6 @@ def test_known_speaker_segment_review_form_cleans_segment_decisions(audio):
         0: {"action": "approve", "speaker": "Johannes"},
         1: {"action": "reject", "speaker": ""},
         2: {"action": "correct", "speaker": "Candidate"},
-        3: None,
     }
 
 
@@ -895,7 +894,7 @@ class TestKnownSpeakerReviewView:
         transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, speakers=SPEAKERS)
 
         response = admin_client.post(
-            reverse("cast-transcript:edit", args=(transcript.id,)),
+            reverse("cast-transcript:edit", args=(transcript.id,)) + "?review_filter=all",
             {
                 "action": "review-known-speakers",
                 "artifact_revision": services.artifact_revision(transcript),
@@ -911,7 +910,7 @@ class TestKnownSpeakerReviewView:
     def test_apply_action_without_suggestions_warns(self, admin_client, audio):
         transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE)
         response = admin_client.post(
-            reverse("cast-transcript:edit", args=(transcript.id,)),
+            reverse("cast-transcript:edit", args=(transcript.id,)) + "?review_filter=all",
             {"artifact_revision": services.artifact_revision(transcript), "action": "apply-known-speakers"},
         )
         assert response.status_code == 302
@@ -976,7 +975,7 @@ def test_review_without_revision_is_rejected(admin_client, audio):
 @pytest.mark.django_db
 def test_editor_detects_source_change_after_revision_check(admin_client, audio, monkeypatch):
     transcript = make_transcript(audio, speakers=SPEAKERS)
-    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    url = reverse("cast-transcript:edit", args=(transcript.pk,)) + "?review_filter=all"
     revision = admin_client.get(url).context["artifact_revision"]
     original_write = Transcript._write_speakers_data
     staged = []
@@ -1001,7 +1000,7 @@ def test_editor_detects_source_change_after_revision_check(admin_client, audio, 
 @pytest.mark.parametrize("changed_decisions", [False, True])
 def test_apply_conflict_reports_whether_decisions_were_saved(admin_client, audio, monkeypatch, changed_decisions):
     transcript = make_transcript(audio, podlove=PODLOVE, speakers=SPEAKERS)
-    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    url = reverse("cast-transcript:edit", args=(transcript.pk,)) + "?review_filter=all"
     revision = admin_client.get(url).context["artifact_revision"]
     original_apply = Transcript.apply_known_speaker_suggestions
 

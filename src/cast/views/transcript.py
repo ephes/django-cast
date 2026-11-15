@@ -2,8 +2,10 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TypedDict, cast
+from urllib.parse import urlencode
 
 from django.core.exceptions import ValidationError
+from django.core.paginator import Page as PaginatorPage, Paginator
 from django.db.models import Count, F, Q
 from django.db.models.fields.files import FieldFile
 from django.forms.boundfield import BoundField
@@ -355,6 +357,25 @@ def _handle_known_speaker_apply(
     return redirect("cast-transcript:edit", transcript_id=transcript.id)
 
 
+def get_known_speaker_review_page(
+    request: HttpRequest, transcript: Transcript
+) -> tuple[list[dict[str, Any]], PaginatorPage, str]:
+    segments = transcript.get_speaker_suggestions()
+    review_filter = "all" if request.GET.get("review_filter") == "all" else "needs_decision"
+    positions = [
+        position
+        for position, segment in enumerate(segments)
+        if review_filter == "all"
+        or (
+            segment.get("speaker_uncertain")
+            or segment.get("low_margin")
+            or not segment.get("speaker")
+            or segment.get("editor_decision")
+        )
+    ]
+    return segments, Paginator(positions, 50).get_page(request.GET.get("review_page")), review_filter
+
+
 def _handle_known_speaker_review(
     request: HttpRequest,
     transcript: Transcript,
@@ -362,9 +383,11 @@ def _handle_known_speaker_review(
 ) -> HttpResponse | EditFormState:
     form = TranscriptForm(instance=transcript, user=request.user)
     speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
+    segments, review_page, review_filter = get_known_speaker_review_page(request, transcript)
     known_speaker_review_form = KnownSpeakerSegmentReviewForm(
         request.POST,
-        segments=transcript.get_speaker_suggestions(),
+        segments=segments,
+        segment_positions=list(review_page),
         contributor_assignments=speaker_mapping_context["contributor_assignments"],
         multiple_episodes=speaker_mapping_context["multiple_episodes"],
     )
@@ -386,7 +409,12 @@ def _handle_known_speaker_review(
             )
         else:
             messages.warning(request, _("No known-speaker segment decisions were changed."))
-        return redirect("cast-transcript:edit", transcript_id=transcript.id)
+        return redirect(
+            reverse("cast-transcript:edit", args=(transcript.pk,))
+            + "?"
+            + urlencode({"review_page": review_page.number, "review_filter": review_filter})
+            + "#segment-review"
+        )
     messages.error(request, _("The known-speaker segment decisions could not be saved due to errors."))
     return EditFormState(
         form=form,
@@ -610,9 +638,11 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
     form = form_state.form
     speaker_mapping_form = form_state.speaker_mapping_form
     known_speaker_review_form = form_state.known_speaker_review_form
+    segments, review_page, review_filter = get_known_speaker_review_page(request, transcript)
     if known_speaker_review_form is None:
         known_speaker_review_form = KnownSpeakerSegmentReviewForm(
-            segments=transcript.get_speaker_suggestions(),
+            segments=segments,
+            segment_positions=list(review_page),
             contributor_assignments=speaker_mapping_context["contributor_assignments"],
             multiple_episodes=speaker_mapping_context["multiple_episodes"],
         )
@@ -641,6 +671,8 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
             "known_speaker_review": transcript.known_speaker_review_summary(),
             "known_speaker_review_form": known_speaker_review_form,
             "known_speaker_review_rows": known_speaker_review_rows,
+            "review_page": review_page,
+            "review_filter": review_filter,
             "glossary_review": transcript_glossary.get_glossary_review(transcript, request.user),
             "user_can_delete": transcript_permission_policy.user_has_permission_for_instance(
                 request.user, "delete", transcript

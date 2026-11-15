@@ -1,6 +1,10 @@
 Unreleased
 ==========
 
+- Paginate segment decisions in groups of 50, with Needs a decision and All
+  passages filters. Partial saves preserve other pages and omitted decisions,
+  preventing TooManyFieldsSent on long transcripts.
+
 - Name transcript editors and file save messages after the episode, link back
   to episodes, and keep file saves on the editor. Transcript lists search episode
   titles and show file availability and voice mapping counts.

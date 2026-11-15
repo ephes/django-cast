@@ -1233,3 +1233,15 @@ both episode and audio titles. Related audio/episodes and mapping counts are
 loaded in a constant number of queries for each list page. These admin template
 changes do not affect public theme templates; no existing template blocks were
 renamed.
+
+Reviewing long transcripts
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Passages to check shows at most 50 segment decisions per page. The default
+``Needs a decision`` filter includes uncertain suggestions, low-margin/no-name
+suggestions and existing editor decisions. ``All passages`` includes confident
+suggestions too. Choices are ``As suggested``, ``No name`` and speaker names.
+Saving preserves the current filter/page and changes only submitted decisions
+on that page. Other pages and omitted fields retain their decisions. The
+artifact revision check still refuses concurrent replacement. This avoids
+Django's default 1,000-field request limit without raising the site setting.

@@ -402,7 +402,17 @@
             </ul>
           </form>
 
-          <form action="{% url 'cast-transcript:edit' transcript.id %}" method="POST" novalidate>
+          <div id="segment-review">
+          <h3>{% trans "Passages to check" %}</h3>
+          <form method="get">
+            <label for="review-filter">{% trans "Show passages" %}</label>
+            <select id="review-filter" name="review_filter">
+              <option value="needs_decision"{% if review_filter == "needs_decision" %} selected{% endif %}>{% trans "Needs a decision" %}</option>
+              <option value="all"{% if review_filter == "all" %} selected{% endif %}>{% trans "All passages" %}</option>
+            </select>
+            <button class="button button-secondary" type="submit">{% trans "Filter" %}</button>
+          </form>
+          <form action="{{ request.get_full_path }}#segment-review" method="POST" novalidate>
             {% csrf_token %}
 <input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
             {% for hidden_field in known_speaker_review_form.hidden_fields %}
@@ -471,7 +481,12 @@
               </li>
             </ul>
           </form>
-
+          <nav aria-label="{% trans 'Passage pages' %}">
+            {% if review_page.has_previous %}<a href="?review_filter={{ review_filter }}&amp;review_page={{ review_page.previous_page_number }}#segment-review">{% trans "Previous" %}</a>{% endif %}
+            {% blocktrans with number=review_page.number total=review_page.paginator.num_pages %}Page {{ number }} of {{ total }}{% endblocktrans %}
+            {% if review_page.has_next %}<a href="?review_filter={{ review_filter }}&amp;review_page={{ review_page.next_page_number }}#segment-review">{% trans "Next" %}</a>{% endif %}
+          </nav>
+          </div>
           <hr />
         {% endif %}
 

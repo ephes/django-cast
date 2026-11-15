@@ -576,6 +576,7 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
         segments: list[dict[str, Any]],
         contributor_assignments: list[EpisodeContributor],
         multiple_episodes: bool = False,
+        segment_positions: list[int] | None = None,
         **kwargs: Any,
     ) -> None:
         del multiple_episodes
@@ -584,17 +585,19 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
         self.segment_field_names: dict[str, int] = {}
         self.speaker_choice_lookup: dict[str, str] = {}
         self.speaker_value_by_name: dict[str, str] = {}
-        speaker_names = self._speaker_names(segments, contributor_assignments)
+        positions = list(range(len(segments))) if segment_positions is None else segment_positions
+        speaker_names = self._speaker_names([segments[position] for position in positions], contributor_assignments)
         choices: list[tuple[str, str]] = [
-            (KNOWN_SPEAKER_REVIEW_BULK_VALUE, str(_("Use bulk result"))),
-            (KNOWN_SPEAKER_REVIEW_BLANK_VALUE, str(_("Leave blank"))),
+            (KNOWN_SPEAKER_REVIEW_BULK_VALUE, str(_("As suggested"))),
+            (KNOWN_SPEAKER_REVIEW_BLANK_VALUE, str(_("No name"))),
         ]
         for name in speaker_names:
             value = self._speaker_choice_value(name)
             self.speaker_choice_lookup[value] = name
             self.speaker_value_by_name[name] = value
             choices.append((value, name))
-        for position, segment in enumerate(segments):
+        for position in positions:
+            segment = segments[position]
             field_name = f"known_speaker_segment_{position}"
             self.segment_field_names[field_name] = position
             field = forms.ChoiceField(
@@ -657,6 +660,8 @@ class KnownSpeakerSegmentReviewForm(forms.Form):
         cleaned_data = super().clean() or {}
         segment_decisions: dict[int, dict[str, str] | None] = {}
         for field_name, position in self.segment_field_names.items():
+            if field_name not in self.data:
+                continue
             value = cleaned_data.get(field_name) or KNOWN_SPEAKER_REVIEW_BULK_VALUE
             if value == KNOWN_SPEAKER_REVIEW_BULK_VALUE:
                 segment_decisions[position] = None

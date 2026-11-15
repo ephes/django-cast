@@ -231,3 +231,27 @@ msgstr "Player"
 
 msgid "Transcripts"
 msgstr "Transkripte"
+
+msgid "As suggested"
+msgstr "Wie vorgeschlagen"
+
+msgid "No name"
+msgstr "Kein Name"
+
+msgid "Passages to check"
+msgstr "Zu prüfende Passagen"
+
+msgid "Show passages"
+msgstr "Passagen anzeigen"
+
+msgid "Needs a decision"
+msgstr "Entscheidung erforderlich"
+
+msgid "All passages"
+msgstr "Alle Passagen"
+
+msgid "Passage pages"
+msgstr "Passagenseiten"
+
+msgid "Page %(number)s of %(total)s"
+msgstr "Seite %(number)s von %(total)s"
