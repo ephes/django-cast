@@ -263,6 +263,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         """Return a stable hash for the current raw public transcript artifacts."""
         digest = hashlib.sha256()
         saw_content = False
+        total_bytes = 0
         for field_name in TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS:
             file_field = getattr(self, field_name)
             if not file_field or not file_field.name:
@@ -272,7 +273,24 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
                 with file_field.storage.open(file_field.name, "rb") as file:
                     artifact_digest.update(field_name.encode("utf-8"))
                     artifact_digest.update(b"\0")
-                    for chunk in iter(lambda: file.read(65536), b""):
+                    artifact_bytes = 0
+                    while chunk := file.read(
+                        min(
+                            65536,
+                            parsing.MAX_TRANSCRIPT_FINGERPRINT_ARTIFACT_BYTES + 1 - artifact_bytes,
+                            parsing.MAX_TRANSCRIPT_FINGERPRINT_TOTAL_BYTES + 1 - total_bytes,
+                        )
+                    ):
+                        artifact_bytes += len(chunk)
+                        total_bytes += len(chunk)
+                        if (
+                            artifact_bytes > parsing.MAX_TRANSCRIPT_FINGERPRINT_ARTIFACT_BYTES
+                            or total_bytes > parsing.MAX_TRANSCRIPT_FINGERPRINT_TOTAL_BYTES
+                        ):
+                            raise parsing.TranscriptArtifactError(
+                                "Transcript fingerprint byte budget exceeded (10 MiB per artifact, 30 MiB total). "
+                                "Replace the artifact and reload."
+                            )
                         artifact_digest.update(chunk)
             except (FileNotFoundError, OSError, ValueError, RecursionError):
                 continue

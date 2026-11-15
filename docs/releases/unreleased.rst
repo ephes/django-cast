@@ -1,6 +1,16 @@
 Unreleased
 ==========
 
+- Bound transcript fingerprint hashing to 10 MiB per artifact and 30 MiB total,
+  with bounded reads and an editorial error before signing partial evidence.
+  Bind signed voice-reference choices to the source audio storage generation
+  and duration under the audio lock; old choices require a fresh preview.
+
+- Exclude booleans and other non-integer/negative Podlove millisecond identities
+  from text/speaker edits, refusing boolean aliases before editorial staging.
+  Refuse duplicate rounded speaker-suggestion keys and ambiguous selected starts
+  in Podlove, DOTe or WebVTT, preserving all original artifacts on refusal.
+
 - Refuse keyword/reserved quickstart project names, and names that shadow an
   importable stdlib or installed module, before writes; reserve the
   project root exclusively and clean up only its original filesystem identity.

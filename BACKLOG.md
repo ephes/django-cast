@@ -2,6 +2,10 @@
 
 This is the canonical planning backlog for django-cast. Keep it small and actionable.
 
+- Round 99 bounded candidate evidence and editorial timestamp correspondence are
+  implemented; external clerk review and integration are pending. See the
+  [validation/handoff record](backlog/2026-11-15-scout-round99.md).
+
 - Round 97 quickstart ownership/recovery and consented contributor references are
   implemented; external clerk review and integration are pending. See the
   [validation/handoff record](backlog/2026-11-15-scout-round97.md).

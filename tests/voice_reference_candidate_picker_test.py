@@ -601,3 +601,36 @@ def test_helper_rechecks_candidate_after_loading_current_generation(episode):
     with pytest.raises(ValidationError, match="Reload the transcript"):
         create_voice_reference_from_candidate(stale, context, candidate, status="pending", consent_confirmed=False)
     assert not ContributorVoiceReference.objects.exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("change", ["file", "duration"])
+def test_candidate_choice_requires_current_source_audio(admin_client, episode, change):
+    from datetime import timedelta
+
+    from django.core.files.base import ContentFile
+
+    contributor = Contributor.objects.create(display_name="Alice", slug="synthetic-source")
+    EpisodeContributor.objects.create(episode=episode, contributor=contributor, role="host")
+    audio = episode.podcast_audio
+    transcript = create_transcript(audio=audio, podlove={"transcripts": [podlove_segment("Alice", "1", "12")]})
+    url = reverse("cast-transcript:edit", args=(transcript.pk,))
+    token = candidate_token(transcript)
+    if change == "file":
+        audio.mp3.save("synthetic-replacement.mp3", ContentFile(b"synthetic audio"), save=False)
+    else:
+        audio.duration = timedelta(seconds=90)
+    audio.save(duration=False, cache_file_sizes=False)
+    post = {
+        "action": "create-voice-reference",
+        "speaker_label": "Alice",
+        "candidate_rank": "1",
+        "candidate_token": token,
+        "voice_reference_status": "pending",
+    }
+    assert admin_client.post(url, post).status_code == 200
+    assert not ContributorVoiceReference.objects.exists()
+    transcript.refresh_from_db()
+    post["candidate_token"] = candidate_token(transcript)
+    assert admin_client.post(url, post).status_code == 302
+    assert ContributorVoiceReference.objects.count() == 1
