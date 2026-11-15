@@ -8,8 +8,7 @@ from django_comments.forms import CommentForm
 
 from cast.models.moderation import NaiveBayes, SpamFilter
 from cast.moderation import Moderator
-
-from .factories import UserFactory
+from tests.factories import UserFactory
 
 
 class TestPostComments:

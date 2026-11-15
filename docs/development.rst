@@ -643,7 +643,7 @@ Test dependencies are declared once in ``pyproject.toml``'s ``test`` group.
 The ``dev`` group includes it and tox installs it via ``dependency_groups``.
 Playwright remains dev-only; the optional comment browser journey skips cleanly
 when it is absent. To run it with Playwright and Chromium installed, use
-``CAST_RUN_BROWSER=1 uv run pytest tests/comment_browser_test.py``.
+``CAST_RUN_BROWSER=1 uv run pytest tests/comments/comment_browser_test.py``.
 
 The isolated collect check needs a warm uv cache or network access. If only
 creating that environment is blocked, run the remaining ``just check`` recipes

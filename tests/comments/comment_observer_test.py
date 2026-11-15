@@ -7,7 +7,7 @@ from django.db import transaction
 from django_comments import get_model, signals
 
 from cast.comments import author_edits
-from tests.comment_page_access_test import comment_payload, submit
+from tests.comments.comment_page_access_helpers import comment_payload, submit
 
 
 @pytest.fixture

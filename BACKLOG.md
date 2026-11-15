@@ -32,8 +32,8 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Structure quick wins: green trunk, parallel tests, readable release notes
   - Design: [docs/design/structure-quick-wins.md](docs/design/structure-quick-wins.md)
-  - S1–S5 are implemented on stacked parked branches; external review and integration remain pending.
-    S6–S8 follow. Both consumer sites install from `develop`.
+  - S1–S8 are implemented on stacked parked branches; external review and integration remain pending.
+    Both consumer sites install from `develop`.
   - Scope: eight small slices ranked by benefit per effort: local gates and manual workflows with one test dependency list, `pytest -n 4`,
     one release-notes file with upgrade actions first, single version source, backlog hygiene, tooling drift,
     shipped-surface trims (`runner.py`, `python-dateutil`), test tree tidy-up.

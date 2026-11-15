@@ -9,7 +9,7 @@ from wagtail.models import PageViewRestriction
 
 from cast.comments import author_edits
 from cast.comments.models import CommentAuthorMeta
-from tests.comment_author_edits_test import AJAX, seed_ownership
+from tests.comments.comment_author_edits_helpers import AJAX, seed_ownership
 from tests.factories import UserFactory
 
 pytestmark = pytest.mark.django_db

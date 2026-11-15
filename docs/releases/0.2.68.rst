@@ -794,6 +794,10 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Organize tests by comments, feeds, media handling and transcripts, replace
+  round names with topic names, and move shared setup helpers out of test modules.
+  Test behavior is unchanged.
+
 - Remove the unused ``cast.runner`` module and direct ``python-dateutil``
   dependency. Styleguide dates use standard-library calendar arithmetic.
   Projects importing ``dateutil`` must declare it as their own dependency.

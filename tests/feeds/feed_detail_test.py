@@ -4,9 +4,8 @@ from django.urls import reverse
 from cast import appsettings
 from cast.models import Audio
 from cast.views.feed import _resolve_feed_detail_template, get_podcast_feed_urls
-
-from .factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory
-from .multisite_helpers import create_site_root
+from tests.factories import BlogFactory, EpisodeFactory, PodcastFactory, PostFactory
+from tests.multisite_helpers import create_site_root
 
 
 class TestFeedDetailForBlog:

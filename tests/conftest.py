@@ -1195,7 +1195,7 @@ def scoped_editor_audio(site):
 
     from django.core.files.base import ContentFile
 
-    from tests.api.editor_posts_test import (
+    from tests.api.editor_posts_helpers import (
         grant_collection_permission,
         grant_wagtail_admin_access,
         page_permission_user,

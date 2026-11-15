@@ -11,7 +11,7 @@ from django.urls import reverse
 from django_comments import get_form, get_model
 
 from cast.comments import author_edits
-from tests.comment_author_edits_test import AJAX, seed_ownership
+from tests.comments.comment_author_edits_helpers import AJAX, seed_ownership
 from tests.factories import PostFactory
 
 

@@ -6,7 +6,7 @@ from threading import Event
 import pytest
 
 from cast.management.commands.storage_backend import copy_missing_file, refresh_existing_file
-from tests.management_command_test import StubOverwriteStorage
+from tests.management_command_helpers import StubOverwriteStorage
 
 
 def test_missing_copy_stages_before_a_partial_save_and_retry_recovers(mocker):

@@ -9,6 +9,7 @@ from django.conf import settings as dj_settings
 from django.utils import timezone
 
 from cast.comments import author_edits
+from tests.comments.comment_author_edits_helpers import AJAX, seed_ownership
 
 
 def make_session():
@@ -231,15 +232,6 @@ def post_a_comment(client, post, text="hello world", parent=None):
         data,
         HTTP_X_REQUESTED_WITH="XMLHttpRequest",
     )
-
-
-def seed_ownership(client, comment):
-    session = client.session
-    session[author_edits.SESSION_KEY] = [str(comment.pk)]
-    session.save()
-
-
-AJAX = {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}
 
 
 class TestEditEndpoint:

@@ -8,7 +8,7 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from cast.transcripts import known_speakers, parsing, services
-from tests.known_speaker_apply_test import DOTE, PODLOVE, SPEAKERS, make_transcript
+from tests.transcripts.known_speaker_apply_helpers import DOTE, PODLOVE, SPEAKERS, make_transcript
 
 
 @pytest.mark.parametrize("value", [[], {}, True, False, 1])

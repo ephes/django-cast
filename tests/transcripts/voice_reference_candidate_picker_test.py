@@ -17,29 +17,13 @@ from cast.views.transcript import (
     resolve_voice_reference_contributor,
     validation_error_message,
 )
+from tests.transcripts.voice_reference_candidate_picker_helpers import podlove_segment
 
 
 def candidate_token(transcript, speaker="Alice"):
     response_context = get_speaker_mapping_context(transcript)
     groups = get_voice_reference_candidate_groups(transcript, response_context)
     return next(group["rows"][0]["candidate_token"] for group in groups if group["speaker_label"] == speaker)
-
-
-def podlove_segment(
-    speaker: str,
-    start: str,
-    end: str,
-    *,
-    text: str | None = None,
-    voice: str | None = None,
-) -> dict:
-    return {
-        "speaker": speaker,
-        "voice": speaker if voice is None else voice,
-        "start_ms": int(Decimal(start) * 1000),
-        "end_ms": int(Decimal(end) * 1000),
-        "text": text if text is not None else f"{speaker} says enough useful words for a candidate range.",
-    }
 
 
 @pytest.mark.django_db

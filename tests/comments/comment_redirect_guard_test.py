@@ -7,7 +7,7 @@ from django.urls import reverse
 from django_comments import get_model
 from wagtail.models import GroupPagePermission, Page, PageViewRestriction
 
-from .factories import UserFactory
+from tests.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
 

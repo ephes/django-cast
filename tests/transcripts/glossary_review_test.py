@@ -12,7 +12,7 @@ from cast.transcripts.corrections import (
 )
 from cast.views.transcript_glossary import corrected_context, marked_context
 from tests.factories import EpisodeFactory, UserFactory
-from tests.transcripts.corrections_test import BODY, make_transcript, public_texts
+from tests.transcripts.corrections_helpers import BODY, make_transcript, public_texts
 
 TEXTS = [
     (10000, "John said Gunacorn is fast."),

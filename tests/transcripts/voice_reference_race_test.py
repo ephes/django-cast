@@ -11,7 +11,7 @@ from cast.devdata import create_transcript
 from cast.models import Audio, Contributor, EpisodeContributor
 from cast.models.contributors import ContributorVoiceReference
 from cast.transcripts import editing
-from tests.voice_reference_candidate_picker_test import podlove_segment
+from tests.transcripts.voice_reference_candidate_picker_helpers import podlove_segment
 
 
 @pytest.mark.django_db(transaction=True)

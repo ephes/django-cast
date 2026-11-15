@@ -10,8 +10,8 @@ from django.urls import reverse
 
 from cast.models import Transcript
 from cast.transcripts import parsing
-from tests.known_speaker_apply_test import make_transcript
-from tests.voice_reference_candidate_picker_test import podlove_segment
+from tests.transcripts.known_speaker_apply_helpers import make_transcript
+from tests.transcripts.voice_reference_candidate_picker_helpers import podlove_segment
 
 
 @pytest.mark.parametrize("kind", ["oversized", "endless", "short"])

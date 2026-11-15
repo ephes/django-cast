@@ -1,7 +1,11 @@
 import pytest
 from django.urls import reverse
 
-from tests.api.editor_posts_test import grant_collection_permission, grant_wagtail_admin_access, page_permission_user
+from tests.api.editor_posts_helpers import (
+    grant_collection_permission,
+    grant_wagtail_admin_access,
+    page_permission_user,
+)
 from tests.block_assertions import block_values
 
 

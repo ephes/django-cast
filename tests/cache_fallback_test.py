@@ -14,7 +14,7 @@ from django.urls import reverse
 
 from cast import cache_policy, media_ingest
 from cast.comments.throttle import comment_post_retry_after
-from tests.comment_post_rate_limit_test import comment_count, post_ajax, post_plain
+from tests.comments.comment_post_rate_limit_helpers import comment_count, post_ajax, post_plain
 
 
 class UnverifiedCache(LocMemCache):

@@ -18,6 +18,7 @@ from cast.management.commands.media_stale import Command as MediaStaleCommand
 from cast.models import Contributor, Video
 from cast.models.contributors import ContributorVoiceReference
 from cast.voxhelm import TranscriptGenerationResult, VoxhelmError
+from tests.management_command_helpers import StubOverwriteStorage, storage_listing
 
 from .factories import BlogFactory
 from .multisite_helpers import create_site_root
@@ -125,12 +126,6 @@ class StubLocalStorage:
         yield BytesIO(self._files[name])
 
 
-def storage_listing(files, path):
-    prefix = path + "/" if path else ""
-    names = [name[len(prefix) :] for name in files if name.startswith(prefix)]
-    return sorted({name.split("/")[0] for name in names if "/" in name}), [name for name in names if "/" not in name]
-
-
 class StubWalkStorage:
     def __init__(self, files: dict[str, bytes]) -> None:
         self._files = files
@@ -184,48 +179,6 @@ def test_media_backup_existing_file_in_backup(stub_storages):
 
     # then the file should not have been added by the backup command
     assert backup.was_not_added_by_backup("foobar.jpg")  # type: ignore
-
-
-class StubOverwriteStorage:
-    """In-memory storage that overwrites existing names, like object storage does."""
-
-    def __init__(self, files: dict[str, bytes] | None = None) -> None:
-        self._files: dict[str, bytes] = dict(files or {})
-        self.saved: list[str] = []
-        self.deleted: list[str] = []
-        self.opened: list[str] = []
-
-    def exists(self, path: str) -> bool:
-        return path in self._files
-
-    def get_modified_time(self, path: str):
-        return timezone.now() - timedelta(days=8)
-
-    def get_created_time(self, path: str):
-        raise NotImplementedError
-
-    def size(self, path: str) -> int:
-        return len(self._files[path])
-
-    def listdir(self, path: str) -> tuple[list[str], list[str]]:
-        return storage_listing(self._files, path)
-
-    def save(self, name: str, content: BytesIO) -> str:
-        self.saved.append(name)
-        self._files[name] = content.read()
-        return name
-
-    def delete(self, path: str) -> None:
-        self.deleted.append(path)
-        self._files.pop(path, None)
-
-    @contextmanager
-    def open(self, name: str, _mode: str) -> Iterator[BytesIO]:
-        self.opened.append(name)
-        yield BytesIO(self._files[name])
-
-    def staged(self) -> list[str]:
-        return [name for name in self._files if ".django-cast-refresh-" in name]
 
 
 def patch_backup_storages(mocker, production, backup):

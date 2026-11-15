@@ -2,11 +2,11 @@
 
 import pytest
 from django.contrib.auth.models import Group
-from django.urls import reverse
-from django_comments import get_form, get_model
+from django_comments import get_model
 from wagtail.models import PageViewRestriction
 
-from .factories import UserFactory
+from tests.comments.comment_page_access_helpers import comment_payload, submit
+from tests.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
 
@@ -14,24 +14,6 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture(params=["comments-post-comment", "comments-post-comment-ajax"])
 def comment_endpoint(request):
     return request.param
-
-
-@pytest.fixture(params=[False, True], ids=["create", "preview"])
-def preview(request):
-    return request.param
-
-
-def comment_payload(target, preview):
-    form = get_form()(target)
-    data = {name: str(form[name].value()) for name in ("content_type", "object_pk", "timestamp", "security_hash")}
-    data.update(comment="Still allowed?", name="Visitor", email="visitor@example.com", title="Comment")
-    if preview:
-        data["preview"] = "1"
-    return data
-
-
-def submit(client, endpoint, data):
-    return client.post(reverse(endpoint), data, HTTP_X_REQUESTED_WITH="XMLHttpRequest")
 
 
 @pytest.mark.parametrize("revocation", ["unpublish", "login", "groups", "password", "inherited_login"])
@@ -140,3 +122,8 @@ def test_superuser_cannot_comment_on_unpublished_page(client, post, comments_ena
     response = submit(client, comment_endpoint, data)
     assert response.status_code == 403
     assert get_model().objects.count() == before
+
+
+@pytest.fixture(params=[False, True], ids=["create", "preview"])
+def preview(request):
+    return request.param

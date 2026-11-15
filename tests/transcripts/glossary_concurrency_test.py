@@ -10,7 +10,7 @@ from wagtail.models import Collection
 from cast.models import Audio, Contributor, EpisodeContributor, TranscriptGlossaryTerm, VoxhelmSettings
 from cast.transcripts import corrections
 from tests.factories import EpisodeFactory, PodcastFactory
-from tests.transcripts.corrections_test import make_transcript
+from tests.transcripts.corrections_helpers import make_transcript
 
 
 @pytest.fixture
@@ -103,7 +103,7 @@ def test_two_glossary_additions_preserve_both_variants(shared_glossary, monkeypa
 def test_import_detects_concurrent_owned_edits_and_preserves_omitted_notes(
     pg_editor_actors, tmp_path, monkeypatch, field
 ):
-    from tests.import_transcript_glossary_command_test import run, write_json
+    from tests.import_transcript_glossary_command_helpers import run, write_json
 
     user, blog = pg_editor_actors
     podcast = PodcastFactory(parent=blog.get_parent(), owner=user, title="Synthetic import", slug="synthetic-import")
@@ -143,7 +143,7 @@ def test_import_detects_concurrent_owned_edits_and_preserves_omitted_notes(
     connection.vendor != "postgresql", reason="Requires independent PostgreSQL read/write transactions"
 )
 def test_import_concurrent_insert_keeps_outer_transaction_usable(pg_editor_actors, tmp_path, monkeypatch):
-    from tests.import_transcript_glossary_command_test import run, write_json
+    from tests.import_transcript_glossary_command_helpers import run, write_json
 
     user, blog = pg_editor_actors
     podcast = PodcastFactory(parent=blog.get_parent(), owner=user, title="Synthetic insert", slug="synthetic-insert")
@@ -177,7 +177,7 @@ def test_import_concurrent_insert_keeps_outer_transaction_usable(pg_editor_actor
 @pytest.mark.skipif(connection.vendor != "postgresql", reason="Requires independent PostgreSQL transactions")
 def test_imports_serialize_cross_term_variants_per_podcast(pg_editor_actors, tmp_path, monkeypatch):
     from cast.management.commands.import_transcript_glossary import Command
-    from tests.import_transcript_glossary_command_test import run, write_json
+    from tests.import_transcript_glossary_command_helpers import run, write_json
 
     user, blog = pg_editor_actors
     podcast = PodcastFactory(parent=blog.get_parent(), owner=user, title="Synthetic show", slug="synthetic-show")

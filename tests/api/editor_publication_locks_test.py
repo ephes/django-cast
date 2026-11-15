@@ -13,7 +13,7 @@ from wagtail.models import GroupApprovalTask, PageLogEntry, Revision, TaskState,
 
 from cast.api.editor.views import PostEditorMixin
 from cast.models import Gallery
-from tests.api.editor_publish_preview_test import grant_wagtail_admin_access, page_permission_user
+from tests.api.editor_publish_preview_helpers import grant_wagtail_admin_access, page_permission_user
 from tests.factories import EpisodeFactory, PostFactory, UserFactory
 
 pytestmark = pytest.mark.django_db

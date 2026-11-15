@@ -6,7 +6,7 @@ from io import BytesIO
 import pytest
 
 from cast.management.commands import storage_backend as media
-from tests.management_command_test import StubOverwriteStorage
+from tests.management_command_helpers import StubOverwriteStorage
 
 
 def limits(mocker, *, size=6, seconds=10):

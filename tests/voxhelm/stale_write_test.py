@@ -14,8 +14,8 @@ from cast.models import TranscriptGeneration, VoxhelmSettings
 from cast.models.voxhelm_settings import TokenInput, VoxhelmSettingsForm, api_token_version
 from cast.voxhelm import TranscriptSubmission, VoxhelmTranscriptService
 from cast.voxhelm.service import StaleTranscriptAttempt, TranscriptGenerationActive
-from tests.known_speaker_apply_test import make_transcript
-from tests.voxhelm.tasks_status_test import VALID_DOTE_ARTIFACT, VALID_PODLOVE_ARTIFACT, VALID_VTT_ARTIFACT
+from tests.transcripts.known_speaker_apply_helpers import make_transcript
+from tests.voxhelm.tasks_status_helpers import VALID_DOTE_ARTIFACT, VALID_PODLOVE_ARTIFACT, VALID_VTT_ARTIFACT
 
 
 def settings_form(instance, **data):

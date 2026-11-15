@@ -5,7 +5,7 @@ import copy
 import pytest
 
 from cast.transcripts import parsing, services
-from tests.known_speaker_apply_test import DOTE, PODLOVE, SPEAKERS, VTT, make_transcript
+from tests.transcripts.known_speaker_apply_helpers import DOTE, PODLOVE, SPEAKERS, VTT, make_transcript
 
 
 @pytest.mark.django_db

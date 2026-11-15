@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from cast.models import Transcript
 from cast.transcripts import parsing, services
-from tests.known_speaker_apply_test import DOTE, PODLOVE, make_transcript
+from tests.transcripts.known_speaker_apply_helpers import DOTE, PODLOVE, make_transcript
 
 
 @pytest.mark.parametrize("chunk_size", [1, 8, 100])

@@ -6,7 +6,7 @@ import pytest
 from django.core.management import CommandError, call_command
 
 from cast.management.commands.storage_backend import refresh_existing_file, remove_staged_copies
-from tests.management_command_test import StubOverwriteStorage
+from tests.management_command_helpers import StubOverwriteStorage
 
 
 @pytest.mark.parametrize("mode", ["backup", "refresh", "restore"])
@@ -255,7 +255,7 @@ def test_real_filesystem_keeps_complete_stage_after_partial_final_write(tmp_path
 
 def test_renamed_missing_copy_reports_that_nothing_was_published():
     from cast.management.commands.storage_backend import sync_media_files
-    from tests.management_command_test import StubOverwriteStorage
+    from tests.management_command_helpers import StubOverwriteStorage
 
     class RenamingStorage(StubOverwriteStorage):
         def save(self, name, content):

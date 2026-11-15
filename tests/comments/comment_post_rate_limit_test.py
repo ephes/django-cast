@@ -1,61 +1,21 @@
-import itertools
-
-import django_comments
 import pytest
 from django.test import Client
-from django.urls import reverse
 
 from cast import checks as cast_checks
 from cast.comments.throttle import CommentPostThrottle
-
-from .factories import UserFactory
+from tests.comments.comment_post_rate_limit_helpers import _addresses, comment_count, post_ajax, post_plain
+from tests.factories import UserFactory
 
 pytestmark = pytest.mark.django_db
 
 # The test cache is shared by the whole run: every test posts from its own address.
-_addresses = (f"198.51.100.{n}" for n in itertools.count(1))
 # Identical comments are collapsed into one, so every post gets its own text.
-_texts = (f"new content {n}" for n in itertools.count(1))
-
-
-@pytest.fixture
-def address():
-    return next(_addresses)
 
 
 @pytest.fixture
 def limit_two(settings):
     settings.CAST_COMMENTS_POST_RATE_LIMIT = 2
     settings.CAST_COMMENTS_POST_RATE_WINDOW = 600
-
-
-def comment_data(post, **extra):
-    form = django_comments.get_form()(post)
-    return {
-        **form.generate_security_data(),
-        "comment": next(_texts),
-        "name": "Name",
-        "email": "name@example.org",
-        "title": "",
-        **extra,
-    }
-
-
-def post_ajax(client, post, address, **extra):
-    return client.post(
-        reverse("comments-post-comment-ajax"),
-        comment_data(post, **extra),
-        HTTP_X_REQUESTED_WITH="XMLHttpRequest",
-        REMOTE_ADDR=address,
-    )
-
-
-def post_plain(client, post, address, **extra):
-    return client.post(reverse("comments-post-comment"), comment_data(post, **extra), REMOTE_ADDR=address)
-
-
-def comment_count():
-    return django_comments.get_model().objects.count()
 
 
 def test_ajax_posts_over_the_limit_are_refused(client, post, comments_enabled, limit_two, address):
@@ -152,3 +112,8 @@ def test_invalid_post_rate_settings_fail_the_system_check(settings, name, value)
     setattr(settings, name, value)
 
     assert [error.id for error in cast_checks.check_cast_comments_author_edits_tunables()] == ["cast.E007"]
+
+
+@pytest.fixture
+def address():
+    return next(_addresses)

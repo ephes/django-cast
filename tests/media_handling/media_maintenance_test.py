@@ -10,7 +10,7 @@ from wagtail.images.models import Image, Rendition
 from cast.management.commands.storage_backend import sync_media_files
 from cast.models import Post
 from tests.factories import BlogFactory
-from tests.management_command_test import StubOverwriteStorage
+from tests.management_command_helpers import StubOverwriteStorage
 
 
 @pytest.mark.parametrize("mode", ["backup", "refresh", "restore"])

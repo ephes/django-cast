@@ -1,11 +1,11 @@
-"""Opt-in local browser journey: CAST_RUN_BROWSER=1 uv run pytest tests/comment_browser_test.py."""
+"""Opt-in local browser journey: CAST_RUN_BROWSER=1 uv run pytest tests/comments/comment_browser_test.py."""
 
 import os
 from pathlib import Path
 
 import pytest
 
-from tests.comment_author_edits_test import seed_ownership
+from tests.comments.comment_author_edits_helpers import seed_ownership
 
 playwright_api = pytest.importorskip("playwright.sync_api", reason="Playwright is an optional dev-only dependency")
 expect = playwright_api.expect

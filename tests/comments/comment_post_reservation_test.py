@@ -11,7 +11,7 @@ from django.db import close_old_connections
 from django.test import Client, RequestFactory
 
 from cast.comments.throttle import comment_post_retry_after
-from tests.comment_post_rate_limit_test import comment_count, post_ajax
+from tests.comments.comment_post_rate_limit_helpers import comment_count, post_ajax
 from tests.factories import BlogFactory, PostFactory
 
 
