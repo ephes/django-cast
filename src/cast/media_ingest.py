@@ -10,10 +10,11 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from typing import Any
 
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.db import transaction
 
 from . import appsettings
+from .cache_policy import ATOMIC_ADD_BACKENDS, warn_best_effort
 from .file_replacement import FileFieldReplacementGuard, fresh_file_name
 from .media_derivation import normalize_model_save_arguments
 from .media_probe import media_probe_budget
@@ -72,11 +73,22 @@ def upload_lock_key(user: Any) -> str:
 
 @contextmanager
 def upload_lock(user: Any, *, seconds: int | None = None) -> Iterator[None]:
-    """Serialize audio and video uploads for one user."""
+    """Admit audio/video uploads per user, atomically where supported."""
     key = upload_lock_key(user)
     owner = uuid.uuid4().hex
     timeout = int(appsettings.CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS if seconds is None else seconds)
-    if not cache.add(key, owner, timeout=timeout):
+    try:
+        if type(caches["default"]) in ATOMIC_ADD_BACKENDS:
+            admitted = cache.add(key, owner, timeout=timeout)
+        else:
+            warn_best_effort(logger, "Audio/video upload")
+            admitted = cache.get(key) is None
+            if admitted:
+                cache.set(key, owner, timeout=timeout)
+    except Exception:
+        logger.warning("Media upload cache reservation unavailable", exc_info=True)
+        raise
+    if not admitted:
         raise MediaUploadInProgress
     # Django's portable cache API has no atomic compare-and-delete operation.
     # Let the lease expire: get()+delete() could delete a successor's lease.

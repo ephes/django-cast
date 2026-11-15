@@ -88,14 +88,6 @@ def test_parallel_public_posts_create_only_one_comment_at_final_slot(
     assert comment_count() == 2
 
 
-@pytest.mark.parametrize("backend", ["dummy.DummyCache", "filebased.FileBasedCache", "db.DatabaseCache"])
-def test_unsupported_cache_refuses_admission(settings, tmp_path, backend):
-    settings.CAST_COMMENTS_POST_RATE_LIMIT = 2
-    settings.CACHES = {"default": {"BACKEND": "django.core.cache.backends." + backend, "LOCATION": str(tmp_path)}}
-    request = RequestFactory().post("/", REMOTE_ADDR="192.0.2.92")
-    assert comment_post_retry_after(request) >= 1
-
-
 def test_cache_outage_refuses_admission(mocker, reservation_cache):
     mocker.patch.object(reservation_cache, "add", side_effect=OSError("synthetic outage"))
     assert comment_post_retry_after(RequestFactory().post("/", REMOTE_ADDR="192.0.2.93")) >= 1

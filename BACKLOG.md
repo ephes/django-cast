@@ -20,9 +20,10 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - Round 90 storage inventory/recovery/publication and atomic comment admission
   safeguards are implemented; see the [validation/handoff record](backlog/2026-11-14-scout-round90.md).
-  Before rollout, choose a supported shared Redis/Memcached cache for homepage
-  and python-podcast; their current file caches intentionally refuse limited
-  comment posts. External clerk review and integration remain pending.
+  Owner decision (2026-11-15): comment and upload admission now fall back to
+  best-effort limits on file/database/custom caches; Redis/Memcached remain
+  optional for exact admission. Existing homepage/python-podcast file caches
+  need no configuration change. External clerk review remains pending.
 
 - [Round 93 validation/handoff](backlog/2026-11-14-scout-round93.md): database-owned numbering, bounded gap projections/gallery admission,
   bulk correction contributors and publication-context checks are implemented.

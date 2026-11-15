@@ -381,6 +381,7 @@ Code Organization
     ├── receivers.py                # Signal receivers
     │
     │   # Media handling
+    ├── cache_policy.py             # Atomic admission backends and fallback warnings
     ├── media_ingest.py, media_validation.py, media_probe.py
     ├── media_derivation.py         # Persisted derived media metadata
     ├── media_permissions.py        # Collection permissions for media

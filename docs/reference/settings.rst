@@ -133,8 +133,9 @@ The maximum number of comments one client may post within
 Defaults to ``20``; ``0`` **disables** the limit. Logged-in users are counted
 per user, anonymous visitors per client address. Further posts are answered
 with ``429 Too Many Requests`` and a ``Retry-After`` header until earlier posts
-leave the window. Previews are not counted. Each admitted post atomically
-reserves one cache slot for the window; refused posts do not extend reservations.
+leave the window. Previews are not counted. On backends with verified atomic
+``add``, each admitted post reserves one cache slot for the window; other backends
+use best-effort history counters. Refused posts do not extend reservations.
 ``Retry-After`` conservatively reports a full window; a slot may become available
 sooner.
 
@@ -143,15 +144,18 @@ proxy set ``REST_FRAMEWORK["NUM_PROXIES"]`` to the number of trusted proxies,
 otherwise all visitors may share one budget or a client can pick its own
 address through ``X-Forwarded-For``. Counters live in the ``default`` cache,
 which has to be shared by all worker processes for the limit to hold across
-them. Supported backends are Django's built-in ``RedisCache``,
-``PyMemcacheCache`` and ``PyLibMCCache``; ``LocMemCache`` is supported for
-single-process development/testing only. Custom subclasses, ``FileBasedCache``,
-``DatabaseCache`` and ``DummyCache`` are refused because their atomic reservation
-contract is not established here. Unsupported backends and reservation outages
-answer ``429`` with ``Retry-After``, without creating comments. Configure a
-supported shared cache before enabling posting in a multi-process deployment.
-Deploy workers together: older workers use a different history format and cannot
-share the new slot budget. Author edit/delete budgets remain independent.
+them. Atomic admission uses Django's built-in ``RedisCache``, ``PyMemcacheCache``
+and ``PyLibMCCache``; ``LocMemCache`` provides atomic admission within one process
+only. Custom subclasses, ``FileBasedCache``, ``DatabaseCache`` and other unverified
+backends allow posting with best-effort rate limiting: concurrent requests may
+occasionally exceed the budget. ``DummyCache`` stores no counters and cannot
+enforce the limit. A WARNING is logged once per process on first fallback use,
+explaining that shared Redis/Memcached make admission exact. Neither is a hard
+dependency. Cache errors on either path still answer ``429`` with ``Retry-After``
+and log a warning, without creating comments; outages never silently disable
+throttling. Deploy workers together: atomic slots and fallback histories use
+different formats and cannot share a budget. Author edit/delete budgets remain
+independent.
 
 .. _cast_comments_post_rate_window:
 
@@ -841,8 +845,12 @@ Time-to-live, in seconds, for the shared editor API, legacy
 ``/api/upload_video/``, and Wagtail admin per-user audio/video upload lock.
 Defaults to ``7200`` (2 hours). The lock is stored in Django's default cache
 and remains until expiry because Django has no portable atomic owner-checked release.
-Multi-worker deployments need a shared cache backend, such as Redis or
-Memcached; Django's ``LocMemCache`` only coordinates within one process.
+Django's built-in Redis/Memcached backends provide atomic admission across
+workers; ``LocMemCache`` only coordinates within one process. Other backends use
+best-effort ``get``/``set`` admission and log a WARNING once per process on first
+upload. Concurrent uploads can overlap with these backends; ``DummyCache`` cannot
+enforce the lease at all. Redis/Memcached are optional. Cache errors are logged
+and propagated, refusing the upload rather than silently bypassing admission.
 
 Upload leases intentionally remain after completion or failure. With the default
 ``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS = 7200``, the same user must wait up to

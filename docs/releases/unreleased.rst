@@ -548,9 +548,14 @@ Unreleased
   an unsafe inventory as a command error.
 - Reserve comment POST budgets with atomic expiring cache slots, preserving
   trusted-proxy identity, disabled limits and independent author-action budgets.
-  Unsupported cache backends and outages fail closed with Retry-After. Deploy
-  with Django's built-in shared Redis/Memcached cache; file-based consumer caches
-  require configuration changes before rollout. Retry-After is conservative.
+  Built-in Redis/Memcached provide exact admission across workers; LocMemCache
+  does so within one process. Other caches now fall back to best-effort comment
+  history counters and audio/video upload leases instead of requiring an atomic
+  backend. Concurrent requests can exceed these limits; DummyCache cannot enforce
+  them. Each process warns once per fallback operation. Redis/Memcached remain
+  optional, so existing file-cache consumers need no configuration change.
+  Cache errors still refuse admission and are logged (comments return 429 with
+  conservative Retry-After; upload errors propagate).
 
 - Replace all classifier counts on refit, including JSON-restored models.
   Tokenless corpora now classify from learned priors without division by zero.

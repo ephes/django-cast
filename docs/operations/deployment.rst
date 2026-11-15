@@ -216,9 +216,16 @@ Upload lease and failure cleanup
 --------------------------------
 
 Audio/video upload admission uses atomic ``cache.add`` with a finite
-``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS`` lease. Use a shared cache in multi-worker
-setups. Django's portable cache API cannot atomically compare and delete an owner
-value, so leases remain until expiry even after successful or failed uploads.
+``CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS`` lease on Django's built-in Redis/Memcached
+backends (and ``LocMemCache`` within one process). Other backends, including
+file/database caches and custom subclasses, use best-effort ``get``/``set``
+admission: concurrent uploads may overlap. A WARNING is logged once per process
+on first fallback upload. ``DummyCache`` cannot enforce admission. Redis/Memcached
+are optional; use a shared built-in backend for exact admission across workers.
+Cache errors are logged and propagated, refusing the upload rather than silently
+bypassing admission. Django's portable cache API cannot atomically compare and
+delete an owner value, so leases remain until expiry even after successful or
+failed uploads.
 A repeat upload by that user can receive HTTP 429 until then. The lease is a
 bounded admission control, not protection for operations exceeding its lifetime.
 

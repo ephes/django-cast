@@ -1,7 +1,8 @@
-"""Atomic cache-slot admission for public comment posts.
+"""Cache admission for public comment posts.
 
-Each allowed post owns one expiring slot. Client identification continues to use
-DRF's trusted proxy rules; author edit/delete throttling has a separate budget.
+Verified atomic backends reserve expiring slots; other backends use DRF's
+best-effort history counters. Client identification uses DRF's trusted proxy
+rules; author edit/delete throttling has a separate budget.
 """
 
 from __future__ import annotations
@@ -12,16 +13,13 @@ import math
 from typing import Any
 
 from django.core.cache import caches
-from django.core.cache.backends.locmem import LocMemCache
-from django.core.cache.backends.memcached import PyLibMCCache, PyMemcacheCache
-from django.core.cache.backends.redis import RedisCache
 from django.http import HttpRequest
 from rest_framework.throttling import SimpleRateThrottle
 
+from ..cache_policy import ATOMIC_ADD_BACKENDS, warn_best_effort
 from . import appsettings
 
 logger = logging.getLogger(__name__)
-ATOMIC_ADD_BACKENDS = (LocMemCache, RedisCache, PyLibMCCache, PyMemcacheCache)
 
 
 class CommentPostThrottle(SimpleRateThrottle):
@@ -37,8 +35,9 @@ class CommentPostThrottle(SimpleRateThrottle):
         try:
             cache = caches["default"]
             if type(cache) not in ATOMIC_ADD_BACKENDS:
-                logger.warning("Comment posting requires a supported atomic-add cache backend")
-                return False
+                warn_best_effort(logger, "Comment posting")
+                self.cache = cache
+                return super().allow_request(request, view)
             for slot in range(self.num_requests):
                 if cache.add(f"{key}:slot:{slot}", True, timeout=self.duration):
                     return True
