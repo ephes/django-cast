@@ -10,7 +10,7 @@
 ## Build, Test, and Development Commands
 - List commands: `just --list` (or plain `just`).
 - Install deps: `uv sync` (or `just install`).
-- Run tests: `just test` (runs `uv run coverage run -m pytest` and `uv run coverage report`, and fails if coverage is below 100%); target specific tests with `just test-one tests/models/posts_test.py::TestPostModel::test_post_slug`.
+- Run tests: `just test` (runs `uv run pytest -n 4 --cov --cov-report=` and `uv run coverage report`, and fails if coverage is below 100%); target specific tests with `just test-one tests/models/posts_test.py::TestPostModel::test_post_slug`.
 - Type checks: `uv run mypy` (or `just typecheck`).
 - Lint/format: `just lint` runs `ruff check --fix .` and `ruff format .` (line length 119).
 - Coverage: `just coverage` runs tests with coverage and opens HTML report.
@@ -31,7 +31,8 @@
 ## Testing Guidelines
 - New behaviors need Pytest coverage under `tests/` in `*_test.py` modules (e.g. `tests/models/posts_test.py`);
   mirror module paths for discoverability.
-- Tests run with coverage via `uv run coverage run -m pytest` and `uv run coverage report`; `fail_under = 100` is configured in `pyproject.toml`.
+- Tests run with coverage via `uv run pytest -n 4 --cov --cov-report=` and `uv run coverage report`; `fail_under = 100` is configured in `pyproject.toml`.
+- Use `just test-serial` for order-dependent debugging; parallel workers keep separate databases and fingerprints.
 - Maintain 100% test coverage for the Python test suite.
 - Transcript evidence tests use synthetic bounded/counting readers; hashing admits
   10 MiB per public artifact and 30 MiB in aggregate for editor evidence only

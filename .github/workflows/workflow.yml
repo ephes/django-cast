@@ -108,7 +108,7 @@ jobs:
 
       - name: Run test suite with coverage enforcement
         run: |
-          uv run --no-sync coverage run -m pytest
+          uv run --no-sync pytest -n 4 --cov --cov-report=
           uv run --no-sync coverage report
           uv run --no-sync coverage xml
 
@@ -258,7 +258,7 @@ jobs:
         run: uv sync
 
       - name: Run pytest on additional supported Python versions
-        run: uv run pytest
+        run: uv run pytest -n 4
 
   dependency-compatibility:
     runs-on: ubuntu-latest

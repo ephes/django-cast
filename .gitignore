@@ -109,3 +109,6 @@ example/media
 .playwright-mcp/
 # Superpowers skill working dir (local agent artifact)
 .superpowers/
+
+# Parallel pytest worker databases, journals and schema fingerprints
+tests/test_database.sqlite3_gw*

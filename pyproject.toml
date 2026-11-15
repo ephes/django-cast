@@ -90,6 +90,7 @@ test = [
     "pytest-django",
     "pytest-mock",
     "pytest-randomly",
+    "pytest-xdist",
     "pytz",
 ]
 dev = [

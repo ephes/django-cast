@@ -361,7 +361,10 @@ Run the Python test suite:
 .. code-block:: bash
 
    $ just test
-   # or directly: uv run pytest
+   # or directly: uv run pytest -n 4 --cov --cov-report=
+
+``just test`` uses four workers and enforces 100% coverage. Use ``just test-serial``
+for debugging failures that depend on test order.
 
 Run only the intentionally slower integration/dev-surface checks:
 
@@ -398,14 +401,18 @@ Or manually:
 
 .. code-block:: bash
 
-   $ uv run coverage run -m pytest
+   $ uv run pytest -n 4 --cov --cov-report=
    $ uv run coverage html
    $ open htmlcov/index.html
 
 Test Database Management
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
-The test database ``tests/test_database.sqlite3`` is reused between test runs for performance
+Each parallel worker uses ``tests/test_database.sqlite3_gw0`` (through ``_gw3``)
+with its own ``.fingerprint``. Worker-local temporary directories also isolate media
+publication locks; subprocesses inherit the same directory and keep testing real
+lock contention. The serial fallback uses ``tests/test_database.sqlite3``.
+The test database is reused between test runs for performance
 (``--reuse-db``) and is built directly from the models rather than by applying migrations
 (``--no-migrations``). Nothing updates the schema of a database that already exists, so it goes
 stale whenever the models change - when you add a cast migration, switch branches, or upgrade a
@@ -413,7 +420,7 @@ dependency such as Wagtail that ships migrations of its own.
 
 You do not have to clean that up by hand. ``tests/conftest.py`` records a fingerprint of every
 installed app's migration files next to the database in
-``tests/test_database.sqlite3.fingerprint``. When the fingerprint no longer matches, the database
+``tests/test_database.sqlite3.fingerprint`` (or the worker-specific counterpart). When the fingerprint no longer matches, the database
 file is deleted at the start of the run and pytest-django creates a fresh one. Recreating it takes
 a few seconds, and a run where nothing changed pays only the cost of hashing the migration files.
 
@@ -509,7 +516,9 @@ and restores them afterwards.
 Media files are therefore no longer a reason to avoid running two test sessions at once.
 The reused test database still is: two plain ``pytest`` runs share
 ``tests/test_database.sqlite3`` and fail with ``database is locked``. Give the second run
-its own database to run both at the same time:
+its own database to run both at the same time. Parallel sessions share the
+``_gw*`` worker files and need distinct base paths too; each worker keeps its
+own fingerprint. A session may also drop a stale serial database:
 
 .. code-block:: bash
 

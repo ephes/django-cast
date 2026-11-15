@@ -196,3 +196,5 @@
   re-check age and exact database file references before each deletion, and
   report files skipped as too young or newly referenced. Listing remains the
   default; the command does not delete database rows.
+
+- Development: ``just test`` uses four workers with worker-specific schema invalidation and temporary locks; ``just test-serial`` remains available.

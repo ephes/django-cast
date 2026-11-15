@@ -65,6 +65,11 @@ check-collect:
 
 # Run the full test suite with coverage enforcement (fail if <100%)
 test:
+    uv run pytest -n 4 --cov --cov-report=
+    uv run coverage report
+
+# Serial fallback for debugging order-dependent failures
+test-serial:
     uv run coverage run -m pytest
     uv run coverage report
 
@@ -104,13 +109,13 @@ lint:
 # Run tests with coverage and open HTML report
 [macos]
 coverage:
-    uv run coverage run -m pytest
+    uv run pytest -n 4 --cov --cov-report=
     uv run coverage html
     open htmlcov/index.html
 
 [linux]
 coverage:
-    uv run coverage run -m pytest
+    uv run pytest -n 4 --cov --cov-report=
     uv run coverage html
     xdg-open htmlcov/index.html 2>/dev/null || echo "Open htmlcov/index.html in your browser"
 
