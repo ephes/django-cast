@@ -59,7 +59,7 @@
 - Before committing, verify whether documentation and release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 - Update docs when adding features or changing behavior.
 - When preparing a release, add a new file under `docs/releases/` and link it in `docs/releases/index.rst`.
-- For ongoing changes, update `docs/releases/<current-version>.rst` when it is unreleased. If the current version is already tagged and no version bump is requested, record pending notes in `docs/releases/unreleased.rst` and link it first in `docs/releases/index.rst`. At the next bump, move those notes into `<next-version>.rst` and remove the standalone page and index entry.
+- For ongoing changes, update `docs/releases/<current-version>.rst` when it is unreleased. If the current version is already tagged and no version bump is requested, record pending notes in `docs/releases/unreleased.rst` and link it first in `docs/releases/index.rst`. At the next bump, move those notes into `<next-version>.rst` and remove the standalone page and index entry. Check which case applies before writing. New notes use the matching section: "Upgrade actions", "Features", "Security and hardening", "Fixes", or "Internal"; anything an operator must do goes under "Upgrade actions".
 
 ## Releasing
 - See `docs/release.rst` for the full release process (checks, JS build, tox, merge, GitHub release, PyPI publish).

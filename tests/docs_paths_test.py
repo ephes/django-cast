@@ -104,3 +104,12 @@ def test_code_organization_lists_every_models_module() -> None:
     listed = {path.name for path in tree_entries() if path.parts[0] == "models" and len(path.parts) == 2}
     actual = package_entries(PACKAGE_DIR / "models") - {"__init__.py"}
     assert sorted(actual - listed) == []
+
+
+def test_only_one_unreleased_notes_file() -> None:
+    import tomllib
+
+    version = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"]["version"]
+    notes = DOCS_DIR / "releases" / f"{version}.rst"
+    if notes.exists() and "(unreleased)" in notes.read_text().splitlines()[0].lower():
+        assert not (DOCS_DIR / "releases" / "unreleased.rst").exists()
