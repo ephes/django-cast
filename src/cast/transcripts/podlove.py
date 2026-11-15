@@ -7,6 +7,23 @@ from typing import Any
 from . import parsing
 
 
+def parse_start_ms(value: object) -> int | None:
+    """Admit a Podlove edit identity without boolean or numeric coercion."""
+    return value if type(value) is int and value >= 0 else None
+
+
+def validate_edit_times(data: dict) -> None:
+    """Refuse boolean aliases before an editorial operation stages any files."""
+    segments = data.get("transcripts")
+    if not isinstance(segments, list):
+        return
+    for segment in segments:
+        if isinstance(segment, dict) and isinstance(segment.get("start_ms"), bool):
+            raise parsing.TranscriptArtifactError(
+                "Invalid Podlove millisecond identity: boolean start_ms. Replace the artifact and reload."
+            )
+
+
 def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> int:
     segments = data.get("transcripts")
     if not isinstance(segments, list):
@@ -15,8 +32,8 @@ def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> int:
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        start_ms = segment.get("start_ms")
-        if not isinstance(start_ms, int):
+        start_ms = parse_start_ms(segment.get("start_ms"))
+        if start_ms is None:
             continue
         name = names_by_start_ms.get(start_ms)
         if name:
@@ -35,8 +52,8 @@ def clear_suggestions(data: dict, start_milliseconds: set[int]) -> tuple[int, bo
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        start_ms = segment.get("start_ms")
-        if not isinstance(start_ms, int) or start_ms not in start_milliseconds:
+        start_ms = parse_start_ms(segment.get("start_ms"))
+        if start_ms is None or start_ms not in start_milliseconds:
             continue
         applied += 1
         changed = changed or segment.get("speaker") != "" or segment.get("voice") != ""
@@ -68,8 +85,8 @@ def get_texts(data: dict) -> list[tuple[int, str]]:
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        start_ms, text = segment.get("start_ms"), segment.get("text")
-        if isinstance(start_ms, int) and isinstance(text, str):
+        start_ms, text = parse_start_ms(segment.get("start_ms")), segment.get("text")
+        if start_ms is not None and isinstance(text, str):
             texts.append((start_ms, text))
             counts[start_ms] = counts.get(start_ms, 0) + 1
     return [(start_ms, text) for start_ms, text in texts if counts[start_ms] == 1]
@@ -84,8 +101,8 @@ def set_texts(data: dict, texts_by_start_ms: Mapping[int, str]) -> int:
     for segment in segments:
         if not isinstance(segment, dict):
             continue
-        start_ms = segment.get("start_ms")
-        text = texts_by_start_ms.get(start_ms) if isinstance(start_ms, int) else None
+        start_ms = parse_start_ms(segment.get("start_ms"))
+        text = texts_by_start_ms.get(start_ms) if start_ms is not None else None
         if text is not None and segment.get("text") != text:
             segment["text"] = text
             changed += 1

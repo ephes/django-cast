@@ -318,6 +318,7 @@ def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _S
     """
     _uses_audio(episode, transcript)
     services.validate_editor_artifacts(transcript)
+    podlove.validate_edit_times(transcript._load_transcript_json("podlove"))
     data = transcript.corrections_data
     if _is_current(data, transcript.mapping_fingerprint()):
         previously = {segment["start_ms"] for segment in data["segments"] if segment["replacements"]}
@@ -475,6 +476,7 @@ def _validate_destination_times(transcript: Transcript, texts: dict[int, str]) -
 def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) -> int:
     """Store the sidecar and the corrected public files in one staged replacement."""
     services.validate_editor_artifacts(transcript)
+    podlove.validate_edit_times(transcript._load_transcript_json("podlove"))
     _validate_destination_times(transcript, texts)
     expected = services.artifact_state(transcript)
     if not transcript.source_fingerprint:

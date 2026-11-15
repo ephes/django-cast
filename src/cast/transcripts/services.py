@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
 from collections.abc import Callable, Collection, Mapping
 from decimal import Decimal
 from functools import partial
@@ -224,6 +225,56 @@ def resolve_unreferenced_label_names(transcript: Transcript, suggestions: list[d
     return {label: name} if name else {}
 
 
+def validate_speaker_destination_times(transcript: Transcript, starts: set[int]) -> None:
+    """Require at most one destination per selected millisecond in each format."""
+    podlove_data = transcript._load_transcript_json("podlove")
+    records = podlove_data.get("transcripts")
+    if isinstance(records, list):
+        counts = Counter(podlove.parse_start_ms(row.get("start_ms")) for row in records if isinstance(row, dict))
+        if any(count > 1 and start in starts for start, count in counts.items()):
+            raise parsing.TranscriptArtifactError("Speaker destination has ambiguous start times. Replace and reload.")
+    # Existing text correspondence checks use the same destination identities.
+    # These transforms touch only the loaded copies, before any file is staged.
+    try:
+        texts = dict.fromkeys(starts, "")
+        dote.set_texts(transcript._load_transcript_json("dote"), texts)
+        if transcript.vtt:
+            webvtt.set_texts_in_content(transcript._load_text_file("vtt"), texts)
+    except ValueError as error:
+        raise parsing.TranscriptArtifactError(
+            "Speaker destination has ambiguous start times. Replace and reload."
+        ) from error
+
+
+def prepare_speaker_application(
+    transcript: Transcript, suggestions: list[dict], *, smooth: bool
+) -> tuple[dict[int, str], set[int]]:
+    """Resolve names and validate correspondence before any editorial file writes."""
+    podlove.validate_edit_times(transcript._load_transcript_json("podlove"))
+    suggestions = sorted(suggestions, key=parsing.segment_sort_key)
+    display_names = known_speakers.resolve_display_names(
+        suggestions, smooth=smooth, label_names=resolve_unreferenced_label_names(transcript, suggestions)
+    )
+    names_by_start_ms: dict[int, str] = {}
+    rejected_start_ms: set[int] = set()
+    seen_starts: set[int] = set()
+    for segment, name in zip(suggestions, display_names):
+        try:
+            start_ms = int(round(float(segment["start"]) * 1000))
+        except (TypeError, ValueError, KeyError, OverflowError):
+            continue
+        if start_ms in seen_starts:
+            raise parsing.TranscriptArtifactError("Speaker suggestions have ambiguous rounded start times. Reload.")
+        seen_starts.add(start_ms)
+        if name:
+            names_by_start_ms[start_ms] = name
+            rejected_start_ms.discard(start_ms)
+        elif known_speakers.segment_has_reject_decision(segment):
+            rejected_start_ms.add(start_ms)
+    validate_speaker_destination_times(transcript, set(names_by_start_ms) | rejected_start_ms)
+    return names_by_start_ms, rejected_start_ms
+
+
 def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = True) -> int:
     """Apply known-speaker suggestions to public transcript output.
 
@@ -257,22 +308,9 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
     """
     validate_editor_artifacts(transcript)
     expected = artifact_state(transcript)
-    suggestions = sorted(transcript.get_speaker_suggestions(), key=parsing.segment_sort_key)
-    display_names = known_speakers.resolve_display_names(
-        suggestions, smooth=smooth, label_names=resolve_unreferenced_label_names(transcript, suggestions)
+    names_by_start_ms, rejected_start_ms = prepare_speaker_application(
+        transcript, transcript.get_speaker_suggestions(), smooth=smooth
     )
-    names_by_start_ms: dict[int, str] = {}
-    rejected_start_ms: set[int] = set()
-    for segment, name in zip(suggestions, display_names):
-        try:
-            start_ms = int(round(float(segment["start"]) * 1000))
-        except (TypeError, ValueError, KeyError):
-            continue
-        if name:
-            names_by_start_ms[start_ms] = name
-            rejected_start_ms.discard(start_ms)
-        elif known_speakers.segment_has_reject_decision(segment):
-            rejected_start_ms.add(start_ms)
     if not names_by_start_ms and not rejected_start_ms:
         return 0
     replacements = StagedFileReplacementGroup()
@@ -333,6 +371,9 @@ def save_known_speaker_editor_decisions(
         changed += 1
     if not changed:
         return 0
+    prepare_speaker_application(
+        transcript, [segment for segment in segments if isinstance(segment, dict)], smooth=False
+    )
     replacements = StagedFileReplacementGroup()
     try:
         transcript._write_speakers_data(data, replacements=replacements)

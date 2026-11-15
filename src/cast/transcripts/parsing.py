@@ -14,6 +14,8 @@ class TranscriptArtifactError(Exception):
 
 MAX_TRANSCRIPT_JSON_DEPTH = 64
 MAX_STORED_TRANSCRIPT_JSON_BYTES = 10 * 1024 * 1024
+MAX_TRANSCRIPT_FINGERPRINT_ARTIFACT_BYTES = 10 * 1024 * 1024
+MAX_TRANSCRIPT_FINGERPRINT_TOTAL_BYTES = 30 * 1024 * 1024
 
 
 def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

@@ -47,7 +47,7 @@ from ..models import (
 )
 from ..models.contributors import ContributorVoiceReference
 from ..site_lookup import get_site_specific_page_or_404
-from ..transcripts import editing, parsing, services
+from ..transcripts import editing, parsing, podlove, services
 from ..transcripts.dote import (
     convert_dote_to_podcastindex_transcript,
     dote_timestamp_to_ms,
@@ -188,9 +188,9 @@ def get_known_speaker_text_by_start_ms(transcript: Transcript) -> dict[int, str]
         for segment in podlove_segments:
             if not isinstance(segment, dict):
                 continue
-            start_ms = segment.get("start_ms")
+            start_ms = podlove.parse_start_ms(segment.get("start_ms"))
             text = parsing.clean_sample_text(segment.get("text"))
-            if isinstance(start_ms, int) and text:
+            if start_ms is not None and text:
                 texts.setdefault(start_ms, text)
     dote_lines = transcript.dote_data.get("lines", [])
     if isinstance(dote_lines, list):
@@ -509,7 +509,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
                 "artifact_revision": services.artifact_revision(transcript),
                 "invalid_sidecars": invalid_sidecars,
                 "artifact_error": _(
-                    "Invalid transcript JSON encoding, nesting or size (maximum 10 MiB). Replace the artifact and reload."
+                    "Invalid transcript JSON or editorial evidence (timestamps or size; 10 MiB per artifact, 30 MiB total). Replace the artifact and reload."
                 ),
             },
             status=400,

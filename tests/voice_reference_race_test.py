@@ -104,3 +104,72 @@ def test_identical_candidates_serialize_before_duplicate_lookup(user, monkeypatc
     )
     assert created
     assert ContributorVoiceReference.objects.count() == 3
+
+
+@pytest.mark.django_db(transaction=True)
+def test_source_replacement_waits_for_signed_evidence_transaction(user, monkeypatch):
+    collection = Collection.get_first_root_node() or Collection.add_root(instance=Collection(name="Root"))
+    audio = Audio.objects.create(user=user, collection=collection, title="Synthetic source race")
+    contributor = Contributor.objects.create(display_name="Alice", slug="synthetic-source-lock")
+    transcript = create_transcript(audio=audio, podlove={"transcripts": [podlove_segment("Alice", "1", "12")]})
+    candidate = transcript.get_voice_reference_candidates()[0]
+    context = {
+        "contributor_assignments": [EpisodeContributor(contributor=contributor)],
+        "source_episode": None,
+        "multiple_episodes": False,
+        "speaker_mappings": [],
+        "speaker_labels": ["Alice"],
+    }
+    monkeypatch.setattr(editing, "get_speaker_mapping_context", lambda current: context)
+    token = editing.sign_voice_reference_candidate(editing.transcript_evidence(transcript), candidate, contributor)
+    evidence_read = threading.Event()
+    replacement_started = threading.Event()
+    replacement_finished = threading.Event()
+    release = threading.Event()
+    original_evidence = editing.transcript_evidence
+
+    def evidence(current):
+        result = original_evidence(current)
+        evidence_read.set()
+        assert release.wait(10)
+        return result
+
+    monkeypatch.setattr(editing, "transcript_evidence", evidence)
+
+    def create():
+        close_old_connections()
+        try:
+            return editing.create_voice_reference_from_candidate(
+                transcript, context, candidate, status="pending", consent_confirmed=False, candidate_token=token
+            )
+        finally:
+            close_old_connections()
+
+    def replace():
+        close_old_connections()
+        try:
+            replacement_started.set()
+            Audio.objects.filter(pk=audio.pk).update(mp3="cast_audio/synthetic-new-generation.mp3")
+            replacement_finished.set()
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(create)
+        try:
+            assert evidence_read.wait(10)
+            second = pool.submit(replace)
+            assert replacement_started.wait(10)
+            assert not replacement_finished.wait(0.3)
+        finally:
+            release.set()
+        assert first.result(timeout=20)[1]
+        second.result(timeout=20)
+    assert replacement_finished.is_set()
+    monkeypatch.setattr(editing, "transcript_evidence", original_evidence)
+    from django.core.exceptions import ValidationError
+
+    with pytest.raises(ValidationError, match="Reload"):
+        editing.create_voice_reference_from_candidate(
+            transcript, context, candidate, status="pending", consent_confirmed=False, candidate_token=token
+        )

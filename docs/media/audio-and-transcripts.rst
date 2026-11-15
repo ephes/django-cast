@@ -1149,12 +1149,24 @@ Voice-reference selection freshness
 -----------------------------------
 
 Each candidate create form carries a signed choice bound to the transcript's
-artifact revision and content fingerprint, exact label/rank/range/text and
-resolved contributor. Both pending and approved submissions require that choice.
-Changed artifacts, reordered candidates, changed contributor assignments,
+artifact revision and content fingerprint, exact label/rank/range/text,
+resolved contributor, and the source audio ID, immutable storage names for all
+formats and duration. Both pending and approved submissions require that choice.
+Changed artifacts, source audio replacements or duration changes, reordered
+candidates, changed contributor assignments,
 missing tokens and tampered choices cannot create a replacement reference:
 reload the transcript, audition the current range and confirm consent again.
-The helper rechecks source evidence inside its creation transaction.
+The helper rechecks source evidence inside its creation transaction after locking
+and reloading the audio and transcript rows. Audio replacements must use new
+storage names; overwriting bytes under an unchanged name bypasses this generation
+contract. Existing choices from before this upgrade require a fresh preview.
+
+Fingerprint reads use at most 64 KiB per request, with a 10 MiB ceiling per
+public artifact (including WebVTT) and 30 MiB across Podlove, DOTe and WebVTT.
+At most one excess byte is read to detect an exhausted budget, including short
+or continuously growing streams. Exceeding either ceiling raises
+``TranscriptArtifactError``: the editor returns HTTP 400 with replacement
+guidance and signs no partial evidence. Accepted artifacts retain the same hash.
 
 Candidate creation takes a write lock on the shared audio before looking for
 an existing contributor/source/range reference. Concurrent identical submissions
@@ -1166,3 +1178,23 @@ The editor contributor list selects only its response fields (ID, slug, display
 name, default role and visibility). Biography and private transcript variants
 are neither hydrated nor returned by this endpoint; ordering and pagination stay
 the same. Public avatar rendition batching is unchanged.
+
+
+Editorial millisecond correspondence
+------------------------------------
+
+Podlove text and speaker edits match only nonnegative integer ``start_ms``
+values; JSON booleans, fractions, strings and negative values never become edit
+keys. Boolean identities can alias valid 0/1 ms records, so correction and
+speaker application refuse such artifacts with ``TranscriptArtifactError``
+before staging files. Replace the malformed source and retry. Other unusable
+identities retain their ignored-record behavior.
+
+Speaker application requires unique rounded millisecond keys across all
+suggestions, even when the names agree or one decision rejects a name. Each
+selected start may match at most one destination in each stored format
+(Podlove, DOTe and WebVTT); absent matches remain allowed. Ambiguous input raises
+``TranscriptArtifactError`` through the editor's HTTP 400 replacement boundary.
+Segment review preflights its prospective decisions before saving the sidecar.
+No public file or private sidecar is replaced on refusal. Unambiguous application
+continues to update the stored formats together.

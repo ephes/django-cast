@@ -259,10 +259,20 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
                 data = {}
         return data if isinstance(data, dict) else {}
 
-    def transcript_artifact_fingerprint(self) -> str:
-        """Return a stable hash for the current raw public transcript artifacts."""
+    def transcript_artifact_fingerprint(self, *, enforce_byte_budget: bool = False) -> str:
+        """Return a stable hash for the current raw public transcript artifacts.
+
+        With ``enforce_byte_budget`` (editorial evidence signing), reading stops
+        after 10 MiB per artifact or 30 MiB in total and raises
+        ``TranscriptArtifactError`` instead of hashing a partial artifact. Storage
+        paths (``save()``, public rendering) hash the complete files, so sites
+        with a larger upload limit keep working.
+        """
+        artifact_limit = parsing.MAX_TRANSCRIPT_FINGERPRINT_ARTIFACT_BYTES if enforce_byte_budget else None
+        total_limit = parsing.MAX_TRANSCRIPT_FINGERPRINT_TOTAL_BYTES if enforce_byte_budget else None
         digest = hashlib.sha256()
         saw_content = False
+        total_bytes = 0
         for field_name in TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS:
             file_field = getattr(self, field_name)
             if not file_field or not file_field.name:
@@ -272,7 +282,23 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
                 with file_field.storage.open(file_field.name, "rb") as file:
                     artifact_digest.update(field_name.encode("utf-8"))
                     artifact_digest.update(b"\0")
-                    for chunk in iter(lambda: file.read(65536), b""):
+                    artifact_bytes = 0
+                    while chunk := file.read(
+                        65536
+                        if artifact_limit is None or total_limit is None
+                        else min(65536, artifact_limit + 1 - artifact_bytes, total_limit + 1 - total_bytes)
+                    ):
+                        artifact_bytes += len(chunk)
+                        total_bytes += len(chunk)
+                        if (
+                            artifact_limit is not None
+                            and total_limit is not None
+                            and (artifact_bytes > artifact_limit or total_bytes > total_limit)
+                        ):
+                            raise parsing.TranscriptArtifactError(
+                                "Transcript fingerprint byte budget exceeded (10 MiB per artifact, 30 MiB total). "
+                                "Replace the artifact and reload."
+                            )
                         artifact_digest.update(chunk)
             except (FileNotFoundError, OSError, ValueError, RecursionError):
                 continue
