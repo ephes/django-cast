@@ -191,3 +191,56 @@ def test_concurrent_edit_checks_revision_after_waiting(pg_editor_actors, setting
     assert responses[1].json()["current_comment"] == "Edit 0"
     comment.refresh_from_db()
     assert comment.comment == "Edit 0"
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="Requires independent moderation/editor transactions")
+@pytest.mark.parametrize("route", ["comments-post-comment", "comments-post-comment-ajax"])
+@pytest.mark.parametrize("change", ["close", "unpublish"])
+def test_comment_rechecks_target_after_concurrent_moderation(
+    pg_editor_actors, comments_enabled, settings, route, change
+):
+    from django_comments import signals
+
+    from cast.models import Post
+    from tests.comment_page_access_test import comment_payload, submit
+
+    _, blog = pg_editor_actors
+    settings.CAST_COMMENTS_ALLOW_AUTHOR_EDITS = True
+    post = PostFactory(parent=blog, title="Synthetic current target", slug="current-target", body=[])
+    data = comment_payload(post, False)
+    entered, resume = threading.Event(), threading.Event()
+    observed = []
+    client = Client()
+
+    def moderate(sender, **kwargs):
+        entered.set()
+        assert resume.wait(10)
+
+    def observer(sender, **kwargs):
+        observed.append(True)
+
+    def post_comment():
+        close_old_connections()
+        try:
+            return submit(client, route, data).status_code
+        finally:
+            close_old_connections()
+
+    signals.comment_will_be_posted.connect(moderate)
+    signals.comment_was_posted.connect(observer)
+    try:
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(post_comment)
+            try:
+                assert entered.wait(10)
+                Post.objects.filter(pk=post.pk).update(**{"comments_enabled" if change == "close" else "live": False})
+            finally:
+                resume.set()
+            assert future.result(timeout=15) == (400 if change == "close" else 403)
+        assert not get_model().objects.exists()
+        assert not client.session.get(author_edits.SESSION_KEY)
+        assert observed == []
+    finally:
+        signals.comment_will_be_posted.disconnect(moderate)
+        signals.comment_was_posted.disconnect(observer)

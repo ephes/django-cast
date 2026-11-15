@@ -123,6 +123,17 @@ integer. Only relevant when
 :ref:`CAST_COMMENTS_ALLOW_AUTHOR_EDITS <cast_comments_allow_author_edits>` is
 enabled.
 
+.. _cast_comments_allowed_target_models:
+
+CAST_COMMENTS_ALLOWED_TARGET_MODELS
+===================================
+
+Default: ``[]``. Lowercase ``app_label.model`` labels for deliberately public
+non-page comment targets. Wagtail Page models and subclasses are supported
+without listing them. Unsupported models are refused before any row lookup.
+Generic-comment integrations must explicitly opt in on upgrade. See
+:doc:`/features/comments` for publication-time policy checks and race limits.
+
 .. _cast_comments_post_rate_limit:
 
 CAST_COMMENTS_POST_RATE_LIMIT

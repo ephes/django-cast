@@ -72,6 +72,7 @@ class CastSetting:
 
 CAST_SETTING_REGISTRY: dict[str, CastSetting] = {
     "CAST_COMMENTS_ENABLED": CastSetting(False, bool),
+    "CAST_COMMENTS_ALLOWED_TARGET_MODELS": CastSetting([], list),
     "CAST_COMMENTS_ALLOW_AUTHOR_EDITS": CastSetting(False, bool),
     "CAST_COMMENTS_FORM_CSS_CLASS": CastSetting("comments-form form-horizontal"),
     "CAST_COMMENTS_LABEL_CSS_CLASS": CastSetting("col-sm-2"),
@@ -151,6 +152,7 @@ _DYNAMIC_SETTING_DEFAULTS: dict[str, Any] = {
 if TYPE_CHECKING:
     CAST_MEDIA_STALE_MIN_AGE_DAYS: int
     CAST_COMMENTS_ENABLED: bool
+    CAST_COMMENTS_ALLOWED_TARGET_MODELS: list[str]
     CAST_COMMENTS_ALLOW_AUTHOR_EDITS: bool
     CAST_COMMENTS_FORM_CSS_CLASS: str
     CAST_COMMENTS_LABEL_CSS_CLASS: str

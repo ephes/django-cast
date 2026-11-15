@@ -52,17 +52,17 @@ class Gallery(TimeStampedModel):
         create_missing_renditions_for_images(missing_renditions, using=using)
 
 
-def get_or_create_gallery(image_ids: Iterable[int]) -> Gallery | None:
-    return get_or_create_galleries([image_ids])[0]
+def get_or_create_gallery(image_ids: Iterable[int], *, using: str | None = None) -> Gallery | None:
+    return get_or_create_galleries([image_ids], using=using)[0]
 
 
-def get_or_create_galleries(image_sets: Iterable[Iterable[int]]) -> list[Gallery | None]:
+def get_or_create_galleries(image_sets: Iterable[Iterable[int]], *, using: str | None = None) -> list[Gallery | None]:
     """Resolve a body's galleries with one globally ordered set of image locks."""
     requested_sets = [set(image_ids) for image_ids in image_sets]
     all_ids = {image_id for image_ids in requested_sets for image_id in image_ids}
     if not all_ids:
         return [None for _ in requested_sets]
-    using = router.db_for_write(Gallery)
+    using = using or router.db_for_write(Gallery)
     with transaction.atomic(using=using):
         existing_ids = set(
             Image.objects.using(using)

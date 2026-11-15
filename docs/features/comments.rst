@@ -743,3 +743,27 @@ return to exactly the same text have the same token. No schema change is needed.
 Custom edit clients must send the token; theme overrides of the raw textarea
 must retain ``data-revision="{{ comment_revision }}"`` and use the rebuilt shared
 comments bundle. Legacy clients without a token fail with 409 until refreshed.
+
+Target admission when posting
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Both posting routes accept Wagtail Page models and their subclasses. Before
+looking up a selected row, other models must be explicitly listed in
+``CAST_COMMENTS_ALLOWED_TARGET_MODELS`` using lowercase ``app_label.model``
+labels, for example ``["catalog.publicentry"]``. Leave the list empty unless
+those rows are deliberately public comment targets. Existing generic-comment
+integrations must opt in before upgrading; a valid form signature alone does
+not grant model access. Unsupported models receive the same refusal for missing,
+existing and malformed primary keys, including with Django DEBUG enabled.
+
+After moderation, posting reloads and locks the target in the comment save
+transaction and checks current comment openness and Wagtail page access again.
+Closure, unpublication or deletion during moderation prevents the comment,
+ownership entry and observer notification. Reply-parent admission remains under
+its own row lock. Successful stock and Ajax posts record ownership in the save
+transaction and notify optional observers after commit.
+
+Row locks serialize target-row edits on databases that support them. SQLite does
+not provide row-level locks. Restrictions and inherited restrictions are checked
+at this boundary too, but writes to separate restriction tables or ancestors do
+not take the target row lock: this is not a serializable restriction-tree fence.

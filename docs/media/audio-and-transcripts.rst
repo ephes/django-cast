@@ -1331,3 +1331,14 @@ then becomes the previous version, so restoring can be undone. This is one
 previous version, not a full history. It is deleted with its transcript and has
 no public download URL. The regeneration confirmation names the loss of manual
 text corrections explicitly.
+
+Chapter import limits
+~~~~~~~~~~~~~~~~~~~~~
+
+FFprobe chapter starts are elapsed seconds, not calendar timestamps. Imports
+accept finite nonnegative offsets representable from ``00:00:00`` through
+``23:59:59.999999`` and preserve microseconds. Negative, day-sized, overflowing
+or nonfinite offsets are validation errors. Audio uploads log and skip invalid
+extracted chapter sets without replacing existing marks. Text chapter input accepts at most 1000 nonempty lines
+and 262144 characters, checked before constructing chapter forms. Duplicate
+starts are rejected in input order with linear membership work.

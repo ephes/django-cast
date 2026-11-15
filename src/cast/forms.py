@@ -7,8 +7,9 @@ a search form that rejects empty queries.
 
 import json
 import logging
+import math
 import subprocess
-from datetime import UTC, datetime, time
+from datetime import time
 from typing import IO, Any, NoReturn, cast
 
 from django import forms
@@ -134,16 +135,23 @@ class ChapterMarkForm(forms.ModelForm):
 
 
 class FFProbeStartField(forms.TimeField):
-    """Time field that converts an ffprobe-style seconds-since-epoch float to a ``time`` object."""
+    """Time field for finite elapsed ffprobe offsets representable within one day."""
 
     def to_python(self, value: Any) -> time | None:
         if value in self.empty_values or isinstance(value, time):
             return super().to_python(value)
         try:
-            # UTC, super important! The value is an offset from the start of the
-            # file, so the local time zone must not shift it.
-            return datetime.fromtimestamp(float(value), UTC).time()
-        except (TypeError, ValueError):
+            seconds = float(value)
+            if not math.isfinite(seconds) or not 0 <= seconds < 86400:
+                raise ValueError("Chapter offset is outside one day")
+            microseconds = round(seconds * 1_000_000)
+            if microseconds >= 86_400_000_000:
+                raise ValueError("Chapter offset rounds outside one day")
+            hours, remainder = divmod(microseconds, 3_600_000_000)
+            minutes, remainder = divmod(remainder, 60_000_000)
+            whole_seconds, fraction = divmod(remainder, 1_000_000)
+            return time(hours, minutes, whole_seconds, fraction)
+        except (TypeError, ValueError, OverflowError):
             raise ValidationError(
                 _(f"Invalid chaptermark start: {value}"),
                 code="invalid",
@@ -189,14 +197,18 @@ class ChapterMarksField(forms.CharField):
     def to_python(self, value: str | None) -> list[ChapterMark]:  # type: ignore[override]
         if value is None:
             return []
+        if len(value) > 262_144 or sum(bool(line) for line in value.split("\n")) > 1000:
+            raise ValidationError(_("Chapter input exceeds 1000 chapters or 262144 characters"), code="invalid")
         chaptermarks: list[ChapterMark] = []
+        starts: set[time] = set()
         for line in value.split("\n"):
             if len(line) == 0:
                 # skip empty lines
                 continue
             mark = parse_chaptermark_line(line)
-            if any(existing.start == mark.start for existing in chaptermarks):
+            if mark.start in starts:
                 raise ValidationError(_("Duplicate chapter start"), code="invalid")
+            starts.add(mark.start)
             chaptermarks.append(mark)
         return chaptermarks
 
@@ -250,7 +262,7 @@ class AudioForm(BaseCollectionMemberForm):
         return upload
 
     def get_chaptermarks_from_field_or_files(self, audio: Audio) -> list[ChapterMark]:
-        chaptermarks = self.cleaned_data["chaptermarks"]
+        chaptermarks = list(self.cleaned_data["chaptermarks"])
         if len(chaptermarks) == 0:
             # get chaptermarks from one of the changed files
             changed_audio_formats = []
@@ -269,8 +281,9 @@ class AudioForm(BaseCollectionMemberForm):
                 return []
             for data in chaptermark_data:
                 form = FFProbeChapterMarkForm(data)
-                if form.is_valid():
-                    chaptermarks.append(form.save(commit=False))
+                if not form.is_valid():
+                    raise ValidationError(form.errors.as_json(), code="invalid")
+                chaptermarks.append(form.save(commit=False))
         return chaptermarks
 
     def save_chaptermarks(self, audio: Audio) -> None:
@@ -279,7 +292,11 @@ class AudioForm(BaseCollectionMemberForm):
         #  2. If the form has no chapter marks, but an audio file was changed or
         #     added, look for chapter marks in the audio content
         #  3. Sync changed chapter marks back to database
-        chaptermarks = self.get_chaptermarks_from_field_or_files(audio)
+        try:
+            chaptermarks = self.get_chaptermarks_from_field_or_files(audio)
+        except ValidationError:
+            logger.warning("Skipping audio chapter extraction after invalid chapter data", exc_info=True)
+            return
         for cm in chaptermarks:
             cm.audio = audio
         ChapterMark.objects.sync_chaptermarks(audio, chaptermarks, update_urls=False)

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
 from django.db import router, transaction
@@ -29,14 +30,24 @@ def sync_media_ids(from_database: TypeToIdSet, from_body: TypeToIdSet) -> tuple[
     return to_add, to_remove
 
 
-def media_ids_from_body(post: Post, body: StreamField) -> TypeToIdSet:
+def media_ids_from_body(post: Post, body: StreamField, *, using: str | None = None) -> TypeToIdSet:
     """Extract built-in media ids from a Post StreamField value."""
     from wagtail.images.models import Image
 
     from cast.blocks import gallery_item_parts
     from cast.models.gallery import get_or_create_galleries
 
-    blocks = [block for content_block in body for block in content_block.value]
+    using = using or router.db_for_write(type(post), instance=post)
+    # Serializing a lazy StreamValue keeps chooser IDs without resolving them
+    # through Wagtail's default-database chooser managers.
+    if hasattr(body, "get_prep_value"):
+        blocks = [
+            SimpleNamespace(block_type=block["type"], value=block["value"])
+            for content in body.get_prep_value()
+            for block in content["value"]
+        ]
+    else:
+        blocks = [block for content_block in body for block in content_block.value]
     gallery_image_sets = []
     for block in blocks:
         if block.block_type == "gallery":
@@ -48,7 +59,7 @@ def media_ids_from_body(post: Post, body: StreamField) -> TypeToIdSet:
                 elif isinstance(image, int):
                     image_ids.append(image)
             gallery_image_sets.append(image_ids)
-    galleries = iter(get_or_create_galleries(gallery_image_sets))
+    galleries = iter(get_or_create_galleries(gallery_image_sets, using=using))
     from_body: TypeToIdSet = {}
     for block in blocks:
         if block.block_type == "gallery":
@@ -61,7 +72,7 @@ def media_ids_from_body(post: Post, body: StreamField) -> TypeToIdSet:
             from_body.setdefault(block.block_type, set()).add(media_model.id)
         elif isinstance(media_model, int):
             media_model_class = post.media_model_lookup[block.block_type]
-            if media_model_class._default_manager.filter(pk=media_model).exists():
+            if media_model_class._default_manager.using(using).filter(pk=media_model).exists():
                 from_body.setdefault(block.block_type, set()).add(media_model)
         else:
             raise ValueError(f"media model {media_model} is not an instance of int or a model")
@@ -70,11 +81,20 @@ def media_ids_from_body(post: Post, body: StreamField) -> TypeToIdSet:
 
 def synchronize_post_media(post: Post) -> None:
     """Synchronize built-in StreamField media into the Post relationships."""
-    from_body = media_ids_from_body(post, post.body)
+    from cast.models.pages import Post
+
     using = router.db_for_write(type(post), instance=post)
     with transaction.atomic(using=using):
-        to_add, to_remove = sync_media_ids(post.media_ids_from_db, from_body)
-        media_attr_lookup = post.media_attr_lookup
+        # Publication updates the Post row too. Read its body only after taking
+        # the same row lock, so a delayed publication callback cannot restore an
+        # older media generation. Do not overwrite request-local draft state.
+        current = Post.objects.using(using).select_for_update().get(pk=post.pk)
+        from_body = media_ids_from_body(current, current.body, using=using)
+        media_attr_lookup = current.media_attr_lookup
+        from_database = {
+            kind: set(manager.using(using).values_list("pk", flat=True)) for kind, manager in media_attr_lookup.items()
+        }
+        to_add, to_remove = sync_media_ids(from_database, from_body)
         for media_type, ids in to_add.items():
             media_attr_lookup[media_type].add(*ids)
         for media_type, ids in to_remove.items():
