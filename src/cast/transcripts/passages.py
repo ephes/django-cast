@@ -131,11 +131,16 @@ def validate_text_destination(transcript: Transcript, start_ms: int, text: str) 
             raise ValidationError("Cannot update this WebVTT passage: check its timestamps and formatting.")
 
 
-def correct_text(transcript: Transcript, start_ms: int, text: str) -> None:
-    """Save a manual correction in canonical files and the existing glossary sidecar."""
+def correct_text(transcript: Transcript, start_ms: int, text: str) -> str:
+    """Save a manual correction in canonical files and the existing glossary sidecar.
+
+    Whitespace is folded to single spaces first, so every format (WebVTT cues are one
+    line) stores the same text. Returns the stored text.
+    """
     from . import corrections
 
-    if not text.strip() or len(text) > 100_000:
+    text = " ".join(text.split())
+    if not text or len(text) > 100_000:
         raise ValidationError("Enter passage text (at most 100,000 characters).")
     rows = get_passages(transcript)
     if start_ms not in {row["start_ms"] for row in rows}:
@@ -147,3 +152,4 @@ def correct_text(transcript: Transcript, start_ms: int, text: str) -> None:
         data = corrections._fresh_data(transcript, [(row["start_ms"], row["text"]) for row in rows])
     data.setdefault("manual_texts", {})[str(start_ms)] = text
     corrections._write(transcript, data, {start_ms: text})
+    return text

@@ -1,5 +1,10 @@
 # Transcript editing: qualification and clerk handoff
 
+> Historical snapshot of branch A's handoff. Branch B later implemented slices
+> 5, 6, 8, 9, 10 and inline text correction; both branches were integrated into
+> `develop` on 2026-11-15. The checks that were blocked here were run at
+> integration; see "Integration results" at the end.
+
 Scope: slices 1, 2, 3, 4 and 7 of `transcript-editing-ux.md`, based on
 `develop` at `f5863de9`. Park all slices on
 `codex-q/cast-transcript-editing-a`; do not merge. Slices 5, 6, 8, 9 and 10
@@ -83,3 +88,20 @@ uv run --with 'psycopg[binary]>=3.3,<4' python -m pytest \
 
 After the blocked checks and external review, the coordinator decides integration.
 Do not rely on GitHub Actions and do not merge automatically from this handoff.
+
+## Integration results (2026-11-15)
+
+Run outside the sandbox on branches A+B rebased onto `develop`:
+
+- `CAST_RUN_BROWSER=1 uv run python -m pytest tests/transcript_admin_browser_test.py`
+  with Playwright's Chromium: both journeys pass. The first run found one wrong
+  test step (it expected upload preselection for an audio that already had a
+  transcript); preselection is covered by the upload journey. Run together with
+  `tests/comment_browser_test.py`, the `site` fixture now restores the Wagtail
+  root after a transactional journey flushed it, instead of failing.
+- `CAST_TEST_DB_PORT=<port> uv run tox -e postgres,postgres-wagtail81` against a
+  disposable PostgreSQL 17: both environments pass.
+- A local walk-through (contributors, new episode with prefilled host, generate
+  with a stubbed Voxhelm, name voices, inline correction, regenerate, restore,
+  manual upload) led to the panel, preview and prefill changes listed under
+  "Integration" in `transcript-editing-ux.md`.

@@ -612,7 +612,7 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
         try:
             restore(transcript)
         except ValidationError as error:
-            return HttpResponse(str(error), status=400)
+            return HttpResponse(_error_text(error), status=400, content_type="text/plain; charset=utf-8")
         except services.TranscriptEditConflict:
             return HttpResponse("Reload the transcript; it changed while you were editing.", status=409)
         for backend in get_search_backends():
@@ -709,6 +709,15 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
     )
 
 
+def _error_text(error: Exception) -> str:
+    """Plain message for the editor, without the list syntax of ``str(ValidationError)``."""
+    if isinstance(error, ValidationError):
+        return " ".join(error.messages)
+    if isinstance(error, ValueError):
+        return str(_("Reload the transcript and try again."))
+    return str(error)
+
+
 @never_cache
 def preview(request: HttpRequest, transcript_id: int) -> HttpResponse:
     from ..transcripts.passages import get_passages
@@ -732,12 +741,10 @@ def preview(request: HttpRequest, transcript_id: int) -> HttpResponse:
         try:
             start_ms = int(request.POST.get("start_ms", ""))
             if request.POST.get("action") == "correct-text":
-                transcript.correct_passage_text(start_ms, request.POST.get("text", ""))
+                text = transcript.correct_passage_text(start_ms, request.POST.get("text", ""))
                 for backend in get_search_backends():
                     backend.add(transcript)
-                return JsonResponse(
-                    {"text": request.POST.get("text", ""), "artifact_revision": services.artifact_revision(transcript)}
-                )
+                return JsonResponse({"text": text, "artifact_revision": services.artifact_revision(transcript)})
             speaker = request.POST.get("speaker", "")
             if speaker and speaker not in names:
                 raise ValidationError("Choose an episode contributor.")
@@ -745,12 +752,12 @@ def preview(request: HttpRequest, transcript_id: int) -> HttpResponse:
         except services.TranscriptEditConflict:
             return HttpResponse("Reload the transcript; its artifacts changed while you were editing.", status=409)
         except (ValueError, ValidationError, parsing.TranscriptArtifactError) as error:
-            return HttpResponse(str(error), status=400)
+            return HttpResponse(_error_text(error), status=400, content_type="text/plain; charset=utf-8")
         return redirect(request.get_full_path())
     try:
         rows = get_passages(transcript)
     except (ValidationError, parsing.TranscriptArtifactError) as error:
-        return HttpResponse(str(error), status=400)
+        return HttpResponse(_error_text(error), status=400, content_type="text/plain; charset=utf-8")
     data = {"transcripts": rows}
     data = apply_public_speaker_mapping_to_podlove_data(data, transcript, episode=episode)
     rows = sanitize_podlove_data(data, strict_public_speaker_labels_for_transcript(transcript, episode=episode))[

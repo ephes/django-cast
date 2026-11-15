@@ -1,6 +1,6 @@
 # Transcript editing in the Wagtail admin: a workflow an editor can follow
 
-Status: implemented on stacked branches A/B, 2026-11-15, including inline text correction. External review and integration pending. Integration branch: `develop`
+Status: implemented and merged into `develop` on 2026-11-15, including inline text correction (see "Integration" at the end). Integration branch: `develop`
 (evidence taken at `e723b0c4`).
 
 This document is about the **editor** who works in the Wagtail admin. It is not
@@ -671,7 +671,9 @@ Fixes friction point 9.
 Owner revision, 2026-11-15: plain-text passage editing is wanted.
 
 - Click a passage in Preview, edit inline, Enter/Cmd+Enter saves, Escape cancels.
-  Shift+Enter inserts a line break. No page reload or rich-text framework.
+  A passage is one paragraph: whitespace, including line breaks, is folded into
+  single spaces so every format stores the same text. No page reload or
+  rich-text framework.
 - Show saved/error state and retain unsaved input on failure. Changed artifacts
   produce a Reload conflict instead of overwriting the other edit.
 - Store corrections in canonical public files and as manual overrides in the
@@ -803,3 +805,25 @@ by regeneration, with restoration through the previous-version bundle.
 Terminology for the django-chat runbook: Voice reference → Voice sample;
 Known-speaker suggestions → Suggested names under Speakers; Glossary corrections
 → Spelling corrections. Python/API identifiers remain compatible.
+
+## Integration (2026-11-15)
+
+Branches A and B were reviewed together, run with real Chromium and on
+PostgreSQL, walked through on a local instance, and merged into `develop`.
+Changes from the walk-through and review:
+
+- Episode panel: "Name the voices" / "Edit transcript and speakers" and
+  "Preview" are buttons; generating again and replacing files sit in a collapsed
+  section. "Upload replacement files" opens the editor's Files section (the add
+  form never offers an audio that already has a transcript, so the old upload
+  link was a dead end there).
+- Host prefill looks back to the most recent episode that has hosts, not just
+  the latest episode.
+- Preview: compact rows, sticky player, a one-line editing hint, plain error
+  sentences, pluralized counts; whitespace in corrections is folded so WebVTT
+  and the JSON formats agree.
+- Speakers: the empty choice reads "No name yet"; the restore button shows a
+  formatted date; the regeneration confirmation states that the current version
+  can be restored.
+- Robustness: indexing never fails on transcripts with ambiguous timestamps,
+  and replacing a transcript whose stored file is missing still works.

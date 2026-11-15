@@ -5,21 +5,32 @@
   {% else %}
     <p data-generation-message>{% if transcript_generation_status %}<strong>{% trans "Transcript status:" %}</strong> {{ transcript_generation_status }}. {{ transcript_generation_message }}{% endif %}</p>
     <p data-generation-error>{{ transcript_generation_error }}</p>
-    <a data-generation-link{% if not transcript_generation_transcript_url %} hidden{% endif %} href="{{ transcript_generation_transcript_url }}">{% trans "Name the voices" %}</a>
     {% if transcript and not transcript_generation_active %}
+      {# The buttons below replace the status link; it only matters while polling an active run. #}
+      <a data-generation-link hidden href="{{ transcript_generation_transcript_url }}">{% trans "Name the voices" %}</a>
       <p>{% blocktrans with named=transcript_voices.named total=transcript_voices.total %}{{ named }} of {{ total }} voices named{% endblocktrans %}</p>
-      <a href="{% url 'cast-transcript:edit' transcript.pk %}">{% trans "Edit transcript and speakers" %}</a>
-      <a href="{% url 'cast-transcript:preview' transcript.pk %}?episode_id={{ self.instance.pk }}">{% trans "Preview" %}</a>
-    {% endif %}
-    {% if not transcript_generation_active %}
-      {% if can_generate_transcript %}{% include "cast/wagtail/_transcript_readiness.html" %}{% endif %}
-      <p><a href="{{ upload_transcript_url }}">{% trans "Upload transcript files" %}</a></p>
-      {% if can_generate_transcript %}
-        {% if transcript %}
-          <a class="button button-secondary" href="{{ generate_transcript_url }}">{% trans "Generate again…" %}</a>
-        {% else %}
-          <button class="button button-secondary" type="submit" formaction="{{ generate_transcript_url }}" formmethod="post" formnovalidate>{% if transcript_generation_error %}{% trans "Try again" %}{% else %}{% trans "Generate transcript" %}{% endif %}</button>
-        {% endif %}
+      <p>
+        <a class="button button-small" href="{% url 'cast-transcript:edit' transcript.pk %}">{% if transcript_voices.named < transcript_voices.total %}{% trans "Name the voices" %}{% else %}{% trans "Edit transcript and speakers" %}{% endif %}</a>
+        <a class="button button-small button-secondary" href="{% url 'cast-transcript:preview' transcript.pk %}?episode_id={{ self.instance.pk }}">{% trans "Preview" %}</a>
+      </p>
+      <details class="w-mt-4">
+        <summary style="display: list-item; cursor: pointer">{% if can_generate_transcript %}{% trans "Generate again or replace files" %}{% else %}{% trans "Replace files" %}{% endif %}</summary>
+        {% if can_generate_transcript %}{% include "cast/wagtail/_transcript_readiness.html" %}{% endif %}
+        <p>
+          {% if can_generate_transcript %}<a class="button button-small button-secondary" href="{{ generate_transcript_url }}">{% trans "Generate again…" %}</a>{% endif %}
+          <a href="{% url 'cast-transcript:edit' transcript.pk %}#files">{% trans "Upload replacement files" %}</a>
+        </p>
+      </details>
+    {% else %}
+      <a data-generation-link{% if not transcript_generation_transcript_url %} hidden{% endif %} href="{{ transcript_generation_transcript_url }}">{% trans "Name the voices" %}</a>
+      {% if not transcript_generation_active %}
+        {% if can_generate_transcript %}{% include "cast/wagtail/_transcript_readiness.html" %}{% endif %}
+        <p>
+          {% if can_generate_transcript %}
+            <button class="button button-small button-secondary" type="submit" formaction="{{ generate_transcript_url }}" formmethod="post" formnovalidate>{% if transcript_generation_error %}{% trans "Try again" %}{% else %}{% trans "Generate transcript" %}{% endif %}</button>
+          {% endif %}
+          <a href="{{ upload_transcript_url }}">{% trans "Upload transcript files" %}</a>
+        </p>
       {% endif %}
     {% endif %}
   {% endif %}

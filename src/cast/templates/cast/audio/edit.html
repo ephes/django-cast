@@ -70,7 +70,7 @@
             {% if user_can_generate_transcript %}
               {% include "cast/wagtail/_transcript_readiness.html" %}
               <form action="{{ generate_transcript_url }}" method="{% if audio.transcript %}get{% else %}post{% endif %}" class="cast-transcript-actions__form">
-                {% csrf_token %}
+                {% if not audio.transcript %}{% csrf_token %}{% endif %}
                 <input type="hidden" name="next" value="{{ request.get_full_path }}" />
                 <button
                   class="button button-secondary"

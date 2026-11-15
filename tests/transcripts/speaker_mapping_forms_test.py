@@ -32,7 +32,7 @@ class TestTranscriptSpeakerMapping:
 
         assert form.is_valid()
         assert form.speaker_mapping == {"Speaker 1": "Alice"}
-        assert form.fields["speaker_0"].choices == [("", "Unmapped"), (str(assignment.pk), "Alice (Host)")]
+        assert form.fields["speaker_0"].choices == [("", "No name yet"), (str(assignment.pk), "Alice (Host)")]
 
     def test_speaker_mapping_form_stores_one_off_display_name(self, episode):
         transcript = create_transcript(
@@ -158,7 +158,7 @@ class TestTranscriptSpeakerMapping:
 
         assert form.fields["speaker_0"].initial == str(assignment.pk)
         assert form.fields["speaker_display_name_1"].initial == "Guest Voice"
-        assert form.fields["speaker_0"].choices == [("", "Unmapped"), (str(assignment.pk), "Alice (Host)")]
+        assert form.fields["speaker_0"].choices == [("", "No name yet"), (str(assignment.pk), "Alice (Host)")]
 
         compatibility_form = SpeakerContributorMappingForm(
             {"action": "map-speakers", "speaker_0": ""},
@@ -182,7 +182,7 @@ class TestTranscriptSpeakerMapping:
             contributor_assignments=[fake_assignment],
         )
         assert fake_form.fields["speaker_0"].choices == [
-            ("", "Unmapped"),
+            ("", "No name yet"),
             (
                 f"{DRAFT_SPEAKER_ASSIGNMENT_PREFIX}{episode.pk}:None:{EpisodeContributor.ROLE_GUEST}",
                 "No Contributor (Guest)",
@@ -230,7 +230,7 @@ class TestTranscriptSpeakerMapping:
         assert context["multiple_episodes"] is True
         assert context["contributor_assignments"] == [first_assignment, second_assignment]
         assert form.fields["speaker_0"].choices == [
-            ("", "Unmapped"),
+            ("", "No name yet"),
             (str(first_assignment.pk), f"Alice (Host) — {episode.title}"),
             (str(second_assignment.pk), f"Bob (Guest) — {podcast_episode_with_same_audio.title}"),
         ]
@@ -256,7 +256,7 @@ class TestTranscriptSpeakerMapping:
         assert [assignment.display_name for assignment in context["contributor_assignments"]] == ["Draft Host"]
         assert context["contributor_assignments"][0].pk is None
         draft_value = f"{DRAFT_SPEAKER_ASSIGNMENT_PREFIX}{episode.pk}:{contributor.pk}:{EpisodeContributor.ROLE_HOST}"
-        assert form.fields["speaker_0"].choices == [("", "Unmapped"), (draft_value, "Draft Host (Host)")]
+        assert form.fields["speaker_0"].choices == [("", "No name yet"), (draft_value, "Draft Host (Host)")]
 
     def test_speaker_mapping_context_uses_stable_draft_assignment_values_with_mixed_assignments(self, episode):
         saved_contributor = Contributor.objects.create(display_name="Saved Host", slug="saved-host")
@@ -296,7 +296,7 @@ class TestTranscriptSpeakerMapping:
             f"{DRAFT_SPEAKER_ASSIGNMENT_PREFIX}{episode.pk}:{draft_contributor.pk}:{EpisodeContributor.ROLE_GUEST}"
         )
         assert form.fields["speaker_0"].choices == [
-            ("", "Unmapped"),
+            ("", "No name yet"),
             (str(saved_assignment.pk), "Saved Host (Host)"),
             (draft_value, "Draft Guest (Guest)"),
         ]

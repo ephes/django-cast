@@ -99,7 +99,7 @@ def test_preview_and_one_passage_speaker_change(admin_client, episode):
     url = reverse("cast-transcript:preview", args=(transcript.pk,))
     response = admin_client.get(url)
     assert response.status_code == 200
-    assert "1 passages without a name" in response.content.decode()
+    assert "1 passage without a name" in response.content.decode()
     assert (
         admin_client.post(
             url, {"start_ms": 0, "speaker": "Host", "artifact_revision": services.artifact_revision(transcript)}
@@ -352,7 +352,7 @@ def test_restore_missing_or_corrupt_version_is_safe(admin_client, episode, mocke
     from cast.transcripts.versions import read_previous
 
     transcript = passage_transcript(episode)
-    assert transcript.previous_version_date == ""
+    assert transcript.previous_version_date is None
     url = reverse("cast-transcript:edit", args=(transcript.pk,))
     assert (
         admin_client.post(

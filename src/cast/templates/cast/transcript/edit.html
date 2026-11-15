@@ -18,6 +18,11 @@
   </script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      var files = document.getElementById('files');
+      if (files && window.location.hash === '#files') {
+        files.open = true;
+        files.scrollIntoView();
+      }
       var bindSeekButtons = function(audio, buttons, seekAttribute, endAttribute) {
         if (!audio) {
           return;
@@ -364,7 +369,7 @@
             <input type="hidden" name="action" value="restore-version">
             <input type="hidden" name="artifact_revision" value="{{ artifact_revision }}">
             <p>{% trans "Restore the previous transcript, including names and manual text corrections. The current version becomes the previous version." %}</p>
-            <button class="button button-secondary" type="submit">{% blocktrans with date=transcript.previous_version_date %}Restore the version from {{ date }}{% endblocktrans %}</button>
+            <button class="button button-secondary" type="submit">{% blocktrans with date=transcript.previous_version_date|date:"DATETIME_FORMAT" %}Restore the version from {{ date }}{% endblocktrans %}</button>
           </form>
         {% endif %}
       </div>

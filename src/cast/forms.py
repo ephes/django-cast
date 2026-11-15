@@ -501,7 +501,7 @@ class SpeakerContributorMappingForm(forms.Form):
         self.contributor_assignments = contributor_assignments
         self.contributor_lookup: dict[str, Contributor] = {}
         self.contributor_value_by_id: dict[int, str] = {}
-        choices: list[tuple[str, str]] = [("", str(_("Unmapped")))]
+        choices: list[tuple[str, str]] = [("", str(_("No name yet")))]
         seen_contributor_values = set()
         for assignment in contributor_assignments:
             assignment_value = self._assignment_value(assignment)
@@ -521,7 +521,7 @@ class SpeakerContributorMappingForm(forms.Form):
             mapping = self.mapping_by_label.get(speaker_label)
             self.speaker_field_names[field_name] = speaker_label
             self.display_field_names[display_field_name] = speaker_label
-            target_field = forms.ChoiceField(label=speaker_label, choices=choices, required=False)
+            target_field = forms.ChoiceField(label=_("Contributor"), choices=choices, required=False)
             display_field = forms.CharField(label=_("Name for this transcript only"), max_length=128, required=False)
             if mapping is not None and mapping.review_state != TranscriptSpeakerMapping.ReviewState.STALE:
                 if mapping.contributor_id is not None:

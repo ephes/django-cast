@@ -26,7 +26,7 @@
                   <div class="cast-speaker-mapping__field">
                     <p>
                       <strong>{{ row.mapping.speaker_label }}</strong><br />
-                      {% if not row.named %}{{ row.mapping.get_review_state_display }}{% endif %}
+                      {% if not row.named and row.mapping.review_state != "unmapped" %}{{ row.mapping.get_review_state_display }}{% endif %}
                       {% if not row.mapping.active %} · {% trans "inactive" %}{% endif %}
                     </p>
                     {% if row.mapping.review_state == "stale" and row.mapping.target_display_name %}

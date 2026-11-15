@@ -1,6 +1,7 @@
 import hashlib
 import json
 from collections.abc import Mapping
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
@@ -513,26 +514,31 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         return convert_dote_to_podcastindex_transcript(data)
 
     @property
-    def previous_version_date(self) -> str:
+    def previous_version_date(self) -> datetime | None:
+        """When the private previous version was kept, or ``None`` when it is unreadable."""
         from ..transcripts.versions import read_previous
 
         try:
-            return str(read_previous(self)["saved_at"])
-        except ValidationError:
-            return ""
+            return datetime.fromisoformat(read_previous(self)["saved_at"])
+        except (ValidationError, ValueError):
+            return None
 
     @property
     def plain_text(self) -> str:
+        """Passage text for the search index; unreadable or ambiguous files index as empty."""
         from ..transcripts.passages import get_passages
 
-        return "\n".join(row["text"] for row in get_passages(self))
+        try:
+            return "\n".join(row["text"] for row in get_passages(self))
+        except (ValidationError, parsing.TranscriptArtifactError, OSError):
+            return ""
 
     search_fields = [index.SearchField("plain_text")]
 
-    def correct_passage_text(self, start_ms: int, text: str) -> None:
+    def correct_passage_text(self, start_ms: int, text: str) -> str:
         from ..transcripts.passages import correct_text
 
-        correct_text(self, start_ms, text)
+        return correct_text(self, start_ms, text)
 
     def change_passage_speaker(self, start_ms: int, speaker: str) -> None:
         from ..transcripts.passages import change_speaker

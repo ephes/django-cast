@@ -97,6 +97,10 @@ def test_episode_transcript_hub_and_upload_initial(admin_client, episode, settin
     content = admin_client.get(url).content.decode()
     assert "0 of 1 voices named" in content
     assert reverse("cast-transcript:edit", args=(transcript.pk,)) in content
+    # An audio with a transcript is not offered by the add form: replace files on the editor instead.
+    assert upload not in content
+    assert reverse("cast-transcript:edit", args=(transcript.pk,)) + "#files" in content
+    assert "Name the voices" in content
     from cast.models import Episode
 
     panels = Episode.content_panels

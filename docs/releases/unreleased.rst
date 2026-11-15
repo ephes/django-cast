@@ -1,6 +1,36 @@
 Unreleased
 ==========
 
+- Transcript editing (integration of the admin UX work): the episode Transcript
+  panel shows "Name the voices"/"Edit transcript and speakers" and "Preview" as
+  buttons and keeps "Generate again…" and "Upload replacement files" in a
+  collapsed section; the replacement link opens the editor's Files section,
+  which also opens on upload errors. New episodes copy the hosts of the most
+  recent episode that has hosts. Preview rows are compact with a sticky player
+  and an editing hint; corrections fold whitespace so all formats agree, and
+  errors read as plain sentences. The empty speaker choice reads "No name yet",
+  the restore button shows a formatted date, and the regeneration confirmation
+  says the current version can be restored. Search indexing no longer fails on
+  transcripts with ambiguous timestamps, and a transcript whose stored file is
+  missing can still be replaced or regenerated.
+
+- Simplify transcript editing sections and wording; allow voice samples from
+  approved contributor mappings and detach stale generation suggestions on upload.
+
+- Add paginated admin transcript preview, per-passage speaker changes and inline
+  plain-text corrections with keyboard save/cancel and consistent output formats.
+
+- Explain transcript uploads, reject empty uploads, identify misplaced formats,
+  and link duplicate audios to their existing transcripts.
+
+- Prefill previous episode hosts, synchronize contributor slugs, and configure
+  guest/host ordering per podcast (guests first by default). Apply migrations
+  0092–0094 (help texts, podcast contributor order, private previous transcript
+  version).
+
+- Keep one private previous transcript version before generation or replacement
+  upload, including text corrections and mappings, and allow swapping it back.
+
 - Show speaker detection and missing voice samples before generation, refresh
   active admin status with bounded polling, and retain failed resubmission
   messages instead of showing an earlier success. Add an audio-change-protected
@@ -599,15 +629,3 @@ Unreleased
   corpus. Only the latest attempt publishes its model and matching metrics;
   failed evaluation preserves the prior usable pair. Apply the new migration
   before upgrading training publishers together.
-
-* Simplify transcript editing sections and wording; allow voice samples from
-  approved contributor mappings and detach stale generation suggestions on upload.
-
-* Add paginated admin transcript preview, per-passage speaker changes and inline
-  plain-text corrections with keyboard save/cancel and consistent output formats.
-* Explain transcript uploads, reject empty uploads, identify misplaced formats,
-  and link duplicate audios to their existing transcripts.
-* Prefill previous episode hosts, synchronize contributor slugs, and configure
-  guest/host ordering per podcast (guests first by default).
-* Keep one private previous transcript version before generation or replacement
-  upload, including text corrections and mappings, and allow swapping it back.

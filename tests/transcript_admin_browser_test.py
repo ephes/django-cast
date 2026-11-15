@@ -5,10 +5,14 @@ import os
 
 import pytest
 from django.urls import reverse
-from playwright.sync_api import expect, sync_playwright
 
 from cast.models import Contributor, EpisodeContributor
 from tests.known_speaker_apply_test import make_transcript
+
+# Playwright is a browser-test extra: collect cleanly (and skip) where it is not installed.
+playwright_sync_api = pytest.importorskip("playwright.sync_api")
+expect = playwright_sync_api.expect
+sync_playwright = playwright_sync_api.sync_playwright
 
 
 class BrowserVoxhelmClient:
@@ -92,9 +96,10 @@ def test_transcript_admin_journey(client, pg_editor_actors, request, settings, l
             expect(page.get_by_role("button", name="Replace and generate transcript")).to_be_visible()
             page.get_by_role("link", name="Cancel", exact=True).click()
             expect(page).to_have_url(live_server.url + reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
-            expect(page.get_by_role("link", name="Edit transcript and speakers")).to_be_visible()
-            page.goto(live_server.url + reverse("cast-transcript:add") + f"?audio={episode.podcast_audio_id}")
-            expect(page.locator("#id_audio")).to_have_value(str(episode.podcast_audio_id))
+            expect(page.get_by_role("link", name="Edit transcript and speakers", exact=True)).to_be_visible()
+            expect(page.get_by_role("link", name="Generate again…", exact=True)).to_be_hidden()
+            # Upload preselection is covered by test_upload_and_contributor_defaults_in_browser:
+            # this audio already has a transcript, so the add form must not offer it.
             page.goto(live_server.url + reverse("cast-transcript:edit", args=(transcript.pk,)))
             expect(page.get_by_role("heading", name=f"Transcript: {episode.title}")).to_be_visible()
             page.get_by_text("Files", exact=True).click()
@@ -135,9 +140,11 @@ def test_transcript_admin_journey(client, pg_editor_actors, request, settings, l
             passage.get_by_text("Change speaker", exact=True).click()
             passage.locator("select[name=speaker]").select_option("")
             passage.get_by_role("button", name="Save speaker", exact=True).click()
-            expect(page.get_by_text("1 passages without a name", exact=True)).to_be_visible()
+            expect(page.get_by_text("1 passage without a name", exact=True)).to_be_visible()
             page.goto(live_server.url + reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
             expect(page.get_by_text("1 of 1 voices named")).to_be_visible()
+            expect(page.get_by_role("link", name="Edit transcript and speakers", exact=True)).to_be_visible()
+            page.get_by_text("Generate again or replace files", exact=True).click()
             page.get_by_role("link", name="Generate again…", exact=True).click()
             page.get_by_role("button", name="Replace and generate transcript", exact=True).click()
             page.get_by_role("link", name="Name the voices", exact=True).click()

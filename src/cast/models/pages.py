@@ -661,14 +661,19 @@ class CustomEpisodeForm(WagtailAdminPageForm):
             and parent is not None
             and not instance.contributor_assignments.all()
         ):
-            previous = Episode.objects.child_of(parent).order_by("-visible_date", "-pk").first()
-            if previous is not None:
+            # Hosts of the most recent episode that has any: a special or an empty
+            # draft in between must not leave the new episode without hosts.
+            hosts: list[EpisodeContributor] = []
+            for previous in Episode.objects.child_of(parent).order_by("-visible_date", "-pk")[:20]:
                 previous = previous.get_latest_revision_as_object()
                 hosts = [
                     assignment
                     for assignment in previous.contributor_assignments.all()
                     if assignment.role == EpisodeContributor.ROLE_HOST and assignment.contributor.visible
                 ]
+                if hosts:
+                    break
+            if hosts:
                 instance.contributor_assignments.set(
                     [
                         EpisodeContributor(

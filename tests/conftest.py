@@ -647,15 +647,21 @@ def transcript(audio):
 @pytest.fixture()
 def pg_editor_actors(transactional_db, settings, request):
     """Restore roots flushed by earlier threaded tests before requesting actors."""
-    locale, _ = Locale.objects.get_or_create(language_code=settings.LANGUAGE_CODE)
-    # Match the session bootstrap's regional/base locales after a flush.
-    Locale.objects.get_or_create(language_code=settings.LANGUAGE_CODE.split("-")[0])
-    if Page.get_first_root_node() is None:
-        Page.add_root(instance=Page(title="Root", slug="root", locale=locale))
-    if Collection.get_first_root_node() is None:
-        Collection.add_root(instance=Collection(name="Root"))
+    restore_flushed_wagtail_roots(settings.LANGUAGE_CODE)
     # blog requests site, which recreates the default Site against the restored root.
     return request.getfixturevalue("admin_user"), request.getfixturevalue("blog")
+
+
+def restore_flushed_wagtail_roots(language_code: str) -> Page:
+    """Recreate the regional/base locales, page root and collection root after a flush."""
+    locale, _ = Locale.objects.get_or_create(language_code=language_code)
+    Locale.objects.get_or_create(language_code=language_code.split("-")[0])
+    root_page = Page.get_first_root_node()
+    if root_page is None:
+        root_page = Page.add_root(instance=Page(title="Root", slug="root", locale=locale))
+    if Collection.get_first_root_node() is None:
+        Collection.add_root(instance=Collection(name="Root"))
+    return root_page
 
 
 @pytest.fixture()
@@ -665,8 +671,9 @@ def site(db, ensure_wagtail_roots):
     site = Site.objects.filter(is_default_site=True, root_page__isnull=False).first()
     if site is not None:
         return site
-    root_page = Page.get_first_root_node()
-    assert root_page is not None
+    # A transactional test may have flushed the session bootstrap (opt-in browser
+    # journeys run back to back): restore locales and roots first.
+    root_page = restore_flushed_wagtail_roots(django_settings.LANGUAGE_CODE)
     orphan_site = Site.objects.filter(root_page__isnull=True).first()
     if orphan_site is not None:
         orphan_site.root_page = root_page

@@ -1203,9 +1203,11 @@ Admin transcript replacement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Generating again from an episode or audio with an existing transcript opens a
-confirmation showing named voices, passage/glossary decisions and live episodes.
-Only an explicit confirmation POST queues replacement. Existing files remain
-until import completes; there is currently no restore option. After regeneration,
+confirmation showing named voices, passage decisions, spelling corrections and
+live episodes. It warns that manual text corrections are replaced too. Only an
+explicit confirmation POST queues replacement. Existing files remain until import
+completes; the import then keeps them as the private previous version, which the
+transcript page can restore (see "Previous transcript version"). After regeneration,
 old mappings that need review start empty and show the former name as a hint.
 Saving them unchanged preserves the review state and publishes no stale name.
 The editor API retains its explicit generation POST replacement contract; this admin
@@ -1215,12 +1217,17 @@ Episode transcript panel
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 Saved episodes always show a Transcript panel below the open Contributors panel
-and Podcast audio. It links to the transcript and displays the number of current
-approved voice mappings, or offers upload with the saved audio preselected and
-generation when Voxhelm is configured. Queued/running and failed runs remain
+and Podcast audio. Without a transcript it shows the generation readiness facts,
+"Generate transcript" (when Voxhelm is configured) and "Upload transcript files"
+with the saved audio preselected. With a transcript it shows "N of M voices
+named" and two buttons: "Name the voices" while voices are unnamed (otherwise
+"Edit transcript and speakers") and "Preview". "Generate again…" and "Upload
+replacement files" sit in a collapsed "Generate again or replace files" section
+together with the readiness facts. Queued/running and failed runs remain
 visible. The panel reads saved revision state. Counts use the mapping rows
 materialized on file save/import, so opening the episode never reads transcript
-artifacts. Preview and passage counts are deferred to the preview slice.
+artifacts. The panel links to the transcript Preview, which shows the count of
+passages without a name.
 
 Transcript navigation
 ~~~~~~~~~~~~~~~~~~~~~
@@ -1270,7 +1277,8 @@ replacement files discards suggestions from the earlier generation.
 
 Terminology for the django-chat runbook: “Known-speaker suggestions” is now
 “Suggested names” under “Speakers”; “Voice reference” becomes “Voice sample”;
-“Glossary corrections” becomes “Spelling corrections”. API/model names stay stable.
+“Glossary corrections” becomes “Spelling corrections”; the empty speaker choice
+“Unmapped” becomes “No name yet”. API/model names stay stable.
 
 Preview, passage corrections and upload
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1280,9 +1288,12 @@ unpublished revisions. It shows 200 passages per page, marks unnamed passages,
 and plays audio from each timestamp. Change speaker affects the same timestamp
 in every stored format and retains a decision for generated transcripts.
 
-Click a passage's text to correct it inline. Enter or Cmd+Enter saves, Escape
-cancels, Shift+Enter inserts a line break. Saved and error states appear beside
-the passage without reloading. Manual corrections update the stored Podlove,
+Preview tells the editor how to edit: click a passage's text to correct it
+inline; Enter or Cmd+Enter saves, Escape cancels. A passage is one paragraph:
+line breaks and repeated spaces are folded into single spaces, so every format
+stores the same text. Saved and error states appear beside the passage without
+reloading; errors are shown as plain sentences and keep the typed text. The
+audio player stays at the top while scrolling. Manual corrections update the stored Podlove,
 DOTe and WebVTT files together, their plain text and search entry. They take
 precedence over subsequent spelling-correction review. Mismatched timestamps or
 styled WebVTT cues are refused without a partial update. Regeneration replaces
@@ -1291,14 +1302,19 @@ manual corrections; restore the previous version to recover them.
 Uploads require at least one file. Podlove JSON is used by the web player;
 WebVTT or DOTe provides transcripts for podcast apps. Missing formats are named
 after saving. The audio chooser offers audios without a transcript and includes
-the episode title; duplicate submissions link to the existing transcript.
+the episode title; duplicate submissions link to the existing transcript. To
+replace the files of an existing transcript, use "Upload replacement files" in
+the episode panel, which opens the editor's Files section (it also opens by
+itself when an upload has errors).
 
 New episode contributors
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 The contributor name uses Wagtail's built-in slug synchronization. A new episode
-starts with the visible hosts from the latest episode of the same podcast
-(sorted by visible date, then ID), using its latest saved revision. Guests are
+starts with the visible hosts of the most recent episode of the same podcast
+that has any (sorted by visible date, then ID, looking at most 20 episodes back),
+using its latest saved revision, so a special or an empty draft in between does
+not leave the new episode without hosts. Guests are
 not copied, and existing or submitted contributor rows are kept. The podcast's
 Contributor order setting chooses Guests, then hosts (default) or Hosts, then
 guests for new episode saves. Order within each group is preserved; existing

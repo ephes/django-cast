@@ -65,3 +65,20 @@ def test_episode_form_save_persists_when_requested(podcast):
     with patch.object(Episode, "save") as save:
         assert form.save() is instance
     save.assert_called_once()
+
+
+def test_new_episode_prefill_skips_newer_episode_without_hosts(podcast, episode):
+    from datetime import timedelta
+
+    host = Contributor.objects.create(display_name="Host", slug="host")
+    EpisodeContributor.objects.create(episode=episode, contributor=host, role="host")
+    episode.save_revision()
+    special = Episode(title="Special", slug="special", visible_date=episode.visible_date + timedelta(days=1))
+    podcast.add_child(instance=special)
+    form = MinimalEpisodeForm(instance=Episode(title="New"), parent_page=podcast)
+    assert [row.contributor for row in form.instance.contributor_assignments.all()] == [host]
+
+
+def test_new_episode_prefill_stays_empty_without_any_hosts(podcast, episode):
+    form = MinimalEpisodeForm(instance=Episode(title="New"), parent_page=podcast)
+    assert not form.instance.contributor_assignments.all()

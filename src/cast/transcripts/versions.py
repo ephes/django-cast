@@ -36,11 +36,15 @@ def bundle(transcript: Transcript) -> bytes:
     for name in services.EDITOR_ARTIFACT_FIELDS:
         field = getattr(transcript, name)
         if field:
-            with field.storage.open(field.name, "rb") as file:
-                files[name] = {
-                    "name": field.name.rsplit("/", 1)[-1],
-                    "content": base64.b64encode(file.read()).decode("ascii"),
-                }
+            try:
+                with field.storage.open(field.name, "rb") as file:
+                    content = file.read()
+            except OSError:
+                continue  # a file missing from storage cannot be kept; replacing it must still work
+            files[name] = {
+                "name": field.name.rsplit("/", 1)[-1],
+                "content": base64.b64encode(content).decode("ascii"),
+            }
     mappings = list(transcript.speaker_mappings.values(*MAPPING_FIELDS))
     return json.dumps(
         {
