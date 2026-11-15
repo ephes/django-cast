@@ -665,7 +665,7 @@ chooser = _views.chooser
 
 
 def add(request: AuthenticatedHttpRequest) -> HttpResponse:
-    return _views.add(request)
+    return _views.add(request, initial={"audio": request.GET.get("audio")})
 
 
 def delete(request: HttpRequest, transcript_id: int) -> HttpResponse:

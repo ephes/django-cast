@@ -19,9 +19,16 @@ from ..voxhelm import (
     VoxhelmError,
     enqueue_audio_transcript_generation,
     get_transcript_generation_status_context,
+    voxhelm_configured,
 )
 
 audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
+
+
+def generation_available(*, request: HttpRequest, audio: Audio) -> bool:
+    return voxhelm_configured(request_or_site=request) and user_can_generate_transcript_for_audio(
+        request=request, audio=audio
+    )
 
 
 def user_can_generate_transcript_for_audio(*, request: HttpRequest, audio: Audio) -> bool:

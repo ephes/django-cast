@@ -39,6 +39,9 @@ def test_transcript_admin_journey(client, admin_user, episode, settings, live_se
             expect(page.get_by_role("button", name="Replace and generate transcript")).to_be_visible()
             page.get_by_role("link", name="Cancel", exact=True).click()
             expect(page).to_have_url(live_server.url + reverse("wagtailadmin_pages:edit", args=(episode.pk,)))
+            expect(page.get_by_role("link", name="Edit transcript and speakers")).to_be_visible()
+            page.goto(live_server.url + reverse("cast-transcript:add") + f"?audio={episode.podcast_audio_id}")
+            expect(page.locator("#id_audio")).to_have_value(str(episode.podcast_audio_id))
             page.goto(live_server.url + reverse("cast-transcript:edit", args=(transcript.pk,)))
             expect(page.get_by_role("button", name="Save speaker mappings")).to_be_visible()
             assert errors == []

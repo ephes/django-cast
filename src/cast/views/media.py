@@ -169,7 +169,7 @@ class MediaAdminViews:
             context["popular_tags"] = popular_tags_for_model(config.model)
         return render(request, f"{config.template_dir}/index.html", context)
 
-    def add(self, request: AuthenticatedHttpRequest) -> HttpResponse:
+    def add(self, request: AuthenticatedHttpRequest, *, initial: dict[str, Any] | None = None) -> HttpResponse:
         config = self.config
         if not config.permission_policy.user_has_permission(request.user, "add"):
             raise PermissionDenied
@@ -189,7 +189,7 @@ class MediaAdminViews:
                 messages.error(request, config.add_error_message)
         else:
             obj = config.create_instance(request.user)
-            form = form_class(user=request.user, instance=obj)
+            form = form_class(user=request.user, instance=obj, initial=initial)
 
         return render(
             request,

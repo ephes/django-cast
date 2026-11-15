@@ -174,3 +174,24 @@ msgstr "Transkript ersetzen und erzeugen"
 
 msgid "Before the transcript changed: %(name)s. Listen to the samples and choose again."
 msgstr "Vor der Änderung des Transkripts: %(name)s. Höre die Beispiele an und wähle erneut."
+
+msgid "Hosts and guests of this episode. Speaker names in the transcript can only be chosen from this list."
+msgstr "Hosts und Gäste dieser Episode. Sprechernamen im Transkript können nur aus dieser Liste gewählt werden."
+
+msgid "Choose the podcast audio and save first."
+msgstr "Wähle das Podcast-Audio und speichere zuerst."
+
+msgid "%(named)s of %(total)s voices named"
+msgstr "%(named)s von %(total)s Stimmen benannt"
+
+msgid "Edit transcript and speakers"
+msgstr "Transkript und Sprecher bearbeiten"
+
+msgid "Upload transcript files"
+msgstr "Transkriptdateien hochladen"
+
+msgid "Generate again…"
+msgstr "Erneut erzeugen…"
+
+msgid "Try again"
+msgstr "Erneut versuchen"

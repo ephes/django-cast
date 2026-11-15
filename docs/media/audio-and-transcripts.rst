@@ -1210,3 +1210,14 @@ old mappings that need review start empty and show the former name as a hint.
 Saving them unchanged preserves the review state and publishes no stale name.
 The editor API retains its explicit generation POST replacement contract; this admin
 confirmation does not change management commands or API clients.
+
+Episode transcript panel
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Saved episodes always show a Transcript panel below the open Contributors panel
+and Podcast audio. It links to the transcript and displays the number of current
+approved voice mappings, or offers upload with the saved audio preselected and
+generation when Voxhelm is configured. Queued/running and failed runs remain
+visible. The panel reads saved revision state. Counts use the mapping rows
+materialized on file save/import, so opening the episode never reads transcript
+artifacts. Preview and passage counts are deferred to the preview slice.

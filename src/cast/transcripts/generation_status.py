@@ -68,3 +68,16 @@ def get_transcript_generation_status_context(*, audio: Audio) -> dict[str, str |
         "transcript_generation_error": generation.error_message,
         "transcript_generation_transcript_url": transcript_url,
     }
+
+
+def transcript_voice_counts(transcript: Transcript) -> dict[str, int]:
+    """Count materialized label mappings without opening artifacts in list/panel requests.
+
+    Import and file saves synchronize these rows. A stale approval never counts
+    as named. Public rendering still checks episode visibility separately.
+    """
+    rows = [row for row in transcript.speaker_mappings.all() if row.active]
+    return {
+        "named": sum(row.is_current_for_fingerprint(transcript.source_fingerprint) for row in rows),
+        "total": len(rows),
+    }

@@ -1,6 +1,9 @@
 Unreleased
 ==========
 
+- Add a Transcript panel to saved episodes and move the open Contributors panel
+  directly after Podcast audio. Upload links preselect the saved audio.
+
 - Require confirmation before regenerating an existing transcript in the admin;
   leave stale speaker choices empty until explicitly reviewed again.
 

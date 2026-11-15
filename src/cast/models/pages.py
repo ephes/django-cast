@@ -742,7 +742,14 @@ class Episode(Post):
     content_panels = Page.content_panels + [
         FieldPanel("visible_date"),
         FieldPanel("podcast_audio"),
-        EpisodeTranscriptStatusPanel(heading=_("Transcript generation")),
+        MultiFieldPanel(
+            [InlinePanel("contributor_assignments", label=_("Contributor"))],
+            heading=_("Contributors"),
+            help_text=_(
+                "Hosts and guests of this episode. Speaker names in the transcript can only be chosen from this list."
+            ),
+        ),
+        EpisodeTranscriptStatusPanel(heading=_("Transcript")),
         MultiFieldPanel(
             [
                 FieldPanel("episode_type"),
@@ -778,11 +785,6 @@ class Episode(Post):
         FieldPanel("keywords"),
         FieldPanel("explicit"),
         FieldPanel("block"),
-        MultiFieldPanel(
-            [InlinePanel("contributor_assignments", label=_("Contributor"))],
-            heading=_("Contributors"),
-            classname="collapsed",
-        ),
     ]
 
     objects: PageManager = PageManager()
