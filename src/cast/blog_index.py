@@ -42,7 +42,15 @@ def create_cached_blog_filterset(filterset_data: Mapping[str, Any]) -> PostFilte
     """Rebuild the facet filterset stored at the blog-index cache boundary."""
     from cast.filters import PostFilterset
 
-    filterset = PostFilterset(filterset_data["get_params"])
+    raw_params = filterset_data["get_params"]
+    get_params: QueryDict
+    if isinstance(raw_params, str):
+        get_params = QueryDict(raw_params)
+    else:
+        # Accept previously serialized single-valued cache entries.
+        get_params = QueryDict("", mutable=True)
+        get_params.update(raw_params)
+    filterset = PostFilterset(get_params)
     filterset.filters["date_facets"].set_field_choices(filterset_data["date_facets_choices"])
     filterset.filters["category_facets"].set_field_choices(filterset_data["category_facets_choices"])
     filterset.filters["tag_facets"].set_field_choices(filterset_data["tag_facets_choices"])
@@ -108,9 +116,8 @@ def pagination_context(posts_queryset: models.QuerySet[Post], get_params: QueryD
 
 def other_get_params(get_params: QueryDict) -> str:
     """Serialize non-pagination query parameters for paging links."""
-    filtered_get_params = {key: str(value) for key, value in get_params.items() if key != "page"}
-    new_get_params = QueryDict("", mutable=True)
-    new_get_params.update(filtered_get_params)
+    new_get_params = get_params.copy()
+    new_get_params.pop("page", None)
     parameters = new_get_params.urlencode()
     return f"&{parameters}" if parameters else ""
 

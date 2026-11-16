@@ -39,15 +39,19 @@ if TEST_DATABASE_ENGINE == "django.db.backends.postgresql":
 
 ROOT_URLCONF = "tests.urls"
 
-INSTALLED_APPS = [
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sites",
-    "django.contrib.sessions",
-    "django.contrib.staticfiles",
-    "django.contrib.admin",
-    "django.contrib.messages",
-] + list(CAST_APPS)
+INSTALLED_APPS = (
+    [
+        "django.contrib.auth",
+        "django.contrib.contenttypes",
+        "django.contrib.sites",
+        "django.contrib.sessions",
+        "django.contrib.staticfiles",
+        "django.contrib.admin",
+        "django.contrib.messages",
+    ]
+    + list(CAST_APPS)
+    + ["tests.preview_image_app"]
+)
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",

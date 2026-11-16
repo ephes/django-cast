@@ -259,3 +259,57 @@ def test_editor_preview_preserves_proxy_tls_scheme(rf, post, mocker, settings, p
     assert response.status_code == 200
     assert spy.call_args.args[1].is_secure() is expected_secure
     assert not spy.call_args.args[1].user.is_authenticated
+
+
+@pytest.mark.parametrize("value", [True, False, 0, -1, 2**63, "1", 1.0, {"value": True}, SimpleNamespace(pk=False)])
+def test_preview_media_id_refuses_noncanonical_values(value):
+    assert _media_id(value) is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("value", [True, False, 0, -1, 2**63])
+def test_preview_never_forwards_invalid_media_ids(value, mocker):
+    from django.db.models.query import QuerySet
+
+    bulk = mocker.spy(QuerySet, "in_bulk")
+    blocks = [SimpleNamespace(block_type=kind, value=value) for kind in ("image", "audio", "video")]
+    blocks.append(SimpleNamespace(block_type="gallery", value={"gallery": [value]}))
+    post = SimpleNamespace(_state=SimpleNamespace(db="default"), body=[SimpleNamespace(value=blocks)])
+    media = PreviewMedia.from_post(post)
+    assert media.images == media.audios == media.videos == media.renditions == {}
+    assert bulk.call_count == 3
+    assert all(not call.args[1] for call in bulk.call_args_list)
+
+
+def test_preview_media_id_upper_boundary():
+    assert _media_id(2**63 - 1) == 2**63 - 1
+    assert _media_id(3, max_id=2) is None
+
+
+@pytest.mark.django_db
+def test_preview_uses_selected_database_integer_range(mocker):
+    from django.db.models.query import QuerySet
+
+    mocker.patch.object(connection.ops, "integer_field_range", return_value=(0, 2))
+    bulk = mocker.spy(QuerySet, "in_bulk")
+    post = SimpleNamespace(
+        _state=SimpleNamespace(db="default"),
+        body=[SimpleNamespace(value=[SimpleNamespace(block_type="image", value=3)])],
+    )
+    assert PreviewMedia.from_post(post).images == {}
+    assert all(not call.args[1] for call in bulk.call_args_list)
+
+
+@pytest.mark.django_db
+def test_preview_skips_media_with_non_integer_primary_keys(mocker):
+    from django.db.models.query import QuerySet
+
+    # Backends such as PostgreSQL have no integer range for UUID or char keys.
+    mocker.patch.object(connection.ops, "integer_field_range", side_effect=KeyError("UUIDField"))
+    bulk = mocker.spy(QuerySet, "in_bulk")
+    post = SimpleNamespace(
+        _state=SimpleNamespace(db="default"),
+        body=[SimpleNamespace(value=[SimpleNamespace(block_type="image", value=3)])],
+    )
+    assert PreviewMedia.from_post(post).images == {}
+    assert all(not call.args[1] for call in bulk.call_args_list)

@@ -73,9 +73,16 @@ Facet Behavior
 - Tag/category facet options with count ``0`` are omitted from the standard filterset choices.
 - Date facets are month buckets generated from ``visible_date``.
 - Invalid facet values are ignored:
-  - ``date_facets`` must parse as ``YYYY-MM``.
+
+  - ``date_facets`` must be exactly ASCII ``YYYY-MM`` with year 0001–9999
+    and month 01–12. Prefixes, suffixes, whitespace and lookalike digits
+    are invalid form values; input is never cleaned into another month.
   - ``tag_facets`` and ``category_facets`` must pass Django slug validation.
-- Generated facet links intentionally drop ``page`` from the query string to avoid broken pagination URLs.
+
+- Facet links preserve unrelated query parameters, including repeated values and
+  their order. Selecting a facet replaces only that facet's values and removes
+  all ``page`` values so navigation starts at the first result page. Query lists
+  also survive cached blog contexts and pagination links.
 
 .. _conjunctive_vs_disjunctive:
 

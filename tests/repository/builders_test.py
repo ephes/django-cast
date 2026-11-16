@@ -353,7 +353,7 @@ def test_blog_index_context_create_from_cachable_data_clears_page_link_cache(moc
         "has_audio_by_id": {1: False},
         "root_nav_links": [],
         "filterset": {
-            "get_params": {},
+            "get_params": "",
             "date_facets_choices": [],
             "category_facets_choices": [],
             "tag_facets_choices": [],

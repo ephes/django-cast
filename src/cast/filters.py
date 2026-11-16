@@ -1,4 +1,4 @@
-import string
+import re
 from collections.abc import Iterable, Mapping
 from datetime import datetime
 from typing import Any, cast
@@ -37,7 +37,7 @@ class StableDateOrderingFilter(django_filters.OrderingFilter):
 
 
 class CountFacetWidget(Widget):
-    data: QueryDict
+    data: Mapping[str, Any]
 
     def __init__(self, attrs: dict[str, str] | None = None):
         super().__init__(attrs)
@@ -51,7 +51,7 @@ class CountFacetWidget(Widget):
     ) -> str:
         data_for_super = cast(dict[str, Any], data)  # make mypy happy
         value = super().value_from_datadict(data_for_super, files, name)
-        self.data: QueryDict = cast(QueryDict, data)
+        self.data = data
         return value
 
     def render(
@@ -83,11 +83,13 @@ class CountFacetWidget(Widget):
         if option_label == BLANK_CHOICE_DASH[0][1]:
             option_label = _("All")
 
-        # remove page from querystring, because otherwise the pagination breaks
-        # filters like date facets, str to make mypy happy
-        data_dict = {k: str(v) for k, v in self.data.items() if k != "page"}
-        data = QueryDict("", mutable=True)
-        data.update(data_dict)
+        # Reset pagination and replace only this facet, retaining unrelated lists.
+        if isinstance(self.data, QueryDict):
+            data = self.data.copy()
+        else:
+            data = QueryDict("", mutable=True)
+            data.update({key: str(value) for key, value in self.data.items()})
+        data.pop("page", None)
         data[name] = option_value
 
         # build the option string
@@ -113,12 +115,9 @@ class CountFacetWidget(Widget):
 
 def parse_date_facets(value: str) -> datetime:
     """Split into function, because it needs to be imported by the post list view."""
-    # clean up value a bit, because otherwise sql-injection
-    # search requests are spamming the logfile with garbage -> analytics won't work
-    allowed = set(string.digits + "-")
-    value = "".join([c for c in value if c in allowed])
-    year_month = datetime.strptime(value, "%Y-%m")
-    return year_month
+    if re.fullmatch(r"[0-9]{4}-[0-9]{2}", value) is None:
+        raise ValueError("Expected a canonical YYYY-MM date facet.")
+    return datetime.strptime(value, "%Y-%m")
 
 
 DateFacetCounts = dict[datetime, int]
