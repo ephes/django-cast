@@ -185,16 +185,16 @@ def get_voice_reference_storage() -> Storage:
     backend under the ``"cast_voice_references"`` alias in ``STORAGES`` so that
     reference clips are not served from public media. When the alias is absent,
     django-cast falls back to the private media storage backend instead of
-    default public media storage.
+    default public media storage. A configured alias whose backend cannot be
+    imported or initialized raises instead of falling back.
     """
-    from django.core.files.storage import InvalidStorageError, storages
+    from django.core.files.storage import storages
 
     from ..private_storage import get_private_media_storage
 
-    try:
+    if "cast_voice_references" in storages.backends:
         return storages["cast_voice_references"]
-    except InvalidStorageError:
-        return get_private_media_storage()
+    return get_private_media_storage()
 
 
 class ContributorVoiceReferenceQuerySet(models.QuerySet):
