@@ -2,7 +2,7 @@ function createAudioChooser(id) {
     let chooserElement = $('#' + id + '-chooser');
     let audioTitle = chooserElement.find('.title');
     let input = $('#' + id);
-    let editLink = chooserElement.find('.edit-link');
+    let editLink = chooserElement.find('[data-chooser-edit-link], .edit-link');
 
     let state = null;
 
@@ -17,7 +17,7 @@ function createAudioChooser(id) {
             }
             input.val(newState.id);
             audioTitle.text(newState.title);
-            editLink.attr('href', newState.edit_link);
+            editLink.attr('href', newState.edit_url).removeAttr('hidden');
             chooserElement.removeClass('blank');
             state = newState;
         },

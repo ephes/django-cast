@@ -520,3 +520,15 @@ The derivation services resolve an explicit ``using`` alias first, otherwise
 Django's public ``router.db_for_write(..., instance=...)`` chooses the database.
 The selected alias owns the transaction, initial model save and derived-field
 save. A replica-loaded instance does not override a router that selects primary.
+
+Admin media choosers
+--------------------
+
+Audio and Video choosers display the saved media title, hidden ID and Edit link
+when reopening the Wagtail editor. Their server, modal and telepath state use
+``id``, ``title`` and ``edit_url``. Custom chooser scripts consuming the previous
+``edit_link`` key must use ``edit_url`` instead.
+
+If a saved Audio or Video ID no longer exists, the chooser opens empty so an
+editor can replace it while editing the rest of the page. Invalid IDs and database
+errors still propagate; this recovery does not grant access to media.
