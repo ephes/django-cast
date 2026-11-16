@@ -244,8 +244,9 @@ Add these essential settings:
    MEDIA_ROOT = BASE_DIR / "media"
    MEDIA_URL = "/media/"
 
-   # Wagtail image model
-   WAGTAILIMAGES_IMAGE_MODEL = "cast.Image"
+Leave ``WAGTAILIMAGES_IMAGE_MODEL`` unset for a standard installation. django-cast
+uses Wagtail's built-in ``wagtailimages.Image`` and its rendition model; it does
+not provide a ``cast.Image`` model.
 
 Optional Settings
 -----------------

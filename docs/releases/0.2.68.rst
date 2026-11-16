@@ -4,6 +4,10 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Correct broken ``cast_private_media``, ``cast_public_transcripts`` and
+  ``cast_voice_references`` storage backends before upgrading. Configured backend import/initialization failures
+  now propagate; compatibility storage fallbacks apply only to omitted aliases.
+
 - Custom Audio/Video chooser integrations must consume ``edit_url`` instead of
   ``edit_link`` in modal and telepath state, matching Wagtail's chooser contract.
 
@@ -626,6 +630,11 @@ Security and hardening
 
 Fixes
 ~~~~~
+
+- Correct the manual installation settings to use Wagtail's built-in image
+  model instead of the nonexistent ``cast.Image``. Execute the documented
+  settings in an isolated project smoke test, resolving image/rendition models
+  and running Django's system checks.
 
 - Render saved Audio/Video choosers with one hidden ID and a working Edit link.
   Deleted media selections open empty and can be replaced in the Wagtail editor.

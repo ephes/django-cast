@@ -2,12 +2,20 @@ import importlib
 from pathlib import Path
 
 import pytest
-from django.core.files.storage import FileSystemStorage, InMemoryStorage, default_storage, storages
+from django.core.files.base import ContentFile
+from django.core.files.storage import (
+    FileSystemStorage,
+    InMemoryStorage,
+    InvalidStorageError,
+    default_storage,
+    storages,
+)
 from django.test import override_settings
 from django.urls import reverse
 
 from cast.devdata import create_transcript
 from cast.models import Transcript
+from cast.models.contributors import get_voice_reference_storage
 from cast.private_storage import get_private_media_root, get_private_media_storage, get_transcript_storage
 
 from .conftest import private_storage_fields
@@ -16,6 +24,36 @@ TEST_STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
 }
+
+
+class UnavailableStorage(InMemoryStorage):
+    def __init__(self, **kwargs):
+        raise InvalidStorageError("Configured storage cannot initialize")
+
+
+@pytest.mark.parametrize(
+    "resolver,alias",
+    [
+        (get_private_media_storage, "cast_private_media"),
+        (get_transcript_storage, "cast_public_transcripts"),
+        (get_transcript_storage, "cast_private_media"),
+        (get_voice_reference_storage, "cast_voice_references"),
+        (get_voice_reference_storage, "cast_private_media"),
+    ],
+)
+@pytest.mark.parametrize("backend", ["missing_cast_backend.Storage", "tests.private_storage_test.UnavailableStorage"])
+def test_configured_storage_failure_refuses_fallback(resolver, alias, backend, mocker):
+    filesystem_save = mocker.patch.object(FileSystemStorage, "_save", return_value="artifact.json")
+    memory_save = mocker.patch.object(InMemoryStorage, "_save", return_value="artifact.json")
+    configuration = {**TEST_STORAGES, alias: {"BACKEND": backend}}
+    if alias in ("cast_public_transcripts", "cast_voice_references"):
+        configuration["cast_private_media"] = {"BACKEND": "django.core.files.storage.InMemoryStorage"}
+
+    with override_settings(STORAGES=configuration), pytest.raises(InvalidStorageError):
+        resolver().save("artifact.json", ContentFile(b"synthetic transcript"))
+
+    filesystem_save.assert_not_called()
+    memory_save.assert_not_called()
 
 
 def test_private_media_root_uses_configured_setting(settings, tmp_path):
