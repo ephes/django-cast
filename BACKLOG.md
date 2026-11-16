@@ -22,23 +22,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
     [round 97](backlog/2026-11-15-scout-round97.md).
   - Done when: both checks pass and their acceptance is recorded.
 
-- [ ] Transcript editing in the Wagtail admin: a workflow an editor can follow
-  - Design: [docs/design/transcript-editing-ux.md](docs/design/transcript-editing-ux.md)
-  - Status: all slices, including inline text correction, implemented on stacked branches A/B; external review and integration remain.
-  - Scope: ten slices, biggest gain first (confirm before a regeneration replaces a reviewed transcript, no
-    pre-selected stale speaker names, a transcript panel on the episode page, paged passage review, one
-    "Speakers" section, preview, generation feedback, clearer upload, contributor conveniences, restore).
-  - Done when: the slices are implemented or explicitly dropped and the note carries a status line saying so.
-
-- [ ] Structure quick wins: green trunk, parallel tests, readable release notes
-  - Design: [docs/design/structure-quick-wins.md](docs/design/structure-quick-wins.md)
-  - S1–S8 are implemented on stacked parked branches; external review and integration remain pending.
-    Both consumer sites install from `develop`.
-  - Scope: eight small slices ranked by benefit per effort: local gates and manual workflows with one test dependency list, `pytest -n 4`,
-    one release-notes file with upgrade actions first, single version source, backlog hygiene, tooling drift,
-    shipped-surface trims (`runner.py`, `python-dateutil`), test tree tidy-up.
-  - Done when: the slices are implemented or explicitly dropped and the note carries a status line saying so.
-
 - [ ] Verify concurrent gallery membership/signature publication on PostgreSQL
   - Round 89's mutation-database isolation fix is implemented. The separate
     publication-race oracle remains pending because the local PostgreSQL bootstrap

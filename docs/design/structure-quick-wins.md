@@ -2,7 +2,7 @@
 
 Date: 2026-11-15
 
-Status: S1–S8 implemented on stacked parked implementation branches; external review and integration remain pending.
+Status: S1–S8 implemented, reviewed and integrated into `develop`.
 Owner overrides (2026-11-15): S1 uses soupsieve >=4.1 (requiring Python >=3.11.5),
 manual-only workflows and local checks instead of paid Actions, and branch parking without Claude invocation or merge.
 S2 uses four workers by default, worker-specific schema fingerprints and temporary lock directories.
