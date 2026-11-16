@@ -586,6 +586,40 @@ def enqueue_audio_transcript_generation(
     request_or_site: HttpRequest | Site | None = None,
     requested_by: Any | None = None,
     episode: Any | None = None,
+    regeneration_token: str | None = None,
+) -> TranscriptEnqueueResult:
+    # Internal/API callers retain their explicit replacement contract. Admin
+    # callers supply a token (or an empty string for first-time generation).
+    if regeneration_token is None:
+        return _enqueue_audio_transcript_generation(
+            audio=audio, request_or_site=request_or_site, requested_by=requested_by, episode=episode
+        )
+    from cast.models import Audio as AudioModel
+    from cast.transcripts.regeneration import check_regeneration
+
+    using = audio._state.db or "default"
+    with transaction.atomic(using=using):
+        AudioModel.objects.using(using).filter(pk=audio.pk).update(title=models.F("title"))
+        TranscriptGeneration.objects.using(using).filter(audio_id=audio.pk).update(updated_at=models.F("updated_at"))
+        Transcript.objects.using(using).filter(audio_id=audio.pk).update(
+            source_fingerprint=models.F("source_fingerprint")
+        )
+        current = AudioModel.objects.using(using).get(pk=audio.pk)
+        transcript = Transcript.objects.using(using).select_related("audio").filter(audio_id=audio.pk).first()
+        if transcript is not None:
+            transcript.speaker_mappings.update(active=models.F("active"))
+        check_regeneration(current, transcript, regeneration_token)
+        return _enqueue_audio_transcript_generation(
+            audio=current, request_or_site=request_or_site, requested_by=requested_by, episode=episode
+        )
+
+
+def _enqueue_audio_transcript_generation(
+    *,
+    audio: Audio,
+    request_or_site: HttpRequest | Site | None = None,
+    requested_by: Any | None = None,
+    episode: Any | None = None,
 ) -> TranscriptEnqueueResult:
     if audio.pk is None:
         raise VoxhelmError("Audio must be saved before requesting a transcript.")

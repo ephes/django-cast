@@ -631,6 +631,10 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Bind admin transcript-regeneration consent to the reviewed transcript, speaker
+  decisions, audio upload generation and attempt. Stale confirmations return HTTP
+  409 before submission and require a fresh review.
+
 - Correct the manual installation settings to use Wagtail's built-in image
   model instead of the nonexistent ``cast.Image``. Execute the documented
   settings in an isolated project smoke test, resolving image/rendition models

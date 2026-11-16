@@ -1205,7 +1205,11 @@ Admin transcript replacement
 Generating again from an episode or audio with an existing transcript opens a
 confirmation showing named voices, passage decisions, spelling corrections and
 live episodes. It warns that manual text corrections are replaced too. Only an
-explicit confirmation POST queues replacement. Existing files remain until import
+explicit confirmation POST queues replacement. The signed confirmation binds the
+reviewed transcript files, speaker mappings, correction sidecar, audio upload names
+and duration, and generation attempt. These are rechecked under the audio and
+transcript write locks before submission. Changes or reuse after an attempt return
+HTTP 409; reopen the confirmation and review the current state. Existing files remain until import
 completes; the import then keeps them as the private previous version, which the
 transcript page can restore (see "Previous transcript version"). After regeneration,
 old mappings that need review start empty and show the former name as a hint.

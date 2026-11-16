@@ -18,6 +18,7 @@ from wagtail.permission_policies.collections import CollectionOwnershipPermissio
 from ..models import Audio, Episode
 from ..models.transcript_generation import TranscriptGeneration
 from ..transcripts.editing import episode_from_latest_revision
+from ..transcripts.regeneration import StaleRegenerationConfirmation, sign_regeneration
 from ..voxhelm import (
     VoxhelmError,
     build_known_speaker_references,
@@ -113,6 +114,7 @@ def _confirm_regeneration(request: HttpRequest, *, audio: Audio, redirect_url: s
         "cast/wagtail/confirm_regenerate_transcript.html",
         {
             "audio": audio,
+            "regeneration_token": sign_regeneration(audio, transcript),
             "named_voices": [mapping.target_display_name for mapping in mappings],
             "segment_decisions": sum(
                 bool(segment.get("editor_decision")) for segment in transcript.get_speaker_suggestions()
@@ -147,7 +149,10 @@ def generate_episode_transcript(request: HttpRequest, episode_id: int) -> HttpRe
             request_or_site=site,
             requested_by=request.user,
             episode=draft_episode,
+            regeneration_token=request.POST.get("regeneration_token", ""),
         )
+    except StaleRegenerationConfirmation as exc:
+        return HttpResponse(str(exc), status=409)
     except ImproperlyConfigured as exc:
         _add_generation_configuration_error_message(request, exc)
         return redirect(redirect_url)
@@ -178,7 +183,10 @@ def generate_audio_transcript(request: HttpRequest, audio_id: int) -> HttpRespon
             audio=audio,
             request_or_site=resolve_site_for_audio(request=request, audio=audio),
             requested_by=request.user,
+            regeneration_token=request.POST.get("regeneration_token", ""),
         )
+    except StaleRegenerationConfirmation as exc:
+        return HttpResponse(str(exc), status=409)
     except ImproperlyConfigured as exc:
         _add_generation_configuration_error_message(request, exc)
         return redirect(redirect_url)

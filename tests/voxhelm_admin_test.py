@@ -413,7 +413,9 @@ def test_generate_audio_transcript_from_wagtail_admin(admin_client, episode, moc
         response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
-    enqueue.assert_called_once_with(audio=audio, request_or_site=episode.get_site(), requested_by=mocker.ANY)
+    enqueue.assert_called_once_with(
+        audio=audio, request_or_site=episode.get_site(), requested_by=mocker.ANY, regeneration_token=""
+    )
     messages = [message.message for message in get_messages(response.wsgi_request)]
     assert any("Transcript generation queued for" in message and audio.title in message for message in messages)
     content = response.content.decode("utf-8")
@@ -601,7 +603,7 @@ def test_generate_audio_transcript_falls_back_to_request_site(admin_client, audi
         response = admin_client.post(reverse("cast-voxhelm:generate_audio", args=(audio.pk,)), follow=True)
 
     assert response.status_code == 200
-    enqueue.assert_called_once_with(audio=audio, request_or_site=site, requested_by=mocker.ANY)
+    enqueue.assert_called_once_with(audio=audio, request_or_site=site, requested_by=mocker.ANY, regeneration_token="")
 
 
 @pytest.mark.django_db
