@@ -151,6 +151,9 @@ msgstr "Transkript erneut erzeugen"
 msgid "Confirm replacement of the existing transcript first."
 msgstr "Bestätige zuerst das Ersetzen des vorhandenen Transkripts."
 
+msgid "Reload and confirm replacement of the current transcript first."
+msgstr "Lade neu und bestätige zuerst das Ersetzen des aktuellen Transkripts."
+
 msgid "This replaces the transcript files, speaker decisions and manual text corrections. The current version is kept: you can restore it on the transcript page."
 msgstr "Dies ersetzt die Transkriptdateien, Sprecherentscheidungen und manuellen Textkorrekturen. Die aktuelle Fassung bleibt erhalten: Du kannst sie auf der Transkriptseite wiederherstellen."
 

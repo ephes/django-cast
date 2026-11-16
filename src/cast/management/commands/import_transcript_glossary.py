@@ -6,12 +6,14 @@ from typing import Any
 
 from django.core.exceptions import ValidationError
 from django.core.management.base import BaseCommand, CommandError, CommandParser
-from django.db import IntegrityError, transaction
-from django.db.models import F
+from django.db import IntegrityError, connections, router, transaction
+from django.db.models import F, Value
+from django.db.models.functions import Lower
 from django.utils import timezone
-from wagtail.models import Page
+from wagtail.models import Locale, Page, Site
 
-from cast.models import Podcast, TranscriptGlossaryTerm
+from cast.models import Podcast, TranscriptGlossaryTerm, VoxhelmSettings
+from cast.models.transcript_glossary import GlossaryValidationContext
 from cast.transcripts.glossary import normalize_phrase
 
 from ._selectors import is_id_selector, positive_id
@@ -55,12 +57,15 @@ class Command(BaseCommand):
 
     @staticmethod
     def get_podcast(identifier: str) -> Podcast:
+        using = router.db_for_write(Podcast)
+        if using not in connections:
+            raise CommandError("Glossary import selected an unknown database.")
         if is_id_selector(identifier):
-            podcast = Podcast.objects.filter(pk=positive_id(identifier, Podcast)).first()
+            podcast = Podcast.objects.using(using).filter(pk=positive_id(identifier, Podcast)).first()
             if podcast is None:
                 raise CommandError(f"No podcast with id {identifier}.")
             return podcast
-        podcasts = list(Podcast.objects.filter(slug=identifier))
+        podcasts = list(Podcast.objects.using(using).filter(slug=identifier))
         if not podcasts:
             raise CommandError(f'No podcast with slug "{identifier}".')
         if len(podcasts) > 1:
@@ -98,29 +103,54 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         podcast = self.get_podcast(options["podcast"])
+        using = self.write_database(podcast)
         entries = self.load_entries(options["json_file"])
         dry_run = options["dry_run"]
         counts = {"created": 0, "updated": 0, "unchanged": 0, "skipped": 0}
         seen: dict[str, int] = {}
-        with transaction.atomic():
+        with transaction.atomic(using=using):
             # Share the stable parent-row lock used by transcript review and
             # snippet saves. Lock before reading any cross-term variant state.
-            Page.objects.filter(pk=podcast.pk).update(title=F("title"))
-            existing = self.existing_terms(podcast)
+            Page.objects.using(using).filter(pk=podcast.pk).update(title=F("title"))
+            context = GlossaryValidationContext.for_podcast(podcast, ())
+            existing = self.existing_terms(podcast, context)
             for number, entry in enumerate(entries, start=1):
-                outcome, reason = self.import_entry(podcast, entry, number, seen, existing)
+                outcome, reason = self.import_entry(podcast, entry, number, seen, existing, context)
                 counts[outcome] += 1
                 if reason:
                     self.stderr.write(f"skipped entry {number}: {reason}")
             if dry_run:
-                transaction.set_rollback(True)
+                transaction.set_rollback(True, using=using)
         summary = " ".join(f"{name}={count}" for name, count in counts.items())
         suffix = " (dry run, nothing saved)" if dry_run else ""
         self.stdout.write(f"{podcast.title}: {summary}{suffix}")
 
     @staticmethod
-    def existing_terms(podcast: Podcast) -> dict[str, TranscriptGlossaryTerm]:
-        return {normalize_phrase(term.term): term for term in TranscriptGlossaryTerm.objects.filter(podcast=podcast)}
+    def write_database(podcast: Podcast, instance: TranscriptGlossaryTerm | None = None) -> str:
+        using = podcast._state.db
+        for model in (Page, Podcast, TranscriptGlossaryTerm):
+            for operation in (router.db_for_read, router.db_for_write):
+                if operation(model, instance=instance if instance is not None else podcast) != using:
+                    raise CommandError(
+                        "Glossary import requires one database for reads, validation, locks and writes."
+                    )
+        if any(router.db_for_read(model, instance=podcast) != using for model in (Site, Locale, VoxhelmSettings)):
+            raise CommandError("Glossary language validation requires the same database as the import.")
+        assert using is not None
+        return using
+
+    @staticmethod
+    def existing_terms(
+        podcast: Podcast, validation_context: GlossaryValidationContext | None = None
+    ) -> dict[str, TranscriptGlossaryTerm]:
+        existing = {}
+        for term in TranscriptGlossaryTerm.objects.using(podcast._state.db).filter(podcast=podcast):
+            # Index every row for validation, even when normalized identities
+            # collide and the import's update lookup selects the last row.
+            if validation_context is not None:
+                validation_context.accept(term)
+            existing[normalize_phrase(term.term)] = term
+        return existing
 
     @staticmethod
     def import_entry(
@@ -129,6 +159,7 @@ class Command(BaseCommand):
         number: int,
         seen: dict[str, int],
         existing: dict[str, TranscriptGlossaryTerm],
+        validation_context: GlossaryValidationContext,
     ) -> tuple[str, str]:
         """Create or update one term; return the outcome and, for skipped entries, the reason."""
         if not isinstance(entry, dict):
@@ -161,13 +192,18 @@ class Command(BaseCommand):
             instance.variants = variants
         if notes is not None:
             instance.notes = notes
+        using = Command.write_database(podcast, instance)
         conflict = f"{label}: concurrent edit; reload and retry this entry"
         try:
-            instance.full_clean()
+            instance.full_clean(validation_context=validation_context)
         except ValidationError as exc:
-            if created and any(
-                normalize_phrase(other.term) == key
-                for other in TranscriptGlossaryTerm.objects.filter(podcast=podcast).only("term")
+            if (
+                created
+                and TranscriptGlossaryTerm.objects.using(using)
+                .filter(podcast=podcast)
+                .alias(import_term_lower=Lower("term"))
+                .filter(import_term_lower=Lower(Value(instance.term)))
+                .exists()
             ):
                 return "skipped", conflict
             return "skipped", f"{label}: {_validation_message(exc)}"
@@ -175,8 +211,8 @@ class Command(BaseCommand):
             return "unchanged", ""
         if created:
             try:
-                with transaction.atomic():
-                    instance.save()
+                with transaction.atomic(using=using):
+                    instance.save(using=using)
             except IntegrityError:
                 return "skipped", conflict
         else:
@@ -189,9 +225,12 @@ class Command(BaseCommand):
             updates = {field: getattr(instance, field) for field in fields}
             # Compare and publish in one statement. Omitted fields never enter the
             # UPDATE, and an edit to an owned field since lookup is a conflict.
-            if not TranscriptGlossaryTerm.objects.filter(pk=instance.pk, podcast_id=podcast.pk, **expected).update(
-                **updates, modified=timezone.now()
+            if (
+                not TranscriptGlossaryTerm.objects.using(using)
+                .filter(pk=instance.pk, podcast_id=podcast.pk, **expected)
+                .update(**updates, modified=timezone.now())
             ):
                 return "skipped", conflict
         existing[key] = instance
+        validation_context.accept(instance)
         return ("created" if created else "updated"), ""

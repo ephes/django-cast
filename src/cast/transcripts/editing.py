@@ -115,12 +115,17 @@ def get_voice_reference_candidate(
 CANDIDATE_SIGNING_SALT = "cast.voice-reference-candidate"
 
 
-def transcript_evidence(transcript: Transcript) -> dict[str, Any]:
-    """Per-transcript part of the signed evidence; reads every artifact once."""
+def transcript_evidence(transcript: Transcript, *, enforce_byte_budget: bool = True) -> dict[str, Any]:
+    """Per-transcript part of the signed evidence; reads every artifact once.
+
+    Regeneration consent passes ``enforce_byte_budget=False``: replacing an
+    oversized transcript must stay possible, so it hashes the complete files
+    like the storage paths do.
+    """
     return {
         "transcript": transcript.pk,
         "revision": artifact_revision(transcript),
-        "fingerprint": transcript.transcript_artifact_fingerprint(enforce_byte_budget=True),
+        "fingerprint": transcript.transcript_artifact_fingerprint(enforce_byte_budget=enforce_byte_budget),
         # Stored audio names are immutable upload generations. Include every
         # format because a reference can be auditioned using any offered source.
         "audio": {

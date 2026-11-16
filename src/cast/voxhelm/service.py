@@ -4,6 +4,7 @@ import json
 import logging
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any
+from uuid import uuid4
 
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models, transaction
@@ -586,6 +587,77 @@ def enqueue_audio_transcript_generation(
     request_or_site: HttpRequest | Site | None = None,
     requested_by: Any | None = None,
     episode: Any | None = None,
+    regeneration_token: str | None = None,
+) -> TranscriptEnqueueResult:
+    # Internal/API callers retain their explicit replacement contract. Admin
+    # callers supply a token (or an empty string for first-time generation).
+    if regeneration_token is None:
+        return _enqueue_audio_transcript_generation(
+            audio=audio, request_or_site=request_or_site, requested_by=requested_by, episode=episode
+        )
+    from cast.models import Audio as AudioModel
+    from cast.transcripts.regeneration import check_regeneration
+
+    using = audio._state.db or "default"
+    # Only the consent check runs under the write locks. Submission keeps the
+    # caller's transaction semantics: a failed submission still records its
+    # FAILED generation, an enqueue failure in autocommit still reaches the
+    # caller, and no row locks are held while Voxhelm answers. Edits after this
+    # check are no different from edits made while the job runs.
+    with transaction.atomic(using=using):
+        AudioModel.objects.using(using).filter(pk=audio.pk).update(title=models.F("title"))
+        TranscriptGeneration.objects.using(using).filter(audio_id=audio.pk).update(updated_at=models.F("updated_at"))
+        Transcript.objects.using(using).filter(audio_id=audio.pk).update(
+            source_fingerprint=models.F("source_fingerprint")
+        )
+        current = AudioModel.objects.using(using).get(pk=audio.pk)
+        transcript = Transcript.objects.using(using).select_related("audio").filter(audio_id=audio.pk).first()
+        if transcript is not None:
+            transcript.speaker_mappings.update(active=models.F("active"))
+        check_regeneration(current, transcript, regeneration_token)
+        reviewed = TranscriptGeneration.objects.using(using).filter(audio_id=audio.pk).first()
+    consent = None
+    if transcript is not None:
+        consent = _ReviewedAttempt(str(reviewed.attempt_id) if reviewed is not None else None)
+    return _enqueue_audio_transcript_generation(
+        audio=current, request_or_site=request_or_site, requested_by=requested_by, episode=episode, consent=consent
+    )
+
+
+@dataclass(frozen=True)
+class _ReviewedAttempt:
+    """The generation attempt a checked replacement confirmation was reviewed against."""
+
+    attempt_id: str | None
+
+
+def _consume_consent(generation: TranscriptGeneration, *, created: bool, consent: _ReviewedAttempt | None) -> None:
+    """Claim the reviewed attempt once, right before a submission or resumption goes ahead.
+
+    The compare-and-swap lets exactly one request with the same confirmation
+    (for example a double-click) proceed; the replay sees another attempt and
+    must review again. Configuration errors raised earlier leave the consent
+    unused, and an active row returns as already queued without consuming it.
+    """
+    from cast.transcripts.regeneration import StaleRegenerationConfirmation
+
+    if consent is None or created:
+        return
+    claimed = consent.attempt_id is not None and TranscriptGeneration.objects.using(generation._state.db).filter(
+        pk=generation.pk, attempt_id=consent.attempt_id
+    ).update(attempt_id=uuid4())
+    if not claimed:
+        raise StaleRegenerationConfirmation
+    generation.refresh_from_db(using=generation._state.db, fields=["attempt_id"])
+
+
+def _enqueue_audio_transcript_generation(
+    *,
+    audio: Audio,
+    request_or_site: HttpRequest | Site | None = None,
+    requested_by: Any | None = None,
+    episode: Any | None = None,
+    consent: _ReviewedAttempt | None = None,
 ) -> TranscriptEnqueueResult:
     if audio.pk is None:
         raise VoxhelmError("Audio must be saved before requesting a transcript.")
@@ -609,6 +681,7 @@ def enqueue_audio_transcript_generation(
     )
     if not created and generation.is_active:
         return TranscriptEnqueueResult(generation=generation, enqueued=False)
+    _consume_consent(generation, created=created, consent=consent)
     # A stale QUEUED/RUNNING row was interrupted (for example by a worker
     # restart killed the completion task). When its Voxhelm job is known, resume
     # completing that exact job instead of submitting again: the job may already

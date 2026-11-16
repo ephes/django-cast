@@ -12,6 +12,7 @@
   <ul>{% for episode in episodes %}<li>{{ episode.title }} — {% if episode.live %}{% trans "Live: speaker names disappear from the public transcript until you name the voices again." %}{% else %}{% trans "Draft" %}{% endif %}</li>{% endfor %}</ul>
   <form method="post">
     {% csrf_token %}
+    <input type="hidden" name="regeneration_token" value="{{ regeneration_token }}">
     <input type="hidden" name="next" value="{{ next }}">
     <button class="button serious" name="confirm_regeneration" value="yes">{% trans "Replace and generate transcript" %}</button>
     <a href="{{ next }}" class="button button-secondary">{% trans "Cancel" %}</a>

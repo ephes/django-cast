@@ -230,7 +230,10 @@ def test_invalid_entry_leaves_index_instance_unchanged(podcast):
 
     TranscriptGlossaryTerm.objects.create(podcast=podcast, term="Frobnicator", variants="Frob Old")
     existing = Command.existing_terms(podcast)
-    outcome, _ = Command.import_entry(podcast, {"term": "Frobnicator", "variants": ["the"]}, 1, {}, existing)
+    from cast.models.transcript_glossary import GlossaryValidationContext
+
+    context = GlossaryValidationContext.for_podcast(podcast, existing.values())
+    outcome, _ = Command.import_entry(podcast, {"term": "Frobnicator", "variants": ["the"]}, 1, {}, existing, context)
     assert outcome == "skipped"
     assert existing["frobnicator"].variants == "Frob Old"
 

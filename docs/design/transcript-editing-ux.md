@@ -838,3 +838,10 @@ before staging, holds the row reservation through backup selection and swap,
 and refuses obsolete backup generations. Cancellation unwinds owned staging.
 Committed transcript deletion reports backup cleanup failures through the exact
 private recovery key in `cast.receivers` logs. See the operational backup guide.
+
+### Regeneration consent freshness (implemented, 2026-11-16)
+
+The admin confirmation carries signed transcript/review, audio and attempt evidence.
+Enqueue compares it under the audio/transcript write boundary; stale or replayed
+consent returns HTTP 409 before submitting a job. Internal/API generation keeps its
+explicit replacement contract and completion keeps its existing stale-attempt fences.

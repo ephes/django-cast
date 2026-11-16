@@ -667,6 +667,19 @@ A site that already keeps a list can load it for one podcast:
    python manage.py import_transcript_glossary <podcast-id-or-slug> glossary.json --dry-run
    python manage.py import_transcript_glossary <podcast-id-or-slug> glossary.json
 
+The importer selects the podcast's write database and uses it for namespace
+locking, validation, reads, inserts, conditional updates and rollback. Routers
+must keep these operations on the same alias; incompatible routing is refused.
+``--dry-run`` and unexpected failures roll back the complete import on that alias.
+No cross-database atomicity is claimed and no new command option is required.
+The locked import builds normalized term/variant indexes and resolves the transcript
+language once. Validation reuses that context and replaces an index entry only
+after a successful insert or conditional update. Rejected entries leave the old
+spellings reserved; dry runs use the same evolving context, then roll back. Namespace
+normalization work is linear in existing and imported spellings, including invalid
+entries; per-row field and database constraint checks still run. Standalone snippet
+validation retains the same rules and parent-lock protocol.
+
 The UTF-8 JSON file is limited to 8 MiB and 10,000 entries. Reads stop at
 the byte ceiling plus one; oversized, unreadable or malformed inputs are
 rejected before the mutation transaction, leaving the glossary unchanged.
@@ -1205,7 +1218,17 @@ Admin transcript replacement
 Generating again from an episode or audio with an existing transcript opens a
 confirmation showing named voices, passage decisions, spelling corrections and
 live episodes. It warns that manual text corrections are replaced too. Only an
-explicit confirmation POST queues replacement. Existing files remain until import
+explicit confirmation POST queues replacement. The signed confirmation binds the
+reviewed transcript files, speaker mappings, correction sidecar, audio upload names
+and duration, and generation attempt. These are rechecked under the audio and
+transcript write locks before submission. The Voxhelm request itself runs after
+the locks are released: right before it, the reviewed generation attempt is claimed
+once, so a replayed confirmation (for example a double-click) cannot submit a
+second job. A configuration error before that point leaves the confirmation
+usable, and a failed submission is still recorded as a failed generation. The
+confirmation hashes the complete transcript files without the editorial byte
+budget, so an oversized transcript can still be replaced. Changes or reuse after an attempt return
+HTTP 409; reopen the confirmation and review the current state. Existing files remain until import
 completes; the import then keeps them as the private previous version, which the
 transcript page can restore (see "Previous transcript version"). After regeneration,
 old mappings that need review start empty and show the former name as a hint.
