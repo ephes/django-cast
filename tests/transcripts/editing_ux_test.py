@@ -222,7 +222,7 @@ def test_transcript_title_falls_back_to_audio_and_links_all_episodes(admin_clien
 
 def test_long_segment_review_is_paged_and_preserves_other_pages(admin_client, episode):
     from cast.transcripts.services import artifact_revision
-    from tests.known_speaker_apply_test import make_transcript
+    from tests.transcripts.known_speaker_apply_helpers import make_transcript
 
     transcript = make_transcript(
         episode.podcast_audio,
@@ -262,7 +262,7 @@ def test_long_segment_review_is_paged_and_preserves_other_pages(admin_client, ep
 
 def test_segment_review_filter_and_missing_post_fields(admin_client, episode):
     from cast.forms import KnownSpeakerSegmentReviewForm
-    from tests.known_speaker_apply_test import make_transcript
+    from tests.transcripts.known_speaker_apply_helpers import make_transcript
 
     segments = [
         {"start": 0, "speaker": "Host"},

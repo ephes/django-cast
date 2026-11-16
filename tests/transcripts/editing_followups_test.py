@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
 
 from cast.transcripts import services
-from tests.known_speaker_apply_test import make_transcript
+from tests.transcripts.known_speaker_apply_helpers import make_transcript
 from tests.transcripts.remaining_ux_test import passage_transcript
 
 pytestmark = pytest.mark.django_db
