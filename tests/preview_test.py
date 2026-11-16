@@ -298,3 +298,18 @@ def test_preview_uses_selected_database_integer_range(mocker):
     )
     assert PreviewMedia.from_post(post).images == {}
     assert all(not call.args[1] for call in bulk.call_args_list)
+
+
+@pytest.mark.django_db
+def test_preview_skips_media_with_non_integer_primary_keys(mocker):
+    from django.db.models.query import QuerySet
+
+    # Backends such as PostgreSQL have no integer range for UUID or char keys.
+    mocker.patch.object(connection.ops, "integer_field_range", side_effect=KeyError("UUIDField"))
+    bulk = mocker.spy(QuerySet, "in_bulk")
+    post = SimpleNamespace(
+        _state=SimpleNamespace(db="default"),
+        body=[SimpleNamespace(value=[SimpleNamespace(block_type="image", value=3)])],
+    )
+    assert PreviewMedia.from_post(post).images == {}
+    assert all(not call.args[1] for call in bulk.call_args_list)

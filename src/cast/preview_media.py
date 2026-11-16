@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from django.db import connections, router
-from django.db.models import Prefetch
+from django.db.models import Model, Prefetch
 from wagtail.images import get_image_model
 from wagtail.images.models import Filter
 
@@ -24,6 +24,16 @@ def _media_id(value: Any, *, max_id: int = 2**63 - 1) -> int | None:
     return value if type(value) is int and 0 < value <= max_id else None
 
 
+def _max_media_id(using: str, model: type[Model]) -> int:
+    """Return the largest admissible chooser ID, or 0 for non-integer primary keys."""
+    try:
+        return connections[using].ops.integer_field_range(model._meta.pk.get_internal_type())[1]
+    except KeyError:
+        # Backends without a range for this key type (e.g. UUID keys on PostgreSQL)
+        # admit no integer chooser IDs, so previews skip such media instead of failing.
+        return 0
+
+
 @dataclass
 class PreviewMedia:
     images: ImageById
@@ -39,10 +49,7 @@ class PreviewMedia:
         rendition_model = image_model.get_rendition_model()
         using = post._state.db or router.db_for_read(type(post), instance=post)
         models_by_kind = {"image": image_model, "gallery": image_model, "audio": Audio, "video": Video}
-        max_ids = {
-            kind: connections[using].ops.integer_field_range(model._meta.pk.get_internal_type())[1]
-            for kind, model in models_by_kind.items()
-        }
+        max_ids = {kind: _max_media_id(using, model) for kind, model in models_by_kind.items()}
         ids: dict[str, set[int]] = {kind: set() for kind in ("image", "gallery", "audio", "video")}
         for section in post.body:
             for block in section.value:
