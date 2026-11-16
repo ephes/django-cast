@@ -10,10 +10,8 @@ client-side rendering.
 import json
 
 from django import forms
-from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.functional import cached_property
-from django.utils.safestring import mark_safe
 from django.utils.translation import gettext_lazy as _
 from wagtail.admin.staticfiles import versioned_static
 from wagtail.admin.widgets import BaseChooser, BaseChooserAdapter
@@ -24,13 +22,6 @@ except ImportError:  # pragma: no cover - Wagtail 7.0 fallback, removed in Wagta
     from wagtail.telepath import register
 
 from .models import Audio, Video
-
-
-def add_display_none_to_chooser_button(html: str) -> str:
-    """
-    Workaround for duplicate chooser button in wagtail admin.
-    """
-    return mark_safe(html.replace("data-chooser-action-choose", "data-chooser-action-choose style='display: none'"))
 
 
 class CastChooser(BaseChooser):
@@ -46,22 +37,6 @@ class CastChooser(BaseChooser):
     def get_chooser_modal_url(self) -> str:
         return reverse(self.chooser_modal_url_name)
 
-    def render_html(self, name: str, value: dict | None, attrs: dict) -> str:
-        value = value if value is not None else {}
-        original_field_html = super().render_html(name, value.get("id"), attrs)
-        original_field_html = add_display_none_to_chooser_button(original_field_html)
-
-        context = {
-            "widget": self,
-            "original_field_html": original_field_html,
-            "attrs": attrs,
-            "value": value != {},  # only used to identify blank values
-            "title": value.get("title", ""),
-            "edit_url": value.get("edit_url", ""),
-        }
-        html = render_to_string(self.template_name, context=context)
-        return html
-
 
 class AdminVideoChooser(CastChooser):
     """Chooser widget for selecting a Video in the Wagtail admin editor."""
@@ -74,29 +49,16 @@ class AdminVideoChooser(CastChooser):
         if value is None:
             return value
         if not isinstance(value, Video):
-            value = Video.objects.get(pk=value)
+            try:
+                value = Video.objects.get(pk=value)
+            except Video.DoesNotExist:
+                return None
         assert isinstance(value, Video)
         return {
             "id": value.pk,
             "title": value.title,
-            "edit_link": reverse("castvideo:edit", args=[value.id]),
+            "edit_url": reverse("castvideo:edit", args=[value.id]),
         }
-
-    def render_html(self, name: str, value: dict | None, attrs: dict) -> str:
-        value = value if value is not None else {}
-        original_field_html = super().render_html(name, value.get("id"), attrs)
-        original_field_html = add_display_none_to_chooser_button(original_field_html)
-
-        context = {
-            "widget": self,
-            "original_field_html": original_field_html,
-            "attrs": attrs,
-            "value": value != {},  # only used to identify blank values
-            "title": value.get("title", ""),
-            "edit_url": value.get("edit_url", ""),
-        }
-        html = render_to_string("cast/video/chooser.html", context=context)
-        return html
 
     def render_js_init(self, id_: str, name: str, value: dict | None) -> str:
         return f"createVideoChooser({json.dumps(id_)});"
@@ -144,12 +106,15 @@ class AdminAudioChooser(CastChooser):
         if value is None:
             return value
         if not isinstance(value, Audio):
-            value = Audio.objects.get(pk=value)
+            try:
+                value = Audio.objects.get(pk=value)
+            except Audio.DoesNotExist:
+                return None
         assert isinstance(value, Audio)
         return {
             "id": value.pk,
             "title": value.title,
-            "edit_link": reverse("castaudio:edit", args=[value.id]),
+            "edit_url": reverse("castaudio:edit", args=[value.id]),
         }
 
     def render_js_init(self, id_: str, name: str, value: dict | None) -> str:

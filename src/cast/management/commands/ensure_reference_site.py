@@ -14,16 +14,18 @@ from argparse import ArgumentParser
 from typing import Any, cast
 
 from django.core.management.base import BaseCommand, CommandError
-from django.test import RequestFactory
+from django.db import transaction
+from django.test import RequestFactory, override_settings
+from wagtail.models import Page, Site
 
 from cast.http_types import HtmxHttpRequest
-from cast.models import Blog, Episode, Podcast, Post, get_template_base_dir_choices
+from cast.models import Blog, Podcast, Post, get_template_base_dir_choices
 from cast.views.styleguide import (
     STYLEGUIDE_BLOG_SLUG,
-    STYLEGUIDE_EPISODE_SLUG,
     STYLEGUIDE_PODCAST_SLUG,
-    STYLEGUIDE_POST_SLUG_PREFIX,
+    STYLEGUIDE_USER_NAME,
     _build_styleguide_data,
+    _prepare_styleguide_assets,
     _styleguide_context,
     _styleguide_default_theme,
 )
@@ -62,40 +64,57 @@ class Command(BaseCommand):
         elif theme not in available:
             raise CommandError(f"Theme '{theme}' is not available. Available: {', '.join(sorted(available))}")
 
-        if options.get("reset"):
-            self._reset_reference_site()
-            self.stdout.write(self.style.WARNING("Reference site data deleted."))
-
+        overrides = {}
         if options.get("remote_media"):
-            from django.conf import settings
-
-            settings.CAST_STYLEGUIDE_REMOTE_MEDIA = True  # type: ignore[misc]
-
+            overrides["CAST_STYLEGUIDE_REMOTE_MEDIA"] = True
         if options.get("with_renditions"):
-            from django.conf import settings
-
-            settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = True  # type: ignore[misc]
+            overrides["CAST_STYLEGUIDE_GENERATE_RENDITIONS"] = True
 
         factory = RequestFactory()
         request = cast(HtmxHttpRequest, factory.get("/cast/styleguide/", HTTP_HOST="localhost:8000"))
 
-        styleguide_data = _build_styleguide_data(request)
-        _styleguide_context(styleguide_data, request, theme)
+        with override_settings(**overrides), transaction.atomic():
+            if options.get("reset"):
+                roots = self._reference_roots()
+                assets = _prepare_styleguide_assets()
+                self._reset_reference_site(roots)
+                styleguide_data = _build_styleguide_data(request, assets=assets)
+            else:
+                styleguide_data = _build_styleguide_data(request)
+            _styleguide_context(styleguide_data, request, theme)
+
+        if options.get("reset"):
+            self.stdout.write(self.style.WARNING("Reference site data replaced."))
 
         blog_url = styleguide_data.blog.get_url() or f"/{STYLEGUIDE_BLOG_SLUG}/"
         podcast_url = styleguide_data.podcast.get_url() or f"/{STYLEGUIDE_PODCAST_SLUG}/"
-        post_count = Post.objects.filter(slug__startswith=STYLEGUIDE_POST_SLUG_PREFIX).count()
+        post_count = Post.objects.descendant_of(styleguide_data.blog).count()
 
         self.stdout.write(self.style.SUCCESS(f"Reference site ready (theme: {theme})"))
         self.stdout.write(f"  Blog:    {blog_url} ({post_count} posts)")
         self.stdout.write(f"  Podcast: {podcast_url}")
 
-    def _reset_reference_site(self) -> None:
-        """Delete all reference site pages and associated data."""
-        # Delete episodes first (children of podcast)
-        Episode.objects.filter(slug=STYLEGUIDE_EPISODE_SLUG).delete()
-        # Delete posts (children of blog)
-        Post.objects.filter(slug__startswith=STYLEGUIDE_POST_SLUG_PREFIX).delete()
-        # Delete blog and podcast
-        Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).delete()
-        Podcast.objects.filter(slug=STYLEGUIDE_PODCAST_SLUG).delete()
+    def _reference_roots(self) -> list[Page]:
+        """Admit only the seed user's designated roots under the selected Site."""
+        site = Site.objects.first()
+        if site is None:
+            return []
+        roots = []
+        for slug, model in ((STYLEGUIDE_BLOG_SLUG, Blog), (STYLEGUIDE_PODCAST_SLUG, Podcast)):
+            candidates = list(Page.objects.child_of(site.root_page).filter(slug=slug).select_for_update())
+            if not candidates:
+                continue
+            if (
+                len(candidates) != 1
+                or candidates[0].specific_class is not model
+                or candidates[0].owner_id is None
+                or candidates[0].owner.username != STYLEGUIDE_USER_NAME
+            ):
+                raise CommandError(f"Reference root ownership is ambiguous for '{slug}'; reset refused.")
+            roots.append(candidates[0])
+        return roots
+
+    def _reset_reference_site(self, roots: list[Page]) -> None:
+        """Delete only admitted roots; Wagtail owns their descendant deletion."""
+        for root in roots:
+            root.delete()

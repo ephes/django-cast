@@ -28,7 +28,7 @@ def get_audio_data(audio: Audio) -> dict[str, Any]:
     return {
         "id": audio.id,
         "title": audio.title,
-        "edit_link": reverse("castaudio:edit", args=(audio.id,)),
+        "edit_url": reverse("castaudio:edit", args=(audio.id,)),
     }
 
 

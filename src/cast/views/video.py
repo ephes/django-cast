@@ -24,7 +24,7 @@ def get_video_data(video: Video) -> dict[str, Any]:
     return {
         "id": video.id,
         "title": video.title,
-        "edit_link": reverse("castvideo:edit", args=(video.id,)),
+        "edit_url": reverse("castvideo:edit", args=(video.id,)),
     }
 
 

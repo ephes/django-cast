@@ -285,13 +285,23 @@ def _query_params_without_theme(request: HtmxHttpRequest) -> list[tuple[str, str
     return [(key, str(value)) for key, value in request.GET.items() if key != "theme"]
 
 
-def _ensure_styleguide_seed_data() -> StyleguideSeedData:
-    site = _ensure_site()
+@dataclass(frozen=True)
+class StyleguideAssets:
+    user: User
+    remote_media: StyleguideRemoteMedia
+    galleries: list[Gallery]
+    media: StyleguideMedia
+
+
+def _prepare_styleguide_assets() -> StyleguideAssets:
+    """Create media before a command replaces any existing reference pages.
+
+    Storage writes are not transactional; the caller owns the database transaction.
+    """
     with transaction.atomic():
         user = create_user(name=STYLEGUIDE_USER_NAME, password=STYLEGUIDE_USER_NAME)
         user = _harden_styleguide_user(user)
 
-    blog = _ensure_blog(site, user)
     remote_media = _fetch_styleguide_remote_media(user)
     galleries = _create_styleguide_galleries(remote_media.gallery_images, user)
     media = _create_styleguide_media(
@@ -300,6 +310,14 @@ def _ensure_styleguide_seed_data() -> StyleguideSeedData:
         gallery_images=remote_media.gallery_images,
         user=user,
     )
+    return StyleguideAssets(user, remote_media, galleries, media)
+
+
+def _ensure_styleguide_seed_data(*, assets: StyleguideAssets | None = None) -> StyleguideSeedData:
+    site = _ensure_site()
+    assets = assets or _prepare_styleguide_assets()
+    user, remote_media, galleries, media = assets.user, assets.remote_media, assets.galleries, assets.media
+    blog = _ensure_blog(site, user)
     include_video_in_body = False
     posts = _ensure_posts(blog, user, media, galleries, include_video_in_body=include_video_in_body)
     _ensure_styleguide_tags_and_categories(posts)
@@ -340,8 +358,8 @@ def _ensure_styleguide_seed_data() -> StyleguideSeedData:
     )
 
 
-def _build_styleguide_data(request: HtmxHttpRequest) -> StyleguideData:
-    seed_data = _ensure_styleguide_seed_data()
+def _build_styleguide_data(request: HtmxHttpRequest, *, assets: StyleguideAssets | None = None) -> StyleguideData:
+    seed_data = _ensure_styleguide_seed_data(assets=assets)
     return StyleguideData(
         blog=seed_data.blog,
         blog_repository=BlogIndexContext.create_from_django_models(request, seed_data.blog),
@@ -385,7 +403,7 @@ def _ensure_site() -> Site:
 
 def _ensure_blog(site: Site, user: User) -> Blog:
     default_theme = _styleguide_default_theme()
-    blog = Blog.objects.filter(slug=STYLEGUIDE_BLOG_SLUG).first()
+    blog = Blog.objects.child_of(site.root_page).filter(slug=STYLEGUIDE_BLOG_SLUG).first()
     if blog is None:
         blog = Blog(
             title="Styleguide Blog",
@@ -495,7 +513,7 @@ def _ensure_styleguide_tags_and_categories(posts: list[Post]) -> None:
 
 def _ensure_podcast(site: Site, user: User) -> Podcast:
     default_theme = _styleguide_default_theme()
-    podcast = Podcast.objects.filter(slug=STYLEGUIDE_PODCAST_SLUG).first()
+    podcast = Podcast.objects.child_of(site.root_page).filter(slug=STYLEGUIDE_PODCAST_SLUG).first()
     if podcast is None:
         podcast = Podcast(
             title="Styleguide Podcast",

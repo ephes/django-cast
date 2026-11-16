@@ -160,7 +160,7 @@ def test_styleguide_build_data_uses_seed_data_for_repositories(monkeypatch):
     podcast_repository = object()
     calls: list[tuple[object, object]] = []
 
-    monkeypatch.setattr(styleguide_view, "_ensure_styleguide_seed_data", lambda: seed)
+    monkeypatch.setattr(styleguide_view, "_ensure_styleguide_seed_data", lambda **_kwargs: seed)
 
     def fake_create(current_request, current_page):
         calls.append((current_request, current_page))

@@ -4,6 +4,9 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Custom Audio/Video chooser integrations must consume ``edit_url`` instead of
+  ``edit_link`` in modal and telepath state, matching Wagtail's chooser contract.
+
 - Comment posting refuses unsupported target models before querying their rows.
   Generic public targets must opt in via ``CAST_COMMENTS_ALLOWED_TARGET_MODELS``;
   Wagtail Page models remain supported. Both posting routes recheck the locked
@@ -623,6 +626,16 @@ Security and hardening
 
 Fixes
 ~~~~~
+
+- Render saved Audio/Video choosers with one hidden ID and a working Edit link.
+  Deleted media selections open empty and can be replaced in the Wagtail editor.
+
+- Restrict reference-site reset to verified seed-user roots under the selected
+  Site, preserving unrelated matching slugs and refusing ambiguous ownership.
+  Prepare media before deletion and roll back the complete database rebuild on
+  failure. File storage side effects remain outside the transaction. Media option
+  flags now restore prior settings on every exit and post counts use the reference
+  blog subtree.
 
 - Reconstruct blog snapshots after JSON key conversion (including dates and
   audio durations) and keep cache inputs independent from hydrated models.
