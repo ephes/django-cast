@@ -81,13 +81,9 @@ def test_postgres_snapshot_isolation_contract(mocker, nested, isolation):
     fake.cursor.return_value.__enter__.return_value.fetchone.return_value = (isolation,)
     mocker.patch.object(facets, "connections", {"snapshot": fake})
     atomic = mocker.patch.object(facets.transaction, "atomic")
-    if isolation == "read committed":
-        with pytest.raises(facets.FacetSnapshotUnavailable):
-            with facets._facet_snapshot("snapshot"):
-                pass
-    else:
-        with facets._facet_snapshot("snapshot"):
-            pass
+    # A caller's weaker transaction degrades to per-statement reads, never 503.
+    with facets._facet_snapshot("snapshot"):
+        pass
     atomic.assert_called_once_with(using="snapshot")
     sql = fake.cursor.return_value.__enter__.return_value.execute.call_args.args[0]
     assert sql == (
@@ -141,3 +137,24 @@ def test_normalized_empty_search_preserves_no_match_semantics(blog, post):
     assert result["result_count"] == 0
     for group in result["groups"].values():
         assert group["all_count"] == 0
+
+
+@pytest.mark.django_db(transaction=True)
+def test_facet_view_owns_snapshot_under_atomic_requests(api_client, blog, mocker):
+    from django.db import DEFAULT_DB_ALIAS
+    from django.urls import resolve, reverse
+
+    url = reverse("cast:api:facet-counts-detail", args=[blog.pk])
+    assert DEFAULT_DB_ALIAS in resolve(url).func._non_atomic_requests
+    seen = []
+    original = facets._facet_snapshot
+
+    def record(using):
+        seen.append(connection.in_atomic_block)
+        return original(using)
+
+    mocker.patch.object(facets, "_facet_snapshot", side_effect=record)
+    mocker.patch.dict(connection.settings_dict, {"ATOMIC_REQUESTS": True})
+    response = api_client.get(url, {"mode": "modal"})
+    assert response.status_code == 200
+    assert seen == [False]

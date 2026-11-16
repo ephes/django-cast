@@ -27,7 +27,7 @@ from .serialization import (
     deserialize_transcript,
     deserialize_video,
 )
-from .snapshot import PostQuerySnapshot, cache_page_url, clear_cached_page_urls
+from .snapshot import PostQuerySnapshot, cache_page_url, cache_page_urls, clear_cached_page_urls
 from .types import AudioById, CachableBlogData, ChaptersByAudioId, ImageById, LinkTuples, RenditionsForPosts, VideoById
 
 if TYPE_CHECKING:
@@ -231,8 +231,7 @@ class FeedContext:
         self.used = used
         self.post_queryset = queryset_data.queryset
 
-        for post_id, page_url in self.page_url_by_id.items():
-            cache_page_url(post_id, page_url, self.absolute_page_url_by_id.get(post_id))
+        cache_page_urls(self.page_url_by_id, self.absolute_page_url_by_id)
 
     @classmethod
     def create_from_django_models(
@@ -482,8 +481,7 @@ class BlogIndexContext:
         self.page_url_by_id = queryset_data.page_url_by_id
         self.absolute_page_url_by_id = queryset_data.absolute_page_url_by_id
 
-        for post_id, page_url in self.page_url_by_id.items():
-            cache_page_url(post_id, page_url, self.absolute_page_url_by_id.get(post_id))
+        cache_page_urls(self.page_url_by_id, self.absolute_page_url_by_id)
 
     @staticmethod
     def data_for_blog_index_cachable(

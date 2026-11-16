@@ -78,7 +78,14 @@ class FacetSnapshotUnavailable(APIException):
 
 @contextmanager
 def _facet_snapshot(using: str) -> Iterator[None]:
-    """Own a short repeatable-read transaction; refuse weaker ambient isolation."""
+    """Own a short repeatable-read transaction when the caller has none.
+
+    Inside a caller's PostgreSQL transaction the isolation level can no longer
+    change. Repeatable read or serializable already give one snapshot; under a
+    weaker level each read sees its own committed state, as before exact
+    snapshots existed, instead of failing a public endpoint. The public view
+    opts out of ``ATOMIC_REQUESTS`` so requests always own the snapshot.
+    """
     connection = connections[using]
     if connection.vendor not in {"sqlite", "postgresql"}:
         raise FacetSnapshotUnavailable()
@@ -89,7 +96,7 @@ def _facet_snapshot(using: str) -> Iterator[None]:
                 if nested:
                     cursor.execute("SHOW transaction_isolation")
                     if cursor.fetchone()[0] not in {"repeatable read", "serializable"}:
-                        raise FacetSnapshotUnavailable()
+                        logger.debug("Modal facets share the caller's weaker transaction; reads are per statement.")
                 else:
                     cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
         yield

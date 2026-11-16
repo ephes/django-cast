@@ -63,8 +63,11 @@ Unreleased
   contexts and async tasks.
 
 - Keep modal facet membership in database subqueries and compute all groups in a
-  single read snapshot. Unsupported database/search snapshot contracts return
-  HTTP 503 instead of unbounded ID lists or inconsistent counts.
+  single read snapshot. The facet counts view opts out of ``ATOMIC_REQUESTS`` so
+  PostgreSQL sites with the default isolation keep working. Database backends
+  other than SQLite/PostgreSQL and search backends without a database queryset
+  return HTTP 503 instead of unbounded ID lists or inconsistent counts. Filling
+  the rich-text link cache for a feed copies each context-local cache once.
 
 - Bound editorial transcript evidence hashing to 10 MiB per artifact and 30 MiB
   total, with bounded reads and an editorial error before signing partial

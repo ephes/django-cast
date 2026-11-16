@@ -355,3 +355,22 @@ def test_async_link_renders_keep_warmed_context_snapshot():
 
     assert asyncio.run(interleave()) == ['<a href="/first/">', '<a href="/second/">']
     assert handler.expand_db_attributes({"id": 42}) == '<a href="/parent/">'
+
+
+def test_cache_urls_publishes_batches_once_per_context():
+    import contextvars
+
+    from cast.wagtail_hooks import PageLinkHandlerWithCache
+
+    def fill():
+        PageLinkHandlerWithCache.clear_cache()
+        before = PageLinkHandlerWithCache.cache._get_cache()
+        PageLinkHandlerWithCache.cache_urls({1: "/a/", 2: "/b/"}, {2: "https://example.com/b/", 3: "https://x/"})
+        after = PageLinkHandlerWithCache.cache._get_cache()
+        return before, after, dict(PageLinkHandlerWithCache.absolute_cache)
+
+    before, after, absolute = contextvars.copy_context().run(fill)
+    assert before == {}
+    assert after == {1: "/a/", 2: "/b/"}
+    assert after is not before
+    assert absolute == {2: "https://example.com/b/"}

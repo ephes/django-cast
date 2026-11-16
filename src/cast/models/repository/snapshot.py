@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, cast
 
 from django.core.exceptions import ObjectDoesNotExist
@@ -43,6 +44,13 @@ def cache_page_url(post_id: int, url: str, absolute_url: str | None = None) -> N
     from ...wagtail_hooks import PageLinkHandlerWithCache
 
     PageLinkHandlerWithCache.cache_url(post_id, url, absolute_url)
+
+
+def cache_page_urls(page_url_by_id: Mapping[int, str], absolute_page_url_by_id: Mapping[int, str]) -> None:
+    """Store many page URLs in the rich-text link cache with one copy per cache."""
+    from ...wagtail_hooks import PageLinkHandlerWithCache
+
+    PageLinkHandlerWithCache.cache_urls(page_url_by_id, absolute_page_url_by_id)
 
 
 def clear_cached_page_urls() -> None:

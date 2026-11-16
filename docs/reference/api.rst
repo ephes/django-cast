@@ -1886,9 +1886,12 @@ Modal facet database snapshots
 
 ``mode=modal`` returns exact counts from one short database read snapshot, before
 response rendering. SQLite uses its transaction read snapshot; PostgreSQL uses a
-repeatable-read, read-only transaction. An existing PostgreSQL transaction must
-already use repeatable-read or serializable isolation (including when
-``ATOMIC_REQUESTS`` is enabled). Other database backends and external search
+repeatable-read, read-only transaction. The facet counts view opts out of
+``ATOMIC_REQUESTS`` (it only reads), so requests own that snapshot with the
+default read-committed setting too. A direct caller that already holds a
+PostgreSQL transaction keeps its isolation: repeatable read or serializable give
+one snapshot, while a weaker level reads each count as of its own statement.
+Other database backends and external search
 backends without a database ``get_queryset()`` return HTTP 503 with code
 ``facet_snapshot_unavailable`` rather than approximate or truncated counts.
 Database search membership remains in SQL subqueries, including the aggregation
