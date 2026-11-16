@@ -7,7 +7,7 @@ from bs4 import BeautifulSoup
 from django.urls import reverse
 
 from cast.models import Episode, Post
-from tests.api.editor_richtext_test import assert_safe_fragment
+from tests.api.editor_richtext_helpers import assert_safe_fragment
 from tests.block_assertions import block_values
 
 pytestmark = pytest.mark.django_db

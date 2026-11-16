@@ -10,7 +10,7 @@
 ## Build, Test, and Development Commands
 - List commands: `just --list` (or plain `just`).
 - Install deps: `uv sync` (or `just install`).
-- Run tests: `just test` (runs `uv run coverage run -m pytest` and `uv run coverage report`, and fails if coverage is below 100%); target specific tests with `just test-one tests/models/posts_test.py::TestPostModel::test_post_slug`.
+- Run tests: `just test` (runs `uv run pytest -n 4 --cov --cov-report=` and `uv run coverage report`, and fails if coverage is below 100%); target specific tests with `just test-one tests/models/posts_test.py::TestPostModel::test_post_slug`.
 - Type checks: `uv run mypy` (or `just typecheck`).
 - Lint/format: `just lint` runs `ruff check --fix .` and `ruff format .` (line length 119).
 - Coverage: `just coverage` runs tests with coverage and opens HTML report.
@@ -24,14 +24,15 @@
 
 ## Coding Style & Naming Conventions
 - Python 3.11+ with 4-space indentation; prefer explicit typing—public functions and classes should be type-annotated.
-- Imports and formatting follow Ruff (`E,W,F,I,B,UP,DJ`); avoid unused symbols and dead code.
+- Imports and formatting follow Ruff (`E4, E7, E9, F, I`); avoid unused symbols and dead code.
 - Modules/files use `snake_case`, classes `PascalCase`, functions/methods `snake_case`, Django settings/constants `UPPER_SNAKE_CASE`.
 - Keep Django/Wagtail app boundaries clean: models in `models/`, API in `api/`, templates in `templates/cast/`.
 
 ## Testing Guidelines
 - New behaviors need Pytest coverage under `tests/` in `*_test.py` modules (e.g. `tests/models/posts_test.py`);
   mirror module paths for discoverability.
-- Tests run with coverage via `uv run coverage run -m pytest` and `uv run coverage report`; `fail_under = 100` is configured in `pyproject.toml`.
+- Tests run with coverage via `uv run pytest -n 4 --cov --cov-report=` and `uv run coverage report`; `fail_under = 100` is configured in `pyproject.toml`.
+- Use `just test-serial` for order-dependent debugging; parallel workers keep separate databases and fingerprints.
 - Maintain 100% test coverage for the Python test suite.
 - Transcript evidence tests use synthetic bounded/counting readers; hashing admits
   10 MiB per public artifact and 30 MiB in aggregate for editor evidence only
@@ -58,7 +59,7 @@
 - Before committing, verify whether documentation and release notes need updates; update `docs/` or `docs/releases/` when behavior changes.
 - Update docs when adding features or changing behavior.
 - When preparing a release, add a new file under `docs/releases/` and link it in `docs/releases/index.rst`.
-- For ongoing changes, update `docs/releases/<current-version>.rst` when it is unreleased. If the current version is already tagged and no version bump is requested, record pending notes in `docs/releases/unreleased.rst` and link it first in `docs/releases/index.rst`. At the next bump, move those notes into `<next-version>.rst` and remove the standalone page and index entry.
+- For ongoing changes, update `docs/releases/<current-version>.rst` when it is unreleased. If the current version is already tagged and no version bump is requested, record pending notes in `docs/releases/unreleased.rst` and link it first in `docs/releases/index.rst`. At the next bump, move those notes into `<next-version>.rst` and remove the standalone page and index entry. Check which case applies before writing. New notes use the matching section: "Upgrade actions", "Features", "Security and hardening", "Fixes", or "Internal"; anything an operator must do goes under "Upgrade actions".
 
 ## Releasing
 - See `docs/release.rst` for the full release process (checks, JS build, tox, merge, GitHub release, PyPI publish).
@@ -72,8 +73,8 @@
 - Main branch is `develop`.
 - Documentation at https://django-cast.readthedocs.io/
 - Source at https://github.com/ephes/django-cast
-- Local planning lives in `BACKLOG.md`; larger feature notes live in `backlog/` and should be linked from
-  `BACKLOG.md`.
+- Local planning lives in `BACKLOG.md`; link open feature notes from there. Design documents live in
+  `docs/design/`. Dated validation/handoff records of finished work stay in `backlog/` without index links.
 - Before committing, bring `BACKLOG.md` and linked `backlog/` notes up to date with the current repo state:
   remove completed items from active sections and mark retained planning notes as implemented or historical.
 ### Theme Repos (provide templates that extend django-cast)

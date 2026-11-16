@@ -407,9 +407,11 @@ def _ensure_blog(site: Site, user: User) -> Blog:
 
 def _styleguide_post_date(now: datetime, months_back: int) -> datetime:
     """Return a datetime N calendar months before *now*, guaranteeing distinct months."""
-    from dateutil.relativedelta import relativedelta
+    from calendar import monthrange
 
-    return now - relativedelta(months=months_back)
+    year, month_zero = divmod(now.year * 12 + now.month - 1 - months_back, 12)
+    month = month_zero + 1
+    return now.replace(year=year, month=month, day=min(now.day, monthrange(year, month)[1]))
 
 
 def _ensure_posts(
@@ -606,7 +608,7 @@ def _ensure_live(page: Page) -> Page:
 
 
 def _styleguide_post_count() -> int:
-    pagination_size = int(getattr(settings, "POST_LIST_PAGINATION", 5))
+    pagination_size = int(appsettings.POST_LIST_PAGINATION)
     return max(12, pagination_size + 1)
 
 

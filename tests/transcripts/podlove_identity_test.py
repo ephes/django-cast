@@ -5,7 +5,7 @@ import copy
 import pytest
 
 from cast.transcripts import corrections, parsing, podlove, services
-from tests.known_speaker_apply_test import make_transcript
+from tests.transcripts.known_speaker_apply_helpers import make_transcript
 
 
 @pytest.mark.parametrize("invalid", [True, False, -1, 1.0, "1", None])

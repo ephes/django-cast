@@ -7,7 +7,7 @@ import pytest
 from django.urls import reverse
 
 from cast.models import Contributor, EpisodeContributor
-from tests.known_speaker_apply_test import make_transcript
+from tests.transcripts.known_speaker_apply_helpers import make_transcript
 
 # Playwright is a browser-test extra: collect cleanly (and skip) where it is not installed.
 playwright_sync_api = pytest.importorskip("playwright.sync_api")

@@ -9,13 +9,8 @@ from django.urls import reverse
 from cast import media_ingest
 from cast.api.editor import media as editor_media
 from cast.models import Audio, ChapterMark
+from tests.api.editor_audio_update_helpers import oga_upload
 from tests.factories import UserFactory
-
-OGG_CONTENT = b"OggS\x00\x02\x00\x00\x00\x00" + b"\x00" * 64
-
-
-def oga_upload(name: str = "episode.oga") -> SimpleUploadedFile:
-    return SimpleUploadedFile(name, OGG_CONTENT, content_type="audio/ogg")
 
 
 def grant_wagtail_admin_access(user) -> None:

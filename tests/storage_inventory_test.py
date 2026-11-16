@@ -6,7 +6,7 @@ import pytest
 from django.core.management import CommandError, call_command
 
 from cast.utils import storage_walk_paths
-from tests.management_command_test import StubOverwriteStorage
+from tests.management_command_helpers import StubOverwriteStorage
 
 
 @pytest.mark.parametrize("name", ["..", ".", "", "../escape", "/absolute", "a/b", r"a\b", r"C:\escape", "a\x00b"])

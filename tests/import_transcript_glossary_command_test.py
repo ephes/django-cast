@@ -1,23 +1,9 @@
-import json
-from io import StringIO
-
 import pytest
-from django.core.management import CommandError, call_command
+from django.core.management import CommandError
 
 from cast.models import TranscriptGlossaryTerm
 from tests.factories import PodcastFactory
-
-
-def write_json(tmp_path, data):
-    path = tmp_path / "glossary.json"
-    path.write_text(json.dumps(data) if not isinstance(data, str) else data, encoding="utf-8")
-    return str(path)
-
-
-def run(*args, **options):
-    stdout, stderr = StringIO(), StringIO()
-    call_command("import_transcript_glossary", *args, stdout=stdout, stderr=stderr, **options)
-    return stdout.getvalue(), stderr.getvalue()
+from tests.import_transcript_glossary_command_helpers import run, write_json
 
 
 @pytest.mark.django_db

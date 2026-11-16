@@ -2,14 +2,24 @@
 
 Date: 2026-11-15
 
-Status: S1 implemented on the parked implementation branch; external review and integration remain pending.
-S2–S8 remain planned. Owner overrides (2026-11-15): S1 uses soupsieve >=4.1 (requiring Python >=3.11.5),
+Status: S1–S8 implemented, reviewed and integrated into `develop`.
+Owner overrides (2026-11-15): S1 uses soupsieve >=4.1 (requiring Python >=3.11.5),
 manual-only workflows and local checks instead of paid Actions, and branch parking without Claude invocation or merge.
+S2 uses four workers by default, worker-specific schema fingerprints and temporary lock directories.
+The owner approved deleting notebooks and commands.py, including the JupyterLab process and obsolete backup instructions.
+Local qualification: every S2–S8 slice passed `just check`, including 100% Python coverage,
+JavaScript, docs and audits. S2 also passed serial/repeated runs and schema addition/reuse/removal;
+parallel timings were 80/69/73 seconds (one run above the 75-second target).
+Oldest/newest tox and the Django 6.0/Wagtail 7 environment passed after S7. S8 preserves
+all test bodies except import/path updates and collects the same 5,165 tests before and after.
+Integration (2026-11-16): S2–S8 were rebased onto `develop` after the transcript UX and round 100
+merges and reviewed. Outside the sandbox `just check`, both PostgreSQL environments, the six
+compatibility environments, Python 3.13 and the real Chromium comment and transcript journeys passed.
+
 The measurements below describe the pre-implementation tree.
 
 Original design status: Review of `develop` at commit `831a2929`; file and line references were re-checked
-against `f5863de9` (three commits later, CI still red there), measurements were not repeated. The remaining slices are not implemented;
-the slices under "Implementation plan" are the work. This note does not replace
+against `f5863de9` (three commits later, CI still red there), measurements were not repeated. All slices below are implemented and integrated into `develop`. This note does not replace
 [backlog/2026-09-15-architecture-review.md](../../backlog/2026-09-15-architecture-review.md): that review lists the
 structural findings (D1–D12, V1–V12, X1–X10, T1–T12) and stays the reference for the larger seams. This note asks a
 narrower question: which changes are **easy** and bring **a lot**, measured on today's tree.
@@ -598,8 +608,7 @@ each need a release-notes entry. S8 waits for a moment without other open test b
    direkt von `develop`.
 2. Sollen die beiden Sites weiter direkt vom Branch `develop` installieren, oder künftig von einem Tag bzw. von
    PyPI? Solange es `develop` bleibt, ist ein roter CI-Lauf dort ein Produktionsrisiko.
-3. Dürfen `notebooks/` (rund 50 alte Debug-Notebooks) und `commands.py` aus dem Repository gelöscht werden? Für
-   `commands.py` müssten die JupyterLab-Zeile im `Procfile` entfernt und der Abschnitt `production-db-to-local` in
-   `docs/operations/backup.rst` angepasst werden.
-4. Ist `-n 4` als fester Standard für `just test` in Ordnung, auch wenn mehrere Agenten gleichzeitig auf derselben
-   Maschine testen, oder soll der Standard seriell bleiben und parallel nur ein eigenes Rezept sein?
+3. Entschieden (2026-11-15): `notebooks/` und `commands.py` dürfen weg. S5 entfernt auch die
+   JupyterLab-Zeile im `Procfile` und aktualisiert die Backup-Dokumentation.
+4. Entschieden (2026-11-15): `pytest -n 4` ist der feste Standard für `just test`,
+   einschließlich Worker-Fingerprint-Fix; `just test-serial` bleibt zum Debuggen.

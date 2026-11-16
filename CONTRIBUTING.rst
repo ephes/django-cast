@@ -94,7 +94,7 @@ Ready to contribute? Here's how to set up `django-cast` for local development.
 
 The entrypoint regressions can be run with::
 
-    uv run pytest tests/quickstart_test.py tests/media_sizes_command_test.py
+    uv run pytest tests/quickstart_test.py tests/media_handling/media_sizes_command_test.py
 
 Quickstart tests execute the real CLI orchestration in temporary working
 directories, with setup subprocesses, user creation, server startup and browser

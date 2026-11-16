@@ -5,7 +5,7 @@ from django.urls import reverse
 
 from cast.models import Contributor, EpisodeContributor
 from cast.transcripts import editing
-from tests.known_speaker_apply_test import make_transcript
+from tests.transcripts.known_speaker_apply_helpers import make_transcript
 
 pytestmark = pytest.mark.django_db
 

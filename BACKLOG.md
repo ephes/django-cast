@@ -2,106 +2,25 @@
 
 This is the canonical planning backlog for django-cast. Keep it small and actionable.
 
-- Round 100 facet snapshots, editor/control isolation and media partial-save/write
-  authority safeguards are implemented; external clerk review and integration
-  are pending. See the [validation/handoff record](backlog/2026-11-15-scout-round100.md).
-
-- Round 99 bounded candidate evidence and editorial timestamp correspondence are
-  implemented; external clerk review and integration are pending. See the
-  [validation/handoff record](backlog/2026-11-15-scout-round99.md).
-
-- Round 97 quickstart ownership/recovery and consented contributor references are
-  implemented; external clerk review and integration are pending. See the
-  [validation/handoff record](backlog/2026-11-15-scout-round97.md).
-
-- Round 96 transcript admission, WebVTT grammar and feed metadata fixes are
-  implemented; external clerk review and integration are pending. See the
-  [validation/handoff record](backlog/2026-11-14-scout-round96.md).
-
-- Scout round 92 glossary admission, rendition identity/repair and poster
-  boundaries are implemented, reviewed and integrated into `develop`; validation
-  is recorded in [the handoff record](backlog/2026-11-14-scout-round92.md).
-
-- Round 90 storage inventory/recovery/publication and atomic comment admission
-  safeguards are implemented; see the [validation/handoff record](backlog/2026-11-14-scout-round90.md).
-  Owner decision (2026-11-15): comment and upload admission now fall back to
-  best-effort limits on file/database/custom caches; Redis/Memcached remain
-  optional for exact admission. Existing homepage/python-podcast file caches
-  need no configuration change. External clerk review remains pending.
-
-- [Round 93 validation/handoff](backlog/2026-11-14-scout-round93.md): database-owned numbering, bounded gap projections/gallery admission,
-  bulk correction contributors and publication-context checks are implemented.
-  Real-storage subprocess tests cover correction interruption before/after commit.
-  See `docs/releases/unreleased.rst` and the numbering/gallery/transcript docs.
-  Interrupted runs may leave unreferenced blobs; reference-aware cleanup remains
-  an operational requirement, not an automatic recovery promise.
-
-- Round 88 credential/transcript stale-write safeguards and contributor/reference
-  admission are implemented; see the [validation/handoff record](backlog/2026-11-13-scout-round88.md),
-  `docs/releases/unreleased.rst` and the retained
-  [contributor](backlog/2026-05-12-podcast-episode-contributors.md) /
-  [voice-reference](backlog/2026-05-28-contributor-voice-references.md) notes.
-
 - Use this file as the index for planned and future work.
 - Put larger feature notes in `backlog/*.md` and link them from here.
 - Design documents that precede a larger change live in `docs/design/*.md` and are linked from here.
 - Keep README and docs backlog references as links to this file instead of maintaining separate planned-work lists.
 - When docs mention future behavior, add or update the matching entry here.
 - Do not keep a separate done list. Completed user-facing work belongs in the current release notes under
-  `docs/releases/`; implementation history belongs in git.
+  `docs/releases/`; implementation history belongs in git. Dated records of finished work
+  remain in `backlog/` without entries here.
 - Use `Depends on` for blocking relationships and `Related to` for non-blocking cross-links.
 - GitHub issues are optional for public coordination, but local planning starts here.
-- The implemented typeahead architecture, performance measurements, and UX rationale remain available in
-  [backlog/2026-07-16-typeahead-search.md](backlog/2026-07-16-typeahead-search.md).
-
-- The scoped Podlove response-cache security audit and its completed regression
-  evidence are recorded in
-  [backlog/2026-10-03-security-audit.md](backlog/2026-10-03-security-audit.md);
-  the adjacent raw transcript/chapter cache audit and HTML negative evidence are in
-  [backlog/2026-10-03-adjacent-media-cache-audit.md](backlog/2026-10-03-adjacent-media-cache-audit.md).
-
-- The completed Django 6.1 advisory-floor CI repair is recorded in
-  [backlog/2026-10-03-dependency-floor-ci-repair.md](backlog/2026-10-03-dependency-floor-ci-repair.md).
-  The follow-up DRF/Pillow floor repair is recorded in
-  [backlog/2026-11-04-advisory-floor-repair.md](backlog/2026-11-04-advisory-floor-repair.md).
-
-- The completed private API response-cache hardening and synthetic regression
-  evidence are recorded in
-  [backlog/2026-11-06-private-api-cache.md](backlog/2026-11-06-private-api-cache.md).
-
-- Implemented scout media/import safeguards and validation evidence are recorded in
-  [backlog/2026-11-07-scout-media-imports.md](backlog/2026-11-07-scout-media-imports.md).
-
-- Scout round 83 publication ordering, media command outcomes, and Ajax comment
-  observer delivery are implemented; see
-  [the validation record](backlog/2026-11-08-publication-outcomes.md).
-
-- Scout round 81 correction ambiguity checks and round 85 editor boundary
-  hardening are implemented; see
-  [the validation record](backlog/2026-11-08-round85-editor-boundaries.md).
-
-- Round 91 recoverable media and comment edits are implemented; validation and
-  remaining external acceptance are recorded in
-  [the B30 handoff](backlog/2026-11-14-round91-recoverable-edits.md).
 
 ## Later
 
-- [ ] Transcript editing in the Wagtail admin: a workflow an editor can follow
-  - Design: [docs/design/transcript-editing-ux.md](docs/design/transcript-editing-ux.md)
-  - Status: all slices, including inline text correction, implemented on stacked branches A/B; external review and integration remain.
-  - Scope: ten slices, biggest gain first (confirm before a regeneration replaces a reviewed transcript, no
-    pre-selected stale speaker names, a transcript panel on the episode page, paged passage review, one
-    "Speakers" section, preview, generation feedback, clearer upload, contributor conveniences, restore).
-  - Done when: the slices are implemented or explicitly dropped and the note carries a status line saying so.
-
-- [ ] Structure quick wins: green trunk, parallel tests, readable release notes
-  - Design: [docs/design/structure-quick-wins.md](docs/design/structure-quick-wins.md)
-  - S1 collect/dependency repair is implemented on the parked S1 branch; external review and integration
-    remain pending. After integration, continue with S2. Both consumer sites install from `develop`.
-  - Scope: eight small slices ranked by benefit per effort: local gates and manual workflows with one test dependency list, `pytest -n 4`,
-    one release-notes file with upgrade actions first, single version source, backlog hygiene, tooling drift,
-    shipped-surface trims (`runner.py`, `python-dateutil`), test tree tidy-up.
-  - Done when: the slices are implemented or explicitly dropped and the note carries a status line saying so.
+- [ ] Complete external browser/PostgreSQL acceptance from rounds 91 and 97
+  - Integration is finished; the handoffs still record sandbox-blocked browser and PostgreSQL checks.
+  - Run the two-editor comment journey and the publication/comment locking checks outside the sandbox.
+  - Evidence: [round 91](backlog/2026-11-14-round91-recoverable-edits.md) and
+    [round 97](backlog/2026-11-15-scout-round97.md).
+  - Done when: both checks pass and their acceptance is recorded.
 
 - [ ] Verify concurrent gallery membership/signature publication on PostgreSQL
   - Round 89's mutation-database isolation fix is implemented. The separate

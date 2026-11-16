@@ -4,6 +4,7 @@ import json
 import os
 import re
 import shutil
+import tempfile
 from copy import deepcopy
 from datetime import datetime
 from pathlib import Path
@@ -61,6 +62,9 @@ def _reusable_test_db_path():
     name = database.get("TEST", {}).get("NAME") or database["NAME"]
     if not name or str(name) == ":memory:" or str(name).startswith("file:"):
         return None
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    if worker and not str(name).endswith(f"_{worker}"):
+        name = f"{name}_{worker}"
     return Path(name)
 
 
@@ -182,6 +186,24 @@ def pytest_report_header():
     if _dropped_stale_test_db:
         return "test database: schema state changed, dropped the reused database"
     return None
+
+
+@pytest.fixture(scope="session", autouse=True)
+def isolated_temporary_directory(tmp_path_factory):
+    """Keep host-wide media publication locks local to this worker and its children."""
+    directory = str(tmp_path_factory.mktemp("system-temp"))
+    previous_directory = tempfile.tempdir
+    previous_environment = os.environ.get("TMPDIR")
+    tempfile.tempdir = directory
+    os.environ["TMPDIR"] = directory
+    try:
+        yield
+    finally:
+        tempfile.tempdir = previous_directory
+        if previous_environment is None:
+            os.environ.pop("TMPDIR", None)
+        else:
+            os.environ["TMPDIR"] = previous_environment
 
 
 @pytest.fixture()
@@ -1173,7 +1195,7 @@ def scoped_editor_audio(site):
 
     from django.core.files.base import ContentFile
 
-    from tests.api.editor_posts_test import (
+    from tests.api.editor_posts_helpers import (
         grant_collection_permission,
         grant_wagtail_admin_access,
         page_permission_user,

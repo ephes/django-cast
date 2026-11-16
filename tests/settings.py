@@ -61,9 +61,6 @@ MIDDLEWARE = [
     "django_htmx.middleware.HtmxMiddleware",
 ]
 
-# only gets invoked for python manage.py test
-TEST_RUNNER = "cast.runner.PytestTestRunner"
-
 # STATIC FILE CONFIGURATION
 # ------------------------------------------------------------------------------
 # See: https://docs.djangoproject.com/en/dev/ref/settings/#static-root

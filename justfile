@@ -65,6 +65,11 @@ check-collect:
 
 # Run the full test suite with coverage enforcement (fail if <100%)
 test:
+    uv run pytest -n 4 --cov --cov-report=
+    uv run coverage report
+
+# Serial fallback for debugging order-dependent failures
+test-serial:
     uv run coverage run -m pytest
     uv run coverage report
 
@@ -104,27 +109,25 @@ lint:
 # Run tests with coverage and open HTML report
 [macos]
 coverage:
-    uv run coverage run -m pytest
+    uv run pytest -n 4 --cov --cov-report=
     uv run coverage html
     open htmlcov/index.html
 
 [linux]
 coverage:
-    uv run coverage run -m pytest
+    uv run pytest -n 4 --cov --cov-report=
     uv run coverage html
     xdg-open htmlcov/index.html 2>/dev/null || echo "Open htmlcov/index.html in your browser"
 
 # Build documentation and open in browser
 [macos]
 docs:
-    rm -f docs/cast.api.rst docs/cast.migrations.rst docs/cast.rst docs/cast.templatetags.rst docs/modules.rst
     uv run make -C docs clean
     uv run make -C docs html
     open docs/_build/html/index.html
 
 [linux]
 docs:
-    rm -f docs/cast.api.rst docs/cast.migrations.rst docs/cast.rst docs/cast.templatetags.rst docs/modules.rst
     uv run make -C docs clean
     uv run make -C docs html
     xdg-open docs/_build/html/index.html 2>/dev/null || echo "Open docs/_build/html/index.html in your browser"
@@ -159,13 +162,7 @@ js-build-comments:
 
 # Build Vite assets and copy to src/cast/static/cast/vite/
 js-build-vite:
-    cd javascript && npm run build
-    rm -f javascript/dist/manifest.json
-    sh -c 'test -f javascript/dist/.vite/manifest.json && mv javascript/dist/.vite/manifest.json javascript/dist/manifest.json || true'
-    uv run python -c "from pathlib import Path; p=Path('javascript/dist/manifest.json'); txt=p.read_text() if p.exists() else None; (p.write_text(txt.rstrip('\\n')+'\\n') if txt is not None else None)"
-    rm -rf javascript/dist/.vite
-    rm -f src/cast/static/cast/vite/*
-    cp javascript/dist/* src/cast/static/cast/vite/
+    bash scripts/build_frontend.sh
 
 # Build all shipped JS artifacts
 js-build-all:
@@ -229,7 +226,6 @@ check-javascript:
     cd javascript && npm audit --package-lock-only --include=dev
 
 check-docs:
-    rm -f docs/cast.api.rst docs/cast.migrations.rst docs/cast.rst docs/cast.templatetags.rst docs/modules.rst
     uv run make -C docs clean
     uv run make -C docs html
 

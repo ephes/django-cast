@@ -18,6 +18,7 @@ from cast.api.editor.body import author_blocks_to_section
 from cast.api.editor.errors import EditorValidationError
 from cast.api.editor.richtext import sanitize_block_value, sanitize_rich_text
 from cast.models import Post
+from tests.api.editor_richtext_helpers import assert_safe_fragment
 from tests.block_assertions import block_values
 from tests.factories import PostFactory
 
@@ -45,15 +46,6 @@ MALFORMED_HTML = [
     "<p><strong><em>Safe</strong> text</em></p>",
     "<li>Outside a list</li>",
 ]
-
-
-def assert_safe_fragment(html):
-    soup = BeautifulSoup(html, "html.parser")
-    assert not soup.find(["script", "img", "svg", "math", "iframe", "style", "object", "embed"])
-    for tag in soup.find_all(True):
-        assert not any(name.startswith("on") or name in {"style", "srcdoc", "target"} for name in tag.attrs)
-        href = tag.get("href", "")
-        assert not any(scheme in href.lower() for scheme in ("javascript:", "vbscript:", "data:"))
 
 
 @pytest.mark.parametrize("section", ["overview", "detail"])

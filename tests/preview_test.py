@@ -245,7 +245,7 @@ def test_editor_preview_passes_only_transport_metadata(rf, post, admin_user, moc
     assert not {"REMOTE_USER", "HTTP_X_FORWARDED_USER", "HTTP_AUTHORIZATION", "HTTP_COOKIE"} & original.META.keys()
     assert request.user == admin_user
     assert request.session == {"template_base_dir": "plain"}
-    assert request.META["HTTP_AUTHORIZATION"] == "Bearer not-a-real-credential"
+    assert request.headers["authorization"] == "Bearer not-a-real-credential"
 
 
 @pytest.mark.django_db

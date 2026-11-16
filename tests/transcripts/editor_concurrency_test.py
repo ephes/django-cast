@@ -12,7 +12,7 @@ from wagtail.models import Collection
 
 from cast.models import Audio, Contributor, Transcript, TranscriptSpeakerMapping
 from cast.transcripts import services
-from tests.known_speaker_apply_test import make_transcript
+from tests.transcripts.known_speaker_apply_helpers import make_transcript
 
 
 @pytest.mark.django_db

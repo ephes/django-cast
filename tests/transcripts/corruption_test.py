@@ -6,7 +6,7 @@ from django.urls import reverse
 
 from cast.models import Transcript
 from cast.transcripts import services
-from tests.known_speaker_apply_test import DOTE, PODLOVE, SPEAKERS, make_transcript
+from tests.transcripts.known_speaker_apply_helpers import DOTE, PODLOVE, SPEAKERS, make_transcript
 
 
 @pytest.fixture(params=["utf8", "depth"])

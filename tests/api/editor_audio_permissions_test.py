@@ -9,7 +9,7 @@ from django.urls import reverse
 
 from cast.api.editor import media as editor_media
 from cast.models import Audio
-from tests.api.editor_audio_update_test import oga_upload
+from tests.api.editor_audio_update_helpers import oga_upload
 from tests.factories import UserFactory
 
 

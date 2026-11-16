@@ -6,7 +6,6 @@ from functools import update_wrapper, wraps
 from typing import Any, Protocol, cast
 from uuid import uuid4
 
-import django
 from django.conf import settings
 from django.contrib.sites.shortcuts import get_current_site
 from django.contrib.syndication.views import Feed
@@ -19,6 +18,7 @@ from django.utils.cache import get_conditional_response
 from django.utils.feedgenerator import (
     Atom1Feed,
     Rss201rev2Feed,
+    Stylesheet,
     SyndicationFeed,
     rfc2822_date,
 )
@@ -36,12 +36,7 @@ from .models import Audio, Blog, Episode, EpisodeContributor, Podcast, Post
 from .models.repository import FeedContext, limit_blog_feed_posts
 from .models.theme import get_default_template_base_dir
 
-if django.VERSION >= (5, 2):
-    from django.utils.feedgenerator import Stylesheet
-
-    _feed_stylesheets: list | None = [Stylesheet("/static/cast/feed-style.xsl", "text/xsl")]
-else:  # pragma: no cover
-    _feed_stylesheets = None
+_feed_stylesheets: list | None = [Stylesheet("/static/cast/feed-style.xsl", "text/xsl")]
 
 logger = logging.getLogger(__name__)
 

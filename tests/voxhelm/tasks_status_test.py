@@ -19,6 +19,7 @@ from cast.voxhelm import (
     get_transcript_generation_status_context,
 )
 from cast.voxhelm_tasks import complete_transcript_generation
+from tests.voxhelm.tasks_status_helpers import VALID_DOTE_ARTIFACT, VALID_PODLOVE_ARTIFACT, VALID_VTT_ARTIFACT
 
 
 def enqueue_audio_transcript_generation(**kwargs):
@@ -33,13 +34,6 @@ class FakeResponse(io.BytesIO):
     def __exit__(self, exc_type, exc, tb):
         self.close()
         return False
-
-
-VALID_PODLOVE_ARTIFACT = b'{"transcripts": [{"text": "done"}]}'
-VALID_DOTE_ARTIFACT = (
-    b'{"lines": [{"startTime": "00:00:00,000", "endTime": "00:00:00,100", "speakerDesignation": "", "text": "done"}]}'
-)
-VALID_VTT_ARTIFACT = b"WEBVTT\n\n00:00:00.000 --> 00:00:00.100\ndone\n"
 
 
 def test_transcript_service_collection_helpers(mocker):

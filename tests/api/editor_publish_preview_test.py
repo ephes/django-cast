@@ -3,16 +3,12 @@ import json
 import pytest
 from django.contrib.auth.models import Group, Permission
 from django.urls import reverse
-from wagtail.models import GroupCollectionPermission, GroupPagePermission, Page
+from wagtail.models import GroupCollectionPermission
 
 from cast.models import Post
+from tests.api.editor_publish_preview_helpers import grant_wagtail_admin_access, page_permission_user
 from tests.block_assertions import block_values
 from tests.factories import EpisodeFactory, PostFactory, UserFactory
-
-
-def grant_wagtail_admin_access(user) -> None:
-    permission = Permission.objects.get(codename="access_admin", content_type__app_label="wagtailadmin")
-    user.user_permissions.add(permission)
 
 
 def grant_collection_permission(user, collection, *, app_label: str, codename: str) -> None:
@@ -20,18 +16,6 @@ def grant_collection_permission(user, collection, *, app_label: str, codename: s
     permission = Permission.objects.get(codename=codename, content_type__app_label=app_label)
     GroupCollectionPermission.objects.create(group=group, collection=collection, permission=permission)
     user.groups.add(group)
-
-
-def page_permission_user(*, codenames: tuple[str, ...]) -> object:
-    user = UserFactory(is_staff=True)
-    group = Group.objects.create(name=f"Page permissions {user.pk}")
-    root_page = Page.get_first_root_node()
-    assert root_page is not None
-    for codename in codenames:
-        permission = Permission.objects.get(codename=codename, content_type__app_label="wagtailcore")
-        GroupPagePermission.objects.create(group=group, page=root_page, permission=permission)
-    user.groups.add(group)
-    return user
 
 
 class _FakeScopedToken:
