@@ -631,6 +631,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Correct the manual installation settings to use Wagtail's built-in image
+  model instead of the nonexistent ``cast.Image``. Execute the documented
+  settings in an isolated project smoke test, resolving image/rendition models
+  and running Django's system checks.
+
 - Render saved Audio/Video choosers with one hidden ID and a working Edit link.
   Deleted media selections open empty and can be replaced in the Wagtail editor.
 
