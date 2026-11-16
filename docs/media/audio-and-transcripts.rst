@@ -667,6 +667,12 @@ A site that already keeps a list can load it for one podcast:
    python manage.py import_transcript_glossary <podcast-id-or-slug> glossary.json --dry-run
    python manage.py import_transcript_glossary <podcast-id-or-slug> glossary.json
 
+The importer selects the podcast's write database and uses it for namespace
+locking, validation, reads, inserts, conditional updates and rollback. Routers
+must keep these operations on the same alias; incompatible routing is refused.
+``--dry-run`` and unexpected failures roll back the complete import on that alias.
+No cross-database atomicity is claimed and no new command option is required.
+
 The UTF-8 JSON file is limited to 8 MiB and 10,000 entries. Reads stop at
 the byte ceiling plus one; oversized, unreadable or malformed inputs are
 rejected before the mutation transaction, leaving the glossary unchanged.

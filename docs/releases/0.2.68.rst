@@ -631,6 +631,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Keep glossary imports, their namespace lock and dry-run/failure rollback on one
+  validated database alias. Refuse incompatible router decisions.
+
 - Bind admin transcript-regeneration consent to the reviewed transcript, speaker
   decisions, audio upload generation and attempt. Stale confirmations return HTTP
   409 before submission and require a fresh review.
