@@ -31,6 +31,7 @@ from cast.models.repository import (
     deserialize_episode_contributor,
     deserialize_image,
     deserialize_post,
+    deserialize_renditions,
     deserialize_season,
     deserialize_transcript,
     deserialize_video,
@@ -54,7 +55,7 @@ from tests.repository.helpers import (
 def test_serialize_renditions():
     rendition = Rendition(file="foo.jpg", filter_spec="foobarfilter", width=100, height=200)
     renditions = serialize_renditions({1: [rendition]})
-    rendition = Rendition(**renditions[1][0])
+    rendition = deserialize_renditions(renditions)[1][0]
     assert rendition.file == "foo.jpg"
 
 

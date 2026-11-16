@@ -1,9 +1,10 @@
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
+from django.db import router
 from django.db.models import QuerySet
 
-from cast.models import Episode, Transcript
+from cast.models import Audio, Contributor, ContributorLink, Episode, EpisodeContributor, Transcript
 from cast.transcripts.corrections import refresh_transcript_corrections
 
 from ._selectors import positive_id
@@ -36,14 +37,32 @@ class Command(BaseCommand):
             return selected
         if options["podcast"]:
             podcast = ImportGlossaryCommand.get_podcast(options["podcast"])
-            episodes = Episode.objects.descendant_of(podcast)
-            return transcripts.filter(audio__episodes__in=episodes).distinct()
+            using = ImportGlossaryCommand.write_database(podcast)
+            for model in (Episode, Transcript, Audio, Contributor, ContributorLink, EpisodeContributor):
+                for operation in (router.db_for_read, router.db_for_write):
+                    if operation(model, instance=podcast) != using:
+                        raise CommandError(
+                            "Glossary application requires one database for selection, reads and writes."
+                        )
+            episodes = Episode.objects.using(using).descendant_of(podcast)
+            return transcripts.using(using).filter(audio__episodes__in=episodes).distinct()
         return transcripts.all()
 
     def handle(self, *args: Any, **options: Any) -> None:
         dry_run = options["dry_run"]
         failed = 0
-        for transcript in self.get_transcripts(options):
+        transcripts = self.get_transcripts(options)
+        selected = list(transcripts)
+        if options["podcast"]:
+            # Validate every actual transcript before refreshing the first one.
+            # Instance-sensitive routers may differ from the podcast preflight.
+            for transcript in selected:
+                for operation in (router.db_for_read, router.db_for_write):
+                    if operation(Transcript, instance=transcript) != transcript._state.db:
+                        raise CommandError(
+                            "Glossary application requires one database for transcript reads and writes."
+                        )
+        for transcript in selected:
             try:
                 result = refresh_transcript_corrections(transcript, dry_run=dry_run)
             except Exception as exc:

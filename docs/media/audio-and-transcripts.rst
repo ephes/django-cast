@@ -685,7 +685,12 @@ the byte ceiling plus one; oversized, unreadable or malformed inputs are
 rejected before the mutation transaction, leaving the glossary unchanged.
 Only regular files are accepted: the command opens nonblocking, checks the
 opened descriptor, and closes it on refusal (including FIFOs, directories and
-devices). Symlinks to regular files are intentionally supported. Duplicate JSON
+devices). Symlinks to regular files are intentionally supported. Descriptor
+identity, size and nanosecond modification/change metadata are checked around
+the read, and the consumed byte count must match. An in-place rewrite or
+truncation is refused before writes, including in dry runs. Atomic pathname
+replacement may retain the complete opened old generation; an unlink-only
+change to its link count/change time does not invalidate that generation. Duplicate JSON
 object members, including escaped spellings and nested objects, reject the whole
 document before writes; this differs from duplicate glossary terms in separate
 entries, which are skipped individually.
@@ -808,6 +813,12 @@ After editing the glossary, re-apply it:
    python manage.py apply_transcript_glossary --podcast <podcast-id-or-slug> --dry-run
    python manage.py apply_transcript_glossary --transcript 12 --transcript 13
    python manage.py apply_transcript_glossary --all
+
+With ``--podcast``, episode and transcript selection uses the resolved podcast's
+write database, including when other databases contain identical IDs and tree
+paths. Read/write routing for selection, glossary validation and corrections must
+agree on that alias. Split routing is refused before opening transcript artifacts;
+``--dry-run`` performs the same preflight and writes no artifacts.
 
 .. _transcript_glossary_review:
 

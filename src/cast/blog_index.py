@@ -22,13 +22,22 @@ if TYPE_CHECKING:
     from cast.models.repository import BlogIndexContext
 
 
+def public_posts(queryset: Any) -> Any:
+    """Apply Wagtail visibility restrictions from the queryset's own database."""
+    from wagtail.models import PageViewRestriction
+
+    for restriction in PageViewRestriction.objects.using(queryset.db).select_related("page"):
+        queryset = queryset.not_descendant_of(restriction.page, inclusive=True)
+    return queryset
+
+
 def unfiltered_published_posts(blog: Blog) -> models.QuerySet[Post]:
     """Return the live public posts below ``blog`` in display order."""
     from cast.models.pages import Post
 
     if blog.pk is None:
         return Post.objects.none()
-    return Post.objects.live().public().descendant_of(blog).order_by("-visible_date", "-pk")
+    return public_posts(Post.objects.using(blog._state.db).live()).descendant_of(blog).order_by("-visible_date", "-pk")
 
 
 def create_blog_filterset(blog: Blog, get_params: QueryDict) -> PostFilterset:

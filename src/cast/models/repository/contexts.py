@@ -14,11 +14,13 @@ from cast.blog_index import (
     create_blog_filterset,
     create_cached_blog_filterset,
     pagination_context,
+    public_posts,
     published_posts_for_index,
 )
 
 from .builders import _blog_url_from_referer, apply_cover_fallback, build_media_lookup, data_for_blog_cachable
 from .serialization import (
+    _model_from_data,
     deserialize_audio,
     deserialize_blog,
     deserialize_episode,
@@ -28,7 +30,13 @@ from .serialization import (
     deserialize_transcript,
     deserialize_video,
 )
-from .snapshot import PostQuerySnapshot, cache_page_url, cache_page_urls, clear_cached_page_urls
+from .snapshot import (
+    PostQuerySnapshot,
+    _require_site_database,
+    cache_page_url,
+    cache_page_urls,
+    clear_cached_page_urls,
+)
 from .types import AudioById, CachableBlogData, ChaptersByAudioId, ImageById, LinkTuples, RenditionsForPosts, VideoById
 
 if TYPE_CHECKING:
@@ -142,9 +150,13 @@ class PostDetailContext:
             post.get_transcript_or_none()
         # Like the other builders, navigate from the root page of the request's site.
         site = Site.find_for_request(request) or blog.get_site()
+        _require_site_database(site, post._state.db)
         root_nav_links: LinkTuples = []
         if site is not None:
-            root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live().public()]
+            root_nav_links = [
+                (p.get_url(), p.title)
+                for p in public_posts(site.root_page.get_children().using(site._state.db).live())
+            ]
         return cls(
             post_id=post.pk,
             template_base_dir=post.get_template_base_dir(request),
@@ -262,7 +274,10 @@ class FeedContext:
             blog._last_build_date = max(visible_dates)
         root_nav_links: LinkTuples = []
         if site is not None:
-            root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live().public()]
+            root_nav_links = [
+                (p.get_url(), p.title)
+                for p in public_posts(site.root_page.get_children().using(site._state.db).live())
+            ]
         for post in queryset_data.queryset:
             post._media_lookup = build_media_lookup(
                 post.pk,
@@ -295,8 +310,7 @@ class FeedContext:
             from ..pages import Episode
 
             post_queryset = (
-                Episode.objects.live()
-                .public()
+                public_posts(Episode.objects.using(blog._state.db).live())
                 .descendant_of(blog)
                 .select_related("podcast_audio__transcript", "season")
                 .filter(podcast_audio__isnull=False)
@@ -306,7 +320,9 @@ class FeedContext:
             from ..pages import Post
 
             post_queryset = limit_blog_feed_posts(
-                Post.objects.live().public().descendant_of(blog).order_by("-visible_date", "-pk")
+                public_posts(Post.objects.using(blog._state.db).live())
+                .descendant_of(blog)
+                .order_by("-visible_date", "-pk")
             )
         data = data_for_blog_cachable(request=request, blog=blog, post_queryset=post_queryset, is_paginated=False)
         data["blog_url"] = blog.get_url(request=request)
@@ -323,7 +339,7 @@ class FeedContext:
         """
         # The page-link cache is request-scoped and repopulated by this repository.
         clear_cached_page_urls()
-        site = Site(**data["site"])
+        site = _model_from_data(Site, data["site"])
         blog = deserialize_blog(data["blog"])
         if (last_build_date := data.get("last_build_date")) is not None:
             blog._last_build_date = last_build_date
@@ -637,8 +653,9 @@ class BlogIndexContext:
         template_base_dir = blog.get_template_base_dir(cast("HtmxHttpRequest", request))
         root_nav_links = []
         site = blog.get_site()
+        _require_site_database(site, blog._state.db)
         if site is not None:
-            for page in site.root_page.get_children().live().public():
+            for page in public_posts(site.root_page.get_children().using(site._state.db).live()):
                 root_nav_links.append((page.get_url(request), page.title))
         queryset_data = PostQuerySnapshot.create_from_post_queryset(
             request=request, site=site, queryset=pagination["object_list"]

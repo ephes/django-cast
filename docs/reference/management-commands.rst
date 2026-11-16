@@ -97,6 +97,9 @@ Options:
 ``--dry-run``
     Validate and report without saving.
 
+In-place input changes are refused before writes, including in dry runs.
+Symlinks and atomic pathname replacements retain the coherent opened generation.
+
 The command prints a summary in the form
 ``<podcast>: created=<n> updated=<n> unchanged=<n> skipped=<n>``.
 
@@ -119,7 +122,8 @@ Options (one of the first three is required):
     A transcript id; repeat for several.
 
 ``--podcast ID_OR_SLUG``
-    The transcripts of the podcast's episodes.
+    The transcripts of the podcast's episodes, selected on the podcast's database.
+    Incompatible read/write routing is refused before artifact access.
 
 ``--all``
     All transcripts.

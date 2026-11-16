@@ -198,6 +198,7 @@ def test_add_site_raw_fallback_prefers_default_site_then_lowest_pk():
     default = WagtailSite.objects.create(hostname="default.local", root_page=root_page, is_default_site=True)
 
     assert add_site_raw({})["site"] == {
+        "_database": "default",
         "id": default.id,
         "hostname": "default.local",
         "port": 80,
@@ -608,6 +609,7 @@ def test_post_queryset_snapshot_bulk_fetches_non_episode_specific_models(rf, blo
             return []
 
     class FakeQuerySet(list):
+        db = "default"
         model = Post
 
         def select_related(self, *_args):
@@ -664,6 +666,7 @@ def test_post_queryset_snapshot_bulk_fetches_episode_subclass_specific_models(rf
             return []
 
     class FakeQuerySet(list):
+        db = "default"
         model = Post
 
         def select_related(self, *_args):
@@ -728,6 +731,8 @@ def test_queryset_data_create_from_post_queryset_raises_attribute_error_for_brok
             return []
 
     class FakeQuerySet(list):
+        db = "default"
+
         def select_related(self, *_args):
             return self
 

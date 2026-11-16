@@ -7,10 +7,12 @@ from django.http import HttpRequest
 from wagtail.images.models import Image
 from wagtail.models import Site
 
-from cast.blog_index import create_blog_filterset, pagination_context, published_posts_for_index
+from cast.blog_index import create_blog_filterset, pagination_context, public_posts, published_posts_for_index
 from cast.models.theme import get_default_template_base_dir
 
 from .serialization import (
+    _database_fields,
+    _model_from_data,
     serialize_audio,
     serialize_blog,
     serialize_episode,
@@ -20,7 +22,7 @@ from .serialization import (
     serialize_transcript,
     serialize_video,
 )
-from .snapshot import PostQuerySnapshot
+from .snapshot import PostQuerySnapshot, _require_site_database
 from .types import (
     AudioById,
     AudiosByPostID,
@@ -116,10 +118,14 @@ def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, bl
     if site is None:
         # Fallback for contexts where request/blog site resolution is not available:
         # prefer the default site, then the lowest primary key, so the choice is stable.
-        site = Site.objects.order_by("-is_default_site", "pk").first()
+        site = (
+            Site.objects.using(blog._state.db if blog is not None else None).order_by("-is_default_site", "pk").first()
+        )
     if site is None:
         raise ImproperlyConfigured("django-cast needs at least one Wagtail Site, but the Site table is empty.")
+    _require_site_database(site, blog._state.db if blog is not None else None)
     data["site"] = {
+        **_database_fields(site),
         "id": site.id,
         "hostname": site.hostname,
         "port": site.port,
@@ -132,8 +138,10 @@ def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, bl
 
 def add_root_nav_links(data: dict[str, Any]) -> dict:
     """Add top-level navigation links (root page children) to the data dict."""
-    site = Site(**data["site"])
-    root_nav_links = [(p.get_url(), p.title) for p in site.root_page.get_children().live().public()]
+    site = _model_from_data(Site, data["site"])
+    root_nav_links = [
+        (p.get_url(), p.title) for p in public_posts(site.root_page.get_children().using(site._state.db).live())
+    ]
     data["root_nav_links"] = root_nav_links
     return data
 
@@ -234,7 +242,7 @@ def data_for_blog_cachable(
         post_queryset = data["pagination_context"]["object_list"]
         del data["pagination_context"]["object_list"]  # not cachable
     queryset_data = PostQuerySnapshot.create_from_post_queryset(
-        request=request, site=Site(**data["site"]), queryset=post_queryset
+        request=request, site=_model_from_data(Site, data["site"]), queryset=post_queryset
     )
     data = add_queryset_data(data, queryset_data)
     visible_dates = [post.visible_date for post in queryset_data.queryset]
