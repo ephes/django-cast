@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Optional, TypeVar, cast
 
 from django.contrib.auth import get_user_model
@@ -40,7 +41,15 @@ _Value = TypeVar("_Value")
 
 def _int_keyed(mapping: Mapping[Any, _Value]) -> dict[int, _Value]:
     """Return a copy of a serialized map with integer primary-key keys."""
-    return {int(key): value for key, value in mapping.items()}
+    result = {}
+    for key, value in mapping.items():
+        if type(key) is not int and not (isinstance(key, str) and key.isascii() and key.isdecimal()):
+            raise ValueError("Invalid cached primary key.")
+        identity = int(key)
+        if not 0 < identity <= 2**63 - 1 or str(identity) != str(key) or identity in result:
+            raise ValueError("Invalid or duplicate cached primary key.")
+        result[identity] = value
+    return result
 
 
 class PostDetailContext:
@@ -500,6 +509,21 @@ class BlogIndexContext:
         """
         This method recreates usable models from the cachable data.
         """
+        data = deepcopy(data)
+        data["post_by_id"] = _int_keyed(data["post_by_id"])
+        data["audios"] = _int_keyed(data["audios"])
+        data["images"] = _int_keyed(data["images"])
+        data["videos"] = _int_keyed(data["videos"])
+        data["renditions_for_posts"] = _int_keyed(data["renditions_for_posts"])
+        data["images_by_post_id"] = _int_keyed(data["images_by_post_id"])
+        data["videos_by_post_id"] = _int_keyed(data["videos_by_post_id"])
+        data["audios_by_post_id"] = _int_keyed(data["audios_by_post_id"])
+        data["owner_username_by_id"] = _int_keyed(data["owner_username_by_id"])
+        data["page_url_by_id"] = _int_keyed(data["page_url_by_id"])
+        data["absolute_page_url_by_id"] = _int_keyed(data["absolute_page_url_by_id"])
+        data["cover_by_post_id"] = _int_keyed(data["cover_by_post_id"])
+        data["cover_alt_by_post_id"] = _int_keyed(data["cover_alt_by_post_id"])
+        data["has_audio_by_id"] = _int_keyed(data["has_audio_by_id"])
         # The page-link cache is request-scoped and repopulated by this repository.
         clear_cached_page_urls()
         template_base_dir = data["template_base_dir"]

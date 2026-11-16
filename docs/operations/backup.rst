@@ -121,3 +121,25 @@ or the configured private storage in backups. The admin swaps this bundle with
 the current version on restore; it is not an archive of every revision and does
 not replace normal database/media backups. Delete the transcript to remove its
 previous-version bundle. Never expose private storage through the media server.
+
+Previous-version capture admits at most 10 MiB per artifact and 30 MiB of raw
+file bytes in total across public artifacts and private sidecars. Reads remain
+bounded if a stored file grows. The complete JSON bundle, including base64 and
+mapping metadata, must fit within 42 MiB. Replacement refuses before changing
+current files if these limits are exceeded or storage is unavailable; the
+transcript edit view shows the refusal as a form error. Only
+``FileNotFoundError`` permits omitting a missing artifact from the backup; a
+restored version clears fields for those omitted files.
+
+Restore reserves the transcript row before selecting and reading its backup.
+A stale editor cannot restore an obsolete backup generation. JSON admission
+rejects repeated members, excessive nesting, unsupported schema versions,
+invalid file bytes and invalid or duplicate speaker mappings before staging
+files or deleting mappings. Version-1 bundles remain supported; deleted
+contributors are restored as mappings needing review. Interrupted capture or
+restore removes owned staged files while preserving the original failure.
+
+Backup deletion runs after the database commit. If storage deletion fails, the
+transcript remains deleted and the request succeeds; the ``cast.receivers``
+logger records the exact ``recovery storage key``. Retain that log and retry
+removing only that key from the configured private storage after recovery.

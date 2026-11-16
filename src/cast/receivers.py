@@ -1,8 +1,11 @@
 """Signal receivers registered by ``CastConfig.ready()``."""
 
+import logging
 from typing import Any
 
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 
 
 def rotate_feed_cache_on_view_restriction_change(sender: type, **kwargs: Any) -> None:
@@ -34,7 +37,15 @@ def clear_page_link_cache(sender: Any, **kwargs: Any) -> None:
 def delete_transcript_version(sender: Any, instance: Any, **kwargs: Any) -> None:
     field = instance.previous_version
     if field:
-        transaction.on_commit(lambda: field.storage.delete(field.name), using=kwargs.get("using"))
+        storage, name = field.storage, field.name
+
+        def cleanup() -> None:
+            try:
+                storage.delete(name)
+            except Exception:
+                logger.exception("Transcript version cleanup failed; recovery storage key=%s", name)
+
+        transaction.on_commit(cleanup, using=kwargs.get("using"))
 
 
 def connect_receivers() -> None:

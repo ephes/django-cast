@@ -1072,3 +1072,24 @@ def test_post_comment_ajax_authenticated_user_keeps_given_name_and_email(client,
     assert saved.user_id == user.id
     assert saved.user_name == "Given Name"
     assert saved.user_email == "given@example.com"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("hide_removed", [True, False])
+def test_public_comment_count_matches_list_visibility(post, comment, settings, hide_removed):
+    from django.contrib.sites.models import Site
+    from django_comments import get_model
+
+    settings.COMMENTS_HIDE_REMOVED = hide_removed
+    other_site = Site.objects.create(domain="other.example", name="Other synthetic site")
+    model = get_model()
+    values = {"content_object": post, "user_name": "Synthetic", "comment": "Synthetic", "site_id": comment.site_id}
+    model.objects.create(**values, is_public=False)
+    model.objects.create(**values, is_removed=True)
+    model.objects.create(**{**values, "site_id": other_site.pk})
+    rendered = Template(
+        "{% load comments fluent_comments_tags %}"
+        "{% get_comment_list for post as visible %}{{ visible|length }}|{{ post|comments_count }}"
+    ).render(Context({"post": post}))
+    expected = 1 if hide_removed else 2
+    assert rendered == f"{expected}|{expected}"

@@ -519,8 +519,16 @@ def _handle_transcript_form_save(
 ) -> HttpResponse | EditFormState:
     speaker_mapping_form = SpeakerContributorMappingForm(**speaker_mapping_context)
     form = TranscriptForm(request.POST, request.FILES, instance=transcript, user=request.user)
+    saved: Transcript | None = None
     if form.is_valid():
-        transcript = ingest_upload(form, policy=TRANSCRIPT_POLICY)
+        try:
+            saved = ingest_upload(form, policy=TRANSCRIPT_POLICY)
+        except ValidationError as error:
+            # Previous-version capture refuses oversized or unreadable current files
+            # before anything changes; report it on the form instead of a server error.
+            form.add_error(None, error)
+    if saved is not None:
+        transcript = saved
 
         # Reindex the media entry to make sure all tags are indexed
         for backend in get_search_backends():

@@ -244,7 +244,7 @@ def test_scope_uses_one_database_and_cleans_a_rejected_save(synthetic_audio):
     assert audio.m4a.storage.exists(old_name)
     assert not audio.m4a.storage.exists(replacement.new_name)
     # A canceled owner cannot later retire old files through a stale callback.
-    group._commit()
+    group.commit()
     assert audio.m4a.storage.exists(old_name)
 
 

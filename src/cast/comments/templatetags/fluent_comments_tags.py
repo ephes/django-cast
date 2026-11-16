@@ -132,9 +132,11 @@ def comments_are_moderated_filter(content_object: object) -> bool:
 
 @register.filter
 def comments_count(content_object: object) -> int:
-    from django_comments import get_model as get_comments_model
+    from django_comments.templatetags.comments import CommentListNode
 
-    return get_comments_model().objects.for_model(content_object).count()
+    # Use the public list's site, moderation and COMMENTS_HIDE_REMOVED policy.
+    target = template.Variable("target")
+    return CommentListNode(object_expr=target).get_queryset(template.Context({"target": content_object})).count()
 
 
 @register.simple_tag(takes_context=True)

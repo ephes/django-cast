@@ -827,3 +827,14 @@ Changes from the walk-through and review:
   can be restored.
 - Robustness: indexing never fails on transcripts with ambiguous timestamps,
   and replacing a transcript whose stored file is missing still works.
+
+
+### Previous-version admission and transaction hardening (implemented 2026-11-16)
+
+Capture is bounded to 10 MiB per artifact, 30 MiB total raw bytes and a 42 MiB
+JSON bundle. Only positively missing artifacts may be omitted; other storage
+failures refuse replacement. Restore fully validates version-1 JSON and mappings
+before staging, holds the row reservation through backup selection and swap,
+and refuses obsolete backup generations. Cancellation unwinds owned staging.
+Committed transcript deletion reports backup cleanup failures through the exact
+private recovery key in `cast.receivers` logs. See the operational backup guide.
