@@ -3,9 +3,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Model
 from django.http import HttpRequest
 from wagtail.models import Page
 
+from cast import appsettings as cast_appsettings
 from cast.audio_access import page_is_publicly_viewable
 
 from . import appsettings
@@ -52,3 +54,10 @@ def comment_target_is_accessible(content_object: object, request: HttpRequest) -
     if isinstance(content_object, Page):
         return page_is_publicly_viewable(content_object, request)
     return True
+
+
+def comment_target_model_is_allowed(model: type[Model]) -> bool:
+    """Admit Wagtail pages and explicitly configured public non-page models."""
+    return isinstance(model, type) and (
+        issubclass(model, Page) or model._meta.label_lower in cast_appsettings.CAST_COMMENTS_ALLOWED_TARGET_MODELS
+    )

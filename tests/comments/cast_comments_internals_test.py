@@ -813,7 +813,7 @@ def test_post_comment_ajax_invalid_content_type_without_model_returns_bad_reques
 
 
 @pytest.mark.django_db
-def test_post_comment_ajax_attribute_error_branch(client, mocker, post):
+def test_post_comment_ajax_rejects_invalid_model_resolution(client, mocker, post):
     ajax_url = reverse("comments-post-comment-ajax")
 
     class StubModel:
@@ -824,7 +824,7 @@ def test_post_comment_ajax_attribute_error_branch(client, mocker, post):
     original_get_model = comment_views.apps.get_model
 
     def get_model_side_effect(*args, **kwargs):
-        if args[:2] == ("cast", "post"):
+        if args == ("cast.post",):
             return StubModel()
         return original_get_model(*args, **kwargs)
 
@@ -850,34 +850,25 @@ def test_post_comment_ajax_object_does_not_exist_branch(client):
 
 @pytest.mark.django_db
 def test_post_comment_ajax_validation_error_branch(client, mocker, post):
-    ajax_url = reverse("comments-post-comment-ajax")
+    from django.db.models import QuerySet
 
-    class StubManager:
-        def using(self, using=None):
-            return self
+    from cast.models import Post
 
-        def get(self, pk=None):
+    original_get = QuerySet.get
+
+    def get_with_invalid_target(queryset, *args, **kwargs):
+        if queryset.model is Post:
             raise ValidationError("bad")
+        return original_get(queryset, *args, **kwargs)
 
-    class StubModel:
-        _default_manager = StubManager()
-
-    from cast.comments import views as comment_views
-
-    original_get_model = comment_views.apps.get_model
-
-    def get_model_side_effect(*args, **kwargs):
-        if args[:2] == ("cast", "post"):
-            return StubModel()
-        return original_get_model(*args, **kwargs)
-
-    mocker.patch.object(comment_views.apps, "get_model", side_effect=get_model_side_effect)
-    r = client.post(
-        ajax_url,
+    target_lookup = mocker.patch.object(QuerySet, "get", autospec=True, side_effect=get_with_invalid_target)
+    response = client.post(
+        reverse("comments-post-comment-ajax"),
         {"content_type": "cast.post", "object_pk": str(post.pk)},
         HTTP_X_REQUESTED_WITH="XMLHttpRequest",
     )
-    assert r.status_code == 400
+    assert response.status_code == 400
+    assert any(call.args[0].model is Post for call in target_lookup.call_args_list)
 
 
 @pytest.mark.django_db

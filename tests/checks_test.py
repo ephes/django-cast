@@ -160,9 +160,10 @@ class TestCheckAssetFreshness:
 
 
 class TestCheckCastSettingTypes:
-    def test_cast_setting_types_are_derived_from_registry_without_changing_scope(self):
+    def test_cast_setting_types_are_derived_from_registry(self):
         expected = (
             ("CAST_COMMENTS_ENABLED", bool),
+            ("CAST_COMMENTS_ALLOWED_TARGET_MODELS", list),
             ("CAST_COMMENTS_ALLOW_AUTHOR_EDITS", bool),
             ("CAST_CUSTOM_THEMES", list),
             ("CAST_FOLLOW_LINKS", dict),

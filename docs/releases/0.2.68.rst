@@ -4,6 +4,11 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Comment posting refuses unsupported target models before querying their rows.
+  Generic public targets must opt in via ``CAST_COMMENTS_ALLOWED_TARGET_MODELS``;
+  Wagtail Page models remain supported. Both posting routes recheck the locked
+  current target after moderation, before saving ownership or notifying observers.
+
 - Prefill previous episode hosts, synchronize contributor slugs, and configure
   guest/host ordering per podcast (guests first by default). Apply migrations
   0092–0094 (help texts, podcast contributor order, private previous transcript
@@ -350,6 +355,14 @@ Features
 
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
+
+- Post media synchronization now carries the owning database into galleries and
+  numeric lookups, and derives relationships from the locked persisted body so
+  delayed preparation cannot restore stale media links or create stale galleries.
+
+- FFprobe chapter offsets reject negative, nonfinite and unrepresentable elapsed
+  times without replacing chapters. Chapter text parsing uses linear duplicate
+  admission and rejects more than 1000 chapters or 262144 characters.
 
 - Honor the write router before an instance's read database throughout media
   derivations. Recheck current collection add/choose authority after editor image

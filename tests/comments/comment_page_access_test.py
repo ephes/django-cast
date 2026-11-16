@@ -73,7 +73,8 @@ def test_authorized_restricted_viewers_can_comment(
     assert get_model().objects.count() == before + (not preview)
 
 
-def test_generic_comment_targets_keep_existing_policy(client, comment_endpoint, preview):
+def test_generic_comment_targets_keep_existing_policy(client, comment_endpoint, preview, settings):
+    settings.CAST_COMMENTS_ALLOWED_TARGET_MODELS = ["auth.group"]
     target = Group.objects.create(name="Generic comment target")
     before = get_model().objects.count()
     response = submit(client, comment_endpoint, comment_payload(target, preview))

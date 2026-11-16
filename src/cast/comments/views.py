@@ -21,7 +21,6 @@ from django.http import (
     QueryDict,
 )
 from django.template.loader import render_to_string
-from django.utils.html import escape
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 from django_comments import signals
@@ -35,7 +34,13 @@ from cast.audio_access import page_is_publicly_viewable, user_can_edit_page
 from . import appsettings, author_edits
 from .receivers import record_owned_comment
 from .throttle import comment_post_retry_after
-from .utils import comment_target_is_accessible, comments_are_open, get_comment_context_data, get_comment_template_name
+from .utils import (
+    comment_target_is_accessible,
+    comment_target_model_is_allowed,
+    comments_are_open,
+    get_comment_context_data,
+    get_comment_template_name,
+)
 
 if TYPE_CHECKING:
     from django.forms.boundfield import BoundField
@@ -108,6 +113,9 @@ def post_comment_ajax(request: HttpRequest, using: str | None = None) -> HttpRes
     parent_id = getattr(comment, "parent_id", None)
 
     with transaction.atomic(using=using):
+        error = _current_target_error(request, using)
+        if error is not None:
+            return error
         if parent_id:
             # Coordinate with delete on the parent row: lock it and reject a reply to
             # a parent that is no longer a valid target (removed or author-deleted), so
@@ -160,38 +168,39 @@ def _too_many_posts(retry_after: int, *, ajax: bool, object_id: str | None = Non
     return response
 
 
-def _resolve_comment_target(data: QueryDict, using: str | None = None) -> tuple[object | None, HttpResponse | None]:
+def _resolve_comment_target(
+    data: QueryDict, using: str | None = None, *, lock: bool = False
+) -> tuple[object | None, HttpResponse | None]:
     ctype = data.get("content_type")
     object_pk = data.get("object_pk")
     if ctype is None or object_pk is None:
         return None, CommentPostBadRequest("Missing content_type or object_pk field.")
 
     try:
-        app_label, dot, model_name = ctype.partition(".")
-        if dot:
-            model = apps.get_model(app_label, model_name)
-        else:
-            model = apps.get_model(app_label)
-        target = model._default_manager.using(using).get(pk=object_pk)
-    except ValueError:
-        return None, CommentPostBadRequest(f"Invalid object_pk value: {escape(object_pk)}")
-    except (TypeError, LookupError):
-        return None, CommentPostBadRequest(f"Invalid content_type value: {escape(ctype)}")
-    except AttributeError:
-        return None, CommentPostBadRequest(
-            f"The given content-type {escape(ctype)} does not resolve to a valid model."
-        )
-    except ObjectDoesNotExist:
-        return None, CommentPostBadRequest(
-            f"No object matching content-type {escape(ctype)} and object PK {escape(object_pk)} exists."
-        )
-    except (ValueError, ValidationError) as exc:
-        return None, CommentPostBadRequest(
-            "Attempting to get content-type {!r} and object PK {!r} exists raised {}".format(
-                escape(ctype), escape(object_pk), exc.__class__.__name__
-            )
-        )
+        model = apps.get_model(ctype)
+        # This policy runs before touching the selected model's manager. Even
+        # DEBUG responses must not distinguish private rows by their existence.
+        if not comment_target_model_is_allowed(model):
+            return None, CommentPostBadRequest("Comments are unavailable for this target.")
+        targets = model._default_manager.using(using)
+        if lock:
+            targets = targets.select_related(None).select_for_update()
+        target = targets.get(pk=object_pk)
+    except (TypeError, ValueError, LookupError, AttributeError, ObjectDoesNotExist, ValidationError):
+        return None, CommentPostBadRequest("Comments are unavailable for this target.")
     return target, None
+
+
+def _current_target_error(request: HttpRequest, using: str | None) -> HttpResponse | None:
+    """After moderation, lock and admit the current target inside the save transaction."""
+    target, error = _resolve_comment_target(request.POST, using, lock=True)
+    if error is not None:
+        return error
+    if not comments_are_open(target):
+        return CommentPostBadRequest("Comments are closed for this object.")
+    if not comment_target_is_accessible(target, request):
+        return HttpResponseForbidden("Comments are unavailable for this object.")
+    return None
 
 
 def _ajax_result(
@@ -375,8 +384,9 @@ def _validate_comment_text(data: QueryDict) -> tuple[str | None, HttpResponse | 
 def post_comment(request: HttpRequest, next: str | None = None, using: str | None = None) -> HttpResponse:
     """Stock ``django_comments`` post view, overriding its URL.
 
-    Reply parents are locked and checked against the signed target before the
-    third-party view saves. This applies independently of author-edit support.
+    Current targets and reply parents are locked and checked after moderation,
+    before saving. The third-party view handles previews and invalid forms.
+    This applies independently of author-edit support.
     CSRF and method checks are enforced on this wrapper before target resolution.
     """
     from django_comments.views.comments import post_comment as stock_post_comment
@@ -393,36 +403,39 @@ def post_comment(request: HttpRequest, next: str | None = None, using: str | Non
     if not comment_target_is_accessible(target, request):
         return HttpResponseForbidden("Comments are unavailable for this object.")
     parent_id = request.POST.get("parent")
-    if parent_id:
-        data = request.POST.copy()
-        if request.user.is_authenticated:
-            if not data.get("name", ""):
-                data["name"] = request.user.get_full_name() or request.user.get_username()
-            if not data.get("email", ""):
-                data["email"] = request.user.email
-        form = django_comments.get_form()(target, data=data)
-        if form.security_errors() or form.errors or "preview" in data:
-            return stock_post_comment(request, next=next, using=using)
+    data = request.POST.copy()
+    if request.user.is_authenticated:
+        if not data.get("name", ""):
+            data["name"] = request.user.get_full_name() or request.user.get_username()
+        if not data.get("email", ""):
+            data["email"] = request.user.email
+    form = django_comments.get_form()(target, data=data)
+    if form.security_errors() or form.errors or "preview" in data:
+        return stock_post_comment(request, next=next, using=using)
 
-        current_site = cast(Any, get_current_site(request))
-        comment = form.get_comment_object(site_id=current_site.id)
-        comment.ip_address = request.META.get("REMOTE_ADDR", None) or None
-        if request.user.is_authenticated:
-            comment.user = request.user
+    current_site = cast(Any, get_current_site(request))
+    comment = form.get_comment_object(site_id=current_site.id)
+    comment.ip_address = request.META.get("REMOTE_ADDR", None) or None
+    if request.user.is_authenticated:
+        comment.user = request.user
 
-        responses = signals.comment_will_be_posted.send(sender=comment.__class__, comment=comment, request=request)
-        for receiver, response in responses:
-            if response is False:
-                return CommentPostBadRequest(f"comment_will_be_posted receiver {receiver.__name__} killed the comment")
+    responses = signals.comment_will_be_posted.send(sender=comment.__class__, comment=comment, request=request)
+    for receiver, response in responses:
+        if response is False:
+            return CommentPostBadRequest(f"comment_will_be_posted receiver {receiver.__name__} killed the comment")
 
-        with transaction.atomic(using=using):
+    with transaction.atomic(using=using):
+        error = _current_target_error(request, using)
+        if error is not None:
+            return error
+        if parent_id:
             error = _validate_locked_parent_for_target(target, parent_id, current_site.id, using)
             if error is not None:
                 return error
-            comment.save(using=using)
-        signals.comment_was_posted.send(sender=comment.__class__, comment=comment, request=request)
-        return next_redirect(request, fallback=next or "comments-comment-done", c=comment.pk)
-    return stock_post_comment(request, next=next, using=using)
+        comment.save(using=using)
+        record_owned_comment(sender=comment.__class__, comment=comment, request=request)
+        transaction.on_commit(lambda: _notify_comment_observers(comment, request), using=using)
+    return next_redirect(request, fallback=next or "comments-comment-done", c=comment.pk)
 
 
 @csrf_protect

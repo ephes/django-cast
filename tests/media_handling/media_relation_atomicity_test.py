@@ -4,7 +4,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from django.db import close_old_connections, connection
+from django.db import DEFAULT_DB_ALIAS, close_old_connections, connection
 from django.db.models import QuerySet
 from django.db.models.signals import m2m_changed
 
@@ -20,11 +20,11 @@ def test_media_relation_failure_rolls_back_all_updates(pg_editor_actors, post, m
     post.images.add(images[0])
     post.audios.add(audios[0])
     wanted = {"image": {images[1].pk}, "audio": {audios[1].pk}}
-    monkeypatch.setattr("cast.post_media.media_ids_from_body", lambda *args: wanted)
+    monkeypatch.setattr("cast.post_media.media_ids_from_body", lambda *args, **kwargs: wanted)
     updates = []
 
     def fail_second(sender, instance, action, **kwargs):
-        if instance is post and action == "post_add":
+        if instance.pk == post.pk and action == "post_add":
             updates.append(sender)
             if len(updates) == 2:
                 raise RuntimeError("second relation failed")
@@ -145,7 +145,8 @@ def test_publication_locks_all_gallery_sets_in_one_order(pg_editor_actors, monke
                 return execute(sql, params, many, context)
 
             with connection.execute_wrapper(observe_lock), transaction.atomic():
-                return media_ids_from_body(SimpleNamespace(media_model_lookup={"gallery": Gallery}), body)["gallery"]
+                fake_post = SimpleNamespace(media_model_lookup={"gallery": Gallery})
+                return media_ids_from_body(fake_post, body, using=DEFAULT_DB_ALIAS)["gallery"]
         finally:
             close_old_connections()
 
@@ -160,3 +161,49 @@ def test_publication_locks_all_gallery_sets_in_one_order(pg_editor_actors, monke
         results = [first.result(timeout=20), second.result(timeout=20)]
     assert results[0] == results[1]
     assert Gallery.objects.count() == 2
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="Requires independent publication transactions")
+def test_delayed_publication_media_uses_committed_generation(pg_editor_actors):
+    """The waiting callback must read the newer body after the editor commits."""
+    from django.db import transaction
+
+    from cast.models import Post
+    from tests.factories import PostFactory
+
+    _, blog = pg_editor_actors
+    image = create_image()
+    body = [
+        {
+            "type": "overview",
+            "value": [{"type": "gallery", "value": {"gallery": [{"type": "item", "value": image.pk}]}}],
+        }
+    ]
+    post = PostFactory(owner=blog.owner, parent=blog, title="delayed media", slug="delayed-media", body=body)
+    post.galleries.clear()
+    Gallery.objects.all().delete()
+    waiting = threading.Event()
+
+    def delayed_prepare():
+        close_old_connections()
+        try:
+
+            def observe(execute, sql, params, many, context):
+                if "FOR UPDATE" in sql and '"cast_post"' in sql or '"cast_gallery"' in sql:
+                    waiting.set()
+                return execute(sql, params, many, context)
+
+            with connection.execute_wrapper(observe):
+                synchronize_post_media(post)
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with transaction.atomic():
+            Post.objects.filter(pk=post.pk).update(body=[])
+            future = pool.submit(delayed_prepare)
+            assert waiting.wait(10)
+        future.result(timeout=15)
+    assert not post.galleries.exists()
+    assert not Gallery.objects.exists()

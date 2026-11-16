@@ -416,6 +416,17 @@ Oversized requests return HTTP 400 before integer conversion (ID limits) or
 signature decoding (token limit). Existing theme context keys, signed tokens and
 current/previous/next navigation remain compatible within these bounds.
 
+Post media source authority
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Explicit media synchronization resolves the post's owning write database and
+uses it for numeric media lookups, gallery creation and relationships. Gallery
+helpers also accept an optional keyword-only ``using`` alias. Synchronization
+locks and rereads the persisted Post body before deriving any galleries or
+relationships, so delayed publication work uses the latest stored generation.
+Unsaved changes on the supplied instance remain request-local; save them before
+calling synchronization. Draft preview rendering retains its existing behavior.
+
 Editor upload authority
 -----------------------
 
