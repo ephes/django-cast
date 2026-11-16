@@ -203,7 +203,7 @@ def test_comment_rechecks_target_after_concurrent_moderation(
     from django_comments import signals
 
     from cast.models import Post
-    from tests.comment_page_access_test import comment_payload, submit
+    from tests.comments.comment_page_access_helpers import comment_payload, submit
 
     _, blog = pg_editor_actors
     settings.CAST_COMMENTS_ALLOW_AUTHOR_EDITS = True

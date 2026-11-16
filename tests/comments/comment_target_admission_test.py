@@ -8,7 +8,7 @@ from wagtail.models import PageViewRestriction
 
 from cast.comments import author_edits
 from cast.models import Post
-from tests.comment_page_access_test import comment_payload, submit
+from tests.comments.comment_page_access_helpers import comment_payload, submit
 
 pytestmark = pytest.mark.django_db
 
