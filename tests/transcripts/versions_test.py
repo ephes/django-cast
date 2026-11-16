@@ -414,3 +414,39 @@ def test_cancellation_after_mapping_save_rolls_back_all_storage_and_rows(version
     assert state(versioned) == before
     assert staged and all(not item.new_storage.exists(item.new_name) for item in staged)
     assert all(item.old_storage.exists(item.old_name) for item in staged if item.old_name)
+
+
+@pytest.mark.parametrize("failure", ["oversize", "storage"])
+def test_upload_view_reports_refused_capture_as_form_error(admin_client, versioned, monkeypatch, failure):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+    from django.urls import reverse
+
+    before = state(versioned)
+    if failure == "oversize":
+        monkeypatch.setattr(versions, "MAX_VERSION_TOTAL_BYTES", 1)
+    else:
+        storage = versioned.podlove.storage
+        original_open = storage.open
+        current = versioned.podlove.name
+
+        def failing_open(name, *args, **kwargs):
+            if name == current:
+                raise PermissionError("synthetic outage")
+            return original_open(name, *args, **kwargs)
+
+        monkeypatch.setattr(storage, "open", failing_open)
+    response = admin_client.post(
+        reverse("cast-transcript:edit", args=(versioned.pk,)),
+        {
+            "audio": versioned.audio_id,
+            "collection": versioned.collection_id,
+            "podlove": SimpleUploadedFile("new.json", b'{"transcripts": [{"start_ms": 0, "text": "New"}]}'),
+        },
+    )
+    assert response.status_code == 200
+    errors = response.context["form"].non_field_errors()
+    assert errors and any("limit" in error or "backed up" in error for error in errors)
+    monkeypatch.undo()
+    after = state(versioned)
+    # Re-rendering the editor refreshes mapping ``last_seen``; files and backup stay untouched.
+    assert (after[0], after[2]) == (before[0], before[2])

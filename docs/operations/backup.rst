@@ -126,7 +126,8 @@ Previous-version capture admits at most 10 MiB per artifact and 30 MiB of raw
 file bytes in total across public artifacts and private sidecars. Reads remain
 bounded if a stored file grows. The complete JSON bundle, including base64 and
 mapping metadata, must fit within 42 MiB. Replacement refuses before changing
-current files if these limits are exceeded or storage is unavailable. Only
+current files if these limits are exceeded or storage is unavailable; the
+transcript edit view shows the refusal as a form error. Only
 ``FileNotFoundError`` permits omitting a missing artifact from the backup; a
 restored version clears fields for those omitted files.
 

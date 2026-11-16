@@ -359,6 +359,8 @@ Security and hardening
 - Bound transcript previous-version capture to 10 MiB per artifact, 30 MiB total
   raw bytes and 42 MiB JSON. Refuse storage outages rather than silently losing
   backup artifacts, and fully admit unambiguous restore data before mutation.
+  The transcript edit view reports such a refused replacement upload as a form
+  error instead of a server error.
 - Serialize restore backup selection with replacement, refuse stale generations,
   unwind staged version files on cancellation, and log recoverable postcommit
   backup deletion failures without misreporting committed transcript deletion.
