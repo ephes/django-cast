@@ -1,6 +1,8 @@
 from datetime import datetime
+from urllib.parse import parse_qs
 
 import pytest
+from bs4 import BeautifulSoup
 from django.http import QueryDict
 from django.utils import timezone
 from django.utils.timezone import make_aware
@@ -378,3 +380,50 @@ class TestPostFilterset:
         filterset = PostFilterset(QueryDict("foo=bar"))
         # then all filters are removed
         assert filterset.filters == {}
+
+
+@pytest.mark.parametrize("selected", [set(), {"2026-11"}])
+def test_facet_links_preserve_query_lists(selected):
+    widget = CountFacetWidget()
+    widget.data = QueryDict(
+        "extension=first&extension=&extension=last&tag_facets=a&tag_facets=b"
+        "&page=2&page=3&date_facets=old&date_facets=older"
+    )
+    original = list(widget.data.lists())
+    html = widget.render_option("date_facets", selected, "2026-11", "November")
+    query = parse_qs(BeautifulSoup(html, "html.parser").a["href"][1:], keep_blank_values=True)
+    assert query == {"extension": ["first", "", "last"], "tag_facets": ["a", "b"], "date_facets": ["2026-11"]}
+    assert list(widget.data.lists()) == original
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "value",
+    [
+        "a2026-11",
+        "2026-11suffix",
+        "2026-1",
+        "２０２６-11",
+        "2026-１１",
+        " 2026-11",
+        "2026-11\n",
+        "0000-01",
+        "10000-01",
+        "2026-00",
+        "2026-13",
+    ],
+)
+def test_date_facet_refuses_noncanonical_form_values(value):
+    data = QueryDict("", mutable=True)
+    data["date_facets"] = value
+    filterset = PostFilterset(data, queryset=Post.objects.none())
+    assert not filterset.form.is_valid()
+    assert "date_facets" in filterset.form.errors
+    assert not filterset.qs.exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("value", ["0001-01", "2026-11", "9999-12", ""])
+def test_date_facet_accepts_canonical_form_values(value):
+    filterset = PostFilterset(QueryDict(f"date_facets={value}"), queryset=Post.objects.none())
+    assert filterset.form.is_valid()

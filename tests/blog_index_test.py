@@ -334,3 +334,25 @@ def test_htmx_target_response_uses_full_page_or_paging_fragment(client, blog, po
     assert response.status_code == 200
     assert (b"<html" in response.content.lower()) is (target != "paging-area")
     assert post.title in response.content.decode()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("repository", ["default", "django"])
+def test_rendered_facet_and_paging_links_preserve_query_lists(client, post, settings, repository):
+    from urllib.parse import parse_qs
+
+    from bs4 import BeautifulSoup
+
+    settings.CAST_REPOSITORY = repository
+    response = client.get(f"{post.blog.get_url()}?extension=first&extension=&extension=last&page=1")
+    assert response.status_code == 200
+    html = str(response.context["filterset"].form["date_facets"])
+    links = BeautifulSoup(html, "html.parser").select("a")
+    assert links
+    for link in links:
+        query = parse_qs(link["href"][1:], keep_blank_values=True)
+        assert query["extension"] == ["first", "", "last"]
+        assert "page" not in query
+        assert len(query["date_facets"]) == 1
+    paging = parse_qs(response.context["parameters"].lstrip("&"), keep_blank_values=True)
+    assert paging == {"extension": ["first", "", "last"]}

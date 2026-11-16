@@ -5,6 +5,7 @@ from django.db import models
 from django.http import HttpRequest
 from django.template import engines
 from django.template.loaders.base import Loader as BaseLoader
+from django.utils.functional import Promise
 from django.utils.translation import gettext_lazy as _
 from wagtail.contrib.settings.models import BaseSiteSetting, register_setting
 
@@ -13,7 +14,7 @@ from cast import appsettings
 # Process-lifetime cache for theme choices.  Themes are discovered from the
 # filesystem and settings at import/first-call time; changes require a worker
 # restart.  Stored as an immutable tuple to prevent accidental mutation.
-_template_base_dir_choices_cache: tuple[tuple[str, str], ...] | None = None
+_template_base_dir_choices_cache: tuple[tuple[str, str | Promise], ...] | None = None
 
 
 def _clear_template_base_dir_choices_cache() -> None:
@@ -129,20 +130,20 @@ def get_template_base_dir_candidates(
     """
     if required_template_names is None:
         required_template_names = get_strictly_required_template_names()
-    directory_matches: set[Path] = set()
-    if len(required_template_names) == 0:
-        # nothing required -> nothing to find -> return early
+    if not required_template_names:
         return []
-    required_template_name = required_template_names[0]
+    candidates: set[str] = set()
     for template_directory in template_directories:
-        for directory_match in list(template_directory.glob(f"**/cast/**/{required_template_name}")):
-            directory_matches.add(directory_match.parent)
-    candidates = []
-    for dm in directory_matches:
-        if is_cast_template_base_dir_candidate(dm, required_template_names):
-            check_theme_soft_requirements(dm)
-            candidates.append(dm.name)
-    return candidates
+        # Only cast/<theme>/ is a loadable theme identity. Do not walk entire
+        # template roots or descend into a theme's includes and asset trees.
+        cast_directory = template_directory / "cast"
+        if not cast_directory.is_dir():
+            continue
+        for base_dir in sorted(cast_directory.iterdir()):
+            if base_dir.is_dir() and is_cast_template_base_dir_candidate(base_dir, required_template_names):
+                check_theme_soft_requirements(base_dir)
+                candidates.add(base_dir.name)
+    return sorted(candidates)
 
 
 class TemplateName(models.TextChoices):
@@ -156,13 +157,13 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
     """
     global _template_base_dir_choices_cache  # noqa: PLW0603
     if _template_base_dir_choices_cache is not None:
-        return list(_template_base_dir_choices_cache)
+        return [(slug, str(label)) for slug, label in _template_base_dir_choices_cache]
 
     # handle predefined choices
-    choices: list[tuple[str, str]] = []
+    choices: list[tuple[str, str | Promise]] = []
     seen: set[str] = set()
     for template_name in TemplateName:
-        choices.append((template_name.value, str(template_name.label)))  # type: ignore[misc]
+        choices.append((template_name.value, template_name.label))  # type: ignore[misc]
         seen.add(template_name.value)  # type: ignore[misc]
 
     # handle custom choices via settings
@@ -179,7 +180,7 @@ def get_template_base_dir_choices() -> list[tuple[str, str]]:
             choices.append((candidate, candidate))
 
     _template_base_dir_choices_cache = tuple(choices)
-    return choices
+    return [(slug, str(label)) for slug, label in choices]
 
 
 def get_template_base_dir(request: HttpRequest, pre_selected: str | None) -> str:

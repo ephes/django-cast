@@ -544,3 +544,38 @@ def test_theme_contract_deduplicates_choices(theme_template_dir, mocker):
         ],
     )
     assert len(theme_contract_warnings()) == 1
+
+
+@pytest.mark.parametrize("languages", [("en", "de"), ("de", "en")])
+def test_theme_choices_translate_on_each_call(theme_template_dir, mocker, settings, languages):
+    from django.utils.translation import gettext, gettext_lazy, override
+
+    from cast.models import theme
+    from cast.models.theme import TemplateName
+
+    # Use a message with translations in Django's shipped catalogs.
+    mocker.patch.object(TemplateName.PLAIN, "_label_", gettext_lazy("Yes"))
+    settings.CAST_CUSTOM_THEMES = [("custom", gettext_lazy("No"))]
+    scan = mocker.spy(theme, "get_template_base_dir_candidates")
+    for language in languages:
+        with override(language):
+            choices = dict(get_template_base_dir_choices())
+            assert choices["plain"] == gettext("Yes")
+            assert choices["custom"] == gettext("No")
+    assert scan.call_count == 1
+
+
+def test_theme_discovery_prunes_unrelated_and_nested_trees(tmp_path, mocker):
+    roots = [tmp_path / "first", tmp_path / "second"]
+    for root in roots:
+        create_new_theme(root, "zeta")
+        create_new_theme(root, "alpha")
+        create_new_theme(root / "irrelevant" / "deep", "hidden")
+        create_new_theme(root / "cast" / "zeta" / "nested", "hidden_nested")
+    missing = tmp_path / "missing"
+    iterdir = mocker.spy(Path, "iterdir")
+    glob = mocker.spy(Path, "glob")
+    assert get_template_base_dir_candidates([*reversed(roots), missing]) == ["alpha", "zeta"]
+    assert [call.args[0] for call in iterdir.call_args_list] == [root / "cast" for root in reversed(roots)]
+    glob.assert_not_called()
+    assert get_template_base_dir_candidates(roots) == ["alpha", "zeta"]

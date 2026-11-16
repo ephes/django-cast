@@ -4,6 +4,10 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Automatic theme discovery now checks only ``<template-root>/cast/<theme>/``.
+  Move themes from nested layouts to that supported location or register them
+  explicitly with ``CAST_CUSTOM_THEMES``. Restart workers after theme changes.
+
 - Correct broken ``cast_private_media``, ``cast_public_transcripts`` and
   ``cast_voice_references`` storage backends before upgrading. Configured backend import/initialization failures
   now propagate; compatibility storage fallbacks apply only to omitted aliases.
@@ -630,6 +634,18 @@ Security and hardening
 
 Fixes
 ~~~~~
+
+- Ignore noncanonical preview media IDs, including booleans and integers outside
+  the selected database field range. Hydrate preview images and gallery
+  renditions through Wagtail's configured image model and rendition relation
+  on the preview post's database.
+
+- Translate cached theme choices in the current language. Discover only immediate
+  ``cast/<theme>/`` directories, with deterministic sorted and deduplicated names.
+
+- Preserve repeated query values in facet and pagination links, including cached
+  blog contexts, while resetting the page when changing a facet.
+  Reject noncanonical date facets instead of normalizing malformed values.
 
 - Validate glossary imports with one maintained term/variant/language context,
   avoiding repeated namespace scans while preserving per-entry conflicts,

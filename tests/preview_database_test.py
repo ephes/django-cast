@@ -77,3 +77,54 @@ def test_preview_media_and_renditions_stay_on_the_post_database(settings, routed
     assert not Gallery.objects.using("migration_other").exists()
     for name in ("images", "audios", "videos", "galleries"):
         assert not getattr(Post, name).through.objects.using("migration_other").exists()
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("alias", ["default", "migration_other"])
+def test_preview_uses_configured_image_and_rendition_models(settings, alias):
+    from cast.models.image_renditions import get_all_filterstrings
+    from tests.preview_image_app.models import PreviewImage, PreviewRendition
+
+    settings.WAGTAILIMAGES_IMAGE_MODEL = "preview_image_app.PreviewImage"
+    data = BytesIO()
+    PillowImage.new("RGB", (2, 2), "blue").save(data, format="PNG")
+    pk = 91001
+    # Equal IDs in the concrete and configured image tables make accidental
+    # hydration observable rather than silently returning no images.
+    for db in {"default", alias}:
+        Collection.objects.using(db).create(pk=pk, name="Synthetic custom", path="9998", depth=1, numchild=0)
+        for model in (Image, PreviewImage):
+            instance = model(
+                pk=pk,
+                title=f"{db}-{model.__name__}",
+                collection_id=pk,
+                file=SimpleUploadedFile("synthetic.png", data.getvalue(), content_type="image/png"),
+            )
+            instance.save(using=db)
+    image = PreviewImage.objects.using(alias).get(pk=pk)
+    required = set(get_all_filterstrings([("regular", image), ("gallery", image)]))
+    # A concrete rendition with an expected spec must not satisfy custom inventory.
+    spec = next(iter(required))[1]
+    Rendition.objects.using(alias).create(image_id=pk, filter_spec=spec, width=1, height=1, file="concrete.png")
+    concrete_before = list(Rendition.objects.using(alias).values_list("pk", "file"))
+    blocks = [
+        SimpleNamespace(block_type="image", value=pk),
+        SimpleNamespace(block_type="gallery", value={"gallery": [pk]}),
+    ]
+    post = SimpleNamespace(_state=SimpleNamespace(db=alias), body=[SimpleNamespace(value=blocks)])
+    with CaptureQueriesContext(connections["migration_other" if alias == "default" else "default"]) as other_queries:
+        first = PreviewMedia.from_post(post)
+        count = PreviewRendition.objects.using(alias).count()
+        second = PreviewMedia.from_post(post)
+    assert list(other_queries) == []
+    for media in (first, second):
+        assert type(media.images[pk]) is PreviewImage
+        assert media.images[pk].title == f"{alias}-PreviewImage"
+        assert {(r.image_id, r.filter_spec) for r in media.renditions[pk]} == required
+        assert all(
+            type(r) is PreviewRendition and r._state.db == alias and r.file.storage.exists(r.file.name)
+            for r in media.renditions[pk]
+        )
+    assert PreviewRendition.objects.using(alias).count() == count == len(required)
+    assert list(Rendition.objects.using(alias).values_list("pk", "file")) == concrete_before
+    assert not Gallery.objects.using(alias).exists()

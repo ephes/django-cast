@@ -223,7 +223,7 @@ def data_for_blog_cachable(
     if is_paginated:
         get_params = request.GET.copy()
         filterset = create_blog_filterset(blog, get_params)
-        data["filterset"] = {"get_params": get_params.dict()}
+        data["filterset"] = {"get_params": get_params.urlencode()}
         date_facet_choices = [(k, v) for k, v in filterset.form.fields["date_facets"].choices if k != ""]
         data["filterset"]["date_facets_choices"] = date_facet_choices
         data["filterset"]["category_facets_choices"] = get_facet_choices(filterset.form.fields, "category_facets")

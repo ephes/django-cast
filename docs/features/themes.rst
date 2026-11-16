@@ -478,8 +478,11 @@ Theme Discovery
 django-cast discovers themes by scanning the template directories of all
 configured Django template loaders that implement ``get_dirs()``
 (``FilesystemLoader``, ``CachedLoader``, ``AppDirectoriesLoader``). It
-looks for directories matching the pattern ``**/cast/**/<template_name>``
+examines only immediate directories under ``<template-root>/cast/<theme>/``
 and checks that each candidate contains all strictly required templates.
+Unrelated template trees and nested theme subdirectories are not traversed.
+Discovered theme identities are deduplicated and sorted by name. Themes in
+other layouts must be moved to this supported layout or registered manually.
 
 If your template loader does not implement ``get_dirs()``, register your
 theme manually in ``settings.py``:
@@ -490,7 +493,9 @@ theme manually in ``settings.py``:
        ("my_theme", "My Custom Theme"),
    ]
 
-Theme choices are cached for the lifetime of the worker process. After
+Theme discovery and label definitions are cached for the lifetime of the worker
+process. Lazy translated labels are resolved in the active language on every
+call, including configured custom labels. After
 adding or removing a theme, restart the Django process for changes to take
 effect.
 

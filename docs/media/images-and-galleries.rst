@@ -214,7 +214,14 @@ Publication prepares built-in media relationships and image renditions
 automatically. Wagtail previews instead resolve media from the preview body
 into a request-local lookup, including unsaved admin changes. They may create
 missing image renditions but do not synchronize stored media links or create
-Gallery records. A direct model save deliberately has no media I/O.
+Gallery records. Preview chooser identities must be positive integers within the
+selected database's primary-key field range (at most signed 64-bit); booleans,
+strings, nonpositive and oversized values are ignored, as are missing media.
+Preview hydration uses Wagtail's configured image model
+(``WAGTAILIMAGES_IMAGE_MODEL``) and its own rendition model for inventory,
+prefetching and creation. Reads and new renditions stay on the preview post's
+database and bypass Wagtail's shared rendition cache.
+A direct model save deliberately has no media I/O.
 When code changes a post body outside those Wagtail boundaries, prepare its
 media explicitly after persistence:
 

@@ -63,7 +63,7 @@ def test_wagtail_pages_api_with_post_filter(date, post_filter, len_result, rf, b
     path = blog.wagtail_api_pages_url
     if date is None:
         date = timezone.localtime(post.visible_date)
-    date_facet = f"{date.year}-{date.month}"
+    date_facet = f"{date.year:04d}-{date.month:02d}"
     request = rf.get(
         f"{path}?child_of={blog.pk}&type=cast.Post&date_facets={date_facet}&use_post_filter={post_filter}"
     )

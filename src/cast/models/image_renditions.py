@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, TypeAlias
 from django.core.files.storage import Storage
 from django.db import router, transaction
 from django.db.models import Prefetch
-from wagtail.images.models import Filter, Image, Rendition
+from wagtail.images.models import AbstractRendition, Filter, Image, Rendition
 
 from ..renditions import ImageType, RenditionFilters, get_srgb_counterpart_filter_spec
 
@@ -48,7 +48,11 @@ def get_all_filterstrings(images_with_type: ImagesWithType) -> Iterator[tuple[in
 
 
 def get_obsolete_and_missing_rendition_strings(
-    images_with_type: ImagesWithType, *, using: str | None = None, check_files: bool = False
+    images_with_type: ImagesWithType,
+    *,
+    using: str | None = None,
+    check_files: bool = False,
+    rendition_model: type[AbstractRendition] = Rendition,
 ) -> ObsoleteAndMissing:
     """
     Get all obsolete and missing rendition strings from a queryset of posts.
@@ -71,7 +75,7 @@ def get_obsolete_and_missing_rendition_strings(
         if image_type == "gallery":
             srgb_counterpart_renditions.update(get_gallery_thumbnail_srgb_counterpart_filterstrings(image))
     all_image_ids = {image_id for image_id, filter_string in required_renditions}
-    renditions = Rendition.objects if using is None else Rendition.objects.using(using)
+    renditions = rendition_model.objects if using is None else rendition_model.objects.using(using)
     renditions_queryset = renditions.filter(image__in=all_image_ids)
     existing_rendition_to_id = {
         (image_id, filter_spec): pk
