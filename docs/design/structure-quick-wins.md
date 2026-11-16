@@ -12,15 +12,14 @@ JavaScript, docs and audits. S2 also passed serial/repeated runs and schema addi
 parallel timings were 80/69/73 seconds (one run above the 75-second target).
 Oldest/newest tox and the Django 6.0/Wagtail 7 environment passed after S7. S8 preserves
 all test bodies except import/path updates and collects the same 5,165 tests before and after.
-Real Chromium remains blocked by SIGABRT/EPERM; both PostgreSQL acceptance environments lack a
-local server, and local bootstrap fails at `shmget` with EPERM. These require external acceptance.
-The stack remains based on S1 (`7d7aebec`); the concurrent transcript UX integration on `develop`
-is outside this branch. No merge or review agent was invoked.
+Integration (2026-11-16): S2–S8 were rebased onto `develop` after the transcript UX and round 100
+merges and reviewed. Outside the sandbox `just check`, both PostgreSQL environments, the six
+compatibility environments, Python 3.13 and the real Chromium comment and transcript journeys passed.
 
 The measurements below describe the pre-implementation tree.
 
 Original design status: Review of `develop` at commit `831a2929`; file and line references were re-checked
-against `f5863de9` (three commits later, CI still red there), measurements were not repeated. All slices below now have implementations awaiting external review and integration. This note does not replace
+against `f5863de9` (three commits later, CI still red there), measurements were not repeated. All slices below are implemented and integrated into `develop`. This note does not replace
 [backlog/2026-09-15-architecture-review.md](../../backlog/2026-09-15-architecture-review.md): that review lists the
 structural findings (D1–D12, V1–V12, X1–X10, T1–T12) and stays the reference for the larger seams. This note asks a
 narrower question: which changes are **easy** and bring **a lot**, measured on today's tree.
