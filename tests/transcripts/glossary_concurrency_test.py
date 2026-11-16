@@ -207,10 +207,10 @@ def test_imports_serialize_cross_term_variants_per_podcast(pg_editor_actors, tmp
             assert release.wait(10)
         return result
 
-    def existing_terms(show):
+    def existing_terms(show, *args, **kwargs):
         if role.index == 1:
             second_read.set()
-        return original_existing(show)
+        return original_existing(show, *args, **kwargs)
 
     monkeypatch.setattr(Command, "import_entry", staticmethod(import_entry))
     monkeypatch.setattr(Command, "existing_terms", staticmethod(existing_terms))

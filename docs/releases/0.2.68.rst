@@ -631,6 +631,10 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Validate glossary imports with one maintained term/variant/language context,
+  avoiding repeated namespace scans while preserving per-entry conflicts,
+  standalone model validation and dry-run behavior.
+
 - Keep glossary imports, their namespace lock and dry-run/failure rollback on one
   validated database alias. Refuse incompatible router decisions.
 

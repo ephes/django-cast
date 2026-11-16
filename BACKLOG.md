@@ -15,6 +15,11 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
+- [ ] Complete external browser/PostgreSQL acceptance for round 110 transcript consent and glossary imports
+  - Implementation and synthetic rollback/counting regressions are complete.
+  - Run the existing admin browser journey and PostgreSQL concurrency gates outside the worker sandbox.
+  - Commands and environment blockers: [round 110](backlog/2026-11-16-round110-transcript-glossary.md).
+
 - [ ] Complete external browser/PostgreSQL acceptance from rounds 91 and 97
   - Integration is finished; the handoffs still record sandbox-blocked browser and PostgreSQL checks.
   - Run the two-editor comment journey and the publication/comment locking checks outside the sandbox.

@@ -672,6 +672,13 @@ locking, validation, reads, inserts, conditional updates and rollback. Routers
 must keep these operations on the same alias; incompatible routing is refused.
 ``--dry-run`` and unexpected failures roll back the complete import on that alias.
 No cross-database atomicity is claimed and no new command option is required.
+The locked import builds normalized term/variant indexes and resolves the transcript
+language once. Validation reuses that context and replaces an index entry only
+after a successful insert or conditional update. Rejected entries leave the old
+spellings reserved; dry runs use the same evolving context, then roll back. Namespace
+normalization work is linear in existing and imported spellings, including invalid
+entries; per-row field and database constraint checks still run. Standalone snippet
+validation retains the same rules and parent-lock protocol.
 
 The UTF-8 JSON file is limited to 8 MiB and 10,000 entries. Reads stop at
 the byte ceiling plus one; oversized, unreadable or malformed inputs are

@@ -17,6 +17,10 @@ Synthetic PostgreSQL regressions cover competing terms and independent podcasts.
 The importer now selects and validates one write alias for the parent lock,
 validation, term writes and rollback. Two-alias tests cover dry-run and late
 failure rollback; split router decisions are refused before publication.
+Import model validation now reuses one normalized namespace/language context under
+that lock. Accepted writes replace their previous index entries; skipped candidates
+leave it unchanged, and dry runs validate the same sequential state before rollback.
+Counting regressions cover valid and rejected entries without timing thresholds.
 
 ## Why
 

@@ -67,7 +67,7 @@ def test_routed_import_failure_rolls_back_updates_and_inserts(routed_podcast, tm
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("split", ["lock", "term", "read", "instance"])
+@pytest.mark.parametrize("split", ["lock", "term", "read", "instance", "language"])
 def test_import_refuses_split_router_decisions(podcast, settings, tmp_path, split):
     class SplitRouter:
         def db_for_write(self, model, **hints):
@@ -78,7 +78,9 @@ def test_import_refuses_split_router_decisions(podcast, settings, tmp_path, spli
             return "default"
 
         def db_for_read(self, model, **hints):
-            return "migration_other" if split == "read" and model is TranscriptGlossaryTerm else "default"
+            if (split == "read" and model is TranscriptGlossaryTerm) or (split == "language" and model is Locale):
+                return "migration_other"
+            return "default"
 
     settings.DATABASE_ROUTERS = [SplitRouter()]
     with pytest.raises(CommandError, match="database"):

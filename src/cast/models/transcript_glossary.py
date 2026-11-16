@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
 from django.conf import settings
@@ -18,6 +19,49 @@ from .voxhelm_settings import VoxhelmSettings
 
 if TYPE_CHECKING:
     from .index_pages import Podcast
+
+
+class GlossaryValidationContext:
+    """Normalized namespace held by a caller owning the podcast write lock.
+
+    Validation only reads this index. Accept a row after its write succeeds;
+    rejected candidates must never release the previous row's spellings.
+    """
+
+    def __init__(self, language: str, terms: Iterable[TranscriptGlossaryTerm]) -> None:
+        self.language = language
+        self.terms: dict[str, dict[int, str]] = {}
+        self.variants: dict[str, dict[int, str]] = {}
+        self.keys: dict[int, tuple[str, list[str]]] = {}
+        for term in terms:
+            self.accept(term)
+
+    @classmethod
+    def for_podcast(cls, podcast: Podcast, terms: Iterable[TranscriptGlossaryTerm]) -> GlossaryValidationContext:
+        return cls(get_podcast_transcript_language(podcast), terms)
+
+    def accept(self, term: TranscriptGlossaryTerm) -> None:
+        pk = term.pk
+        assert pk is not None
+        previous = self.keys.pop(pk, None)
+        if previous is not None:
+            term_key, variants = previous
+            for index, keys in ((self.terms, [term_key]), (self.variants, variants)):
+                for key in keys:
+                    del index[key][pk]
+                    if not index[key]:
+                        del index[key]
+        key = normalize_phrase(term.term)
+        variants = [normalize_phrase(variant) for variant in term.variant_list]
+        self.terms.setdefault(key, {})[pk] = term.term
+        for variant in variants:
+            self.variants.setdefault(variant, {})[pk] = term.term
+        self.keys[pk] = (key, variants)
+
+    @staticmethod
+    def other_owner(index: dict[str, dict[int, str]], key: str, pk: int | None) -> str | None:
+        # At most two owners are visited: the current row and one other row.
+        return next((label for owner, label in reversed(index.get(key, {}).items()) if owner != pk), None)
 
 
 def get_podcast_transcript_language(podcast: Podcast) -> str:
@@ -107,45 +151,68 @@ class TranscriptGlossaryTerm(TimeStampedModel):
 
     variant_count.short_description = _("Variants")  # type: ignore[attr-defined]
 
+    _validation_context: GlossaryValidationContext | None = None
+
+    def full_clean(
+        self,
+        exclude: Iterable[str] | None = None,
+        validate_unique: bool = True,
+        validate_constraints: bool = True,
+        *,
+        validation_context: GlossaryValidationContext | None = None,
+    ) -> None:
+        previous = self._validation_context
+        self._validation_context = validation_context
+        try:
+            super().full_clean(exclude, validate_unique, validate_constraints)
+        finally:
+            self._validation_context = previous
+
     def clean(self) -> None:
         super().clean()
         self.term = " ".join(self.term.split())
         if not self.term or self.podcast_id is None:
             return
-        term_key = normalize_phrase(self.term)
-        others = (
-            TranscriptGlossaryTerm.objects.using(self._state.db).filter(podcast_id=self.podcast_id).exclude(pk=self.pk)
-        )
-        other_terms: dict[str, str] = {}
-        other_variants: dict[str, str] = {}
-        for other in others.only("term", "variants"):
-            other_terms[normalize_phrase(other.term)] = other.term
-            for variant in other.variant_list:
-                other_variants[normalize_phrase(variant)] = other.term
+        context = self._validation_context
+        if context is None:
+            context = GlossaryValidationContext.for_podcast(
+                self.podcast,
+                TranscriptGlossaryTerm.objects.using(self._state.db)
+                .filter(podcast_id=self.podcast_id)
+                .only("term", "variants"),
+            )
+        self.clean_with_context(context)
 
+    def clean_with_context(self, context: GlossaryValidationContext) -> None:
+        """Check spellings against normalized data without database reads or writes."""
+        term_key = normalize_phrase(self.term)
+        other_term = context.other_owner(context.terms, term_key, self.pk)
+        other_variant = context.other_owner(context.variants, term_key, self.pk)
         errors: dict[str, list[str]] = {}
-        if term_key in other_terms:
+        if other_term is not None:
             errors.setdefault("term", []).append(str(_("This podcast already has this term.")))
-        elif term_key in other_variants:
+        elif other_variant is not None:
             errors.setdefault("term", []).append(
                 str(_('"%(term)s" is a variant of the term "%(other)s".'))
-                % {"term": self.term, "other": other_variants[term_key]}
+                % {"term": self.term, "other": other_variant}
             )
 
-        language = get_podcast_transcript_language(self.podcast)
+        language = context.language
         for variant in self.variant_list:
             key = normalize_phrase(variant)
+            other_term = context.other_owner(context.terms, key, self.pk)
+            other_variant = context.other_owner(context.variants, key, self.pk)
             if key == term_key:
                 message = str(_('"%(variant)s" is the term itself.')) % {"variant": variant}
-            elif key in other_terms:
+            elif other_term is not None:
                 message = str(_('"%(variant)s" is the term "%(other)s".')) % {
                     "variant": variant,
-                    "other": other_terms[key],
+                    "other": other_term,
                 }
-            elif key in other_variants:
+            elif other_variant is not None:
                 message = str(_('"%(variant)s" is already a variant of "%(other)s".')) % {
                     "variant": variant,
-                    "other": other_variants[key],
+                    "other": other_variant,
                 }
             elif is_common_word(variant, language):
                 message = str(
