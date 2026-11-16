@@ -83,3 +83,26 @@ def test_cached_media_snapshot_cannot_hide_stored_relationships(post_with_image)
     Post.objects.filter(pk=post.pk).update(body=[])
     synchronize_post_media(post)
     assert not post.images.exists()
+
+
+@pytest.mark.django_db
+def test_synchronization_keeps_subclass_media_lookups(episode, monkeypatch):
+    from cast.models import Episode, Post
+    from cast.post_media import synchronize_post_media
+
+    seen = []
+
+    def recording(name):
+        base = getattr(Post, name)
+
+        def lookup(self):
+            seen.append((name, type(self)))
+            return base.fget(self)
+
+        return property(lookup)
+
+    monkeypatch.setattr(Episode, "media_model_lookup", recording("media_model_lookup"))
+    monkeypatch.setattr(Episode, "media_attr_lookup", recording("media_attr_lookup"))
+    synchronize_post_media(episode)
+    assert ("media_attr_lookup", Episode) in seen
+    assert ("media_model_lookup", Episode) in seen

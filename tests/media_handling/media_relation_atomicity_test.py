@@ -4,7 +4,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from django.db import close_old_connections, connection
+from django.db import DEFAULT_DB_ALIAS, close_old_connections, connection
 from django.db.models import QuerySet
 from django.db.models.signals import m2m_changed
 
@@ -145,7 +145,8 @@ def test_publication_locks_all_gallery_sets_in_one_order(pg_editor_actors, monke
                 return execute(sql, params, many, context)
 
             with connection.execute_wrapper(observe_lock), transaction.atomic():
-                return media_ids_from_body(SimpleNamespace(media_model_lookup={"gallery": Gallery}), body)["gallery"]
+                fake_post = SimpleNamespace(media_model_lookup={"gallery": Gallery})
+                return media_ids_from_body(fake_post, body, using=DEFAULT_DB_ALIAS)["gallery"]
         finally:
             close_old_connections()
 
@@ -179,7 +180,7 @@ def test_delayed_publication_media_uses_committed_generation(pg_editor_actors):
             "value": [{"type": "gallery", "value": {"gallery": [{"type": "item", "value": image.pk}]}}],
         }
     ]
-    post = PostFactory(parent=blog, body=body)
+    post = PostFactory(owner=blog.owner, parent=blog, title="delayed media", slug="delayed-media", body=body)
     post.galleries.clear()
     Gallery.objects.all().delete()
     waiting = threading.Event()

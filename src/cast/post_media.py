@@ -88,9 +88,10 @@ def synchronize_post_media(post: Post) -> None:
         # Publication updates the Post row too. Read its body only after taking
         # the same row lock, so a delayed publication callback cannot restore an
         # older media generation. Do not overwrite request-local draft state.
+        # Lookups stay on the caller's concrete class so subclass overrides apply.
         current = Post.objects.using(using).select_for_update().get(pk=post.pk)
-        from_body = media_ids_from_body(current, current.body, using=using)
-        media_attr_lookup = current.media_attr_lookup
+        from_body = media_ids_from_body(post, current.body, using=using)
+        media_attr_lookup = post.media_attr_lookup
         from_database = {
             kind: set(manager.using(using).values_list("pk", flat=True)) for kind, manager in media_attr_lookup.items()
         }
