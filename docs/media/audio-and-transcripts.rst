@@ -1221,7 +1221,13 @@ live episodes. It warns that manual text corrections are replaced too. Only an
 explicit confirmation POST queues replacement. The signed confirmation binds the
 reviewed transcript files, speaker mappings, correction sidecar, audio upload names
 and duration, and generation attempt. These are rechecked under the audio and
-transcript write locks before submission. Changes or reuse after an attempt return
+transcript write locks before submission. The Voxhelm request itself runs after
+the locks are released: right before it, the reviewed generation attempt is claimed
+once, so a replayed confirmation (for example a double-click) cannot submit a
+second job. A configuration error before that point leaves the confirmation
+usable, and a failed submission is still recorded as a failed generation. The
+confirmation hashes the complete transcript files without the editorial byte
+budget, so an oversized transcript can still be replaced. Changes or reuse after an attempt return
 HTTP 409; reopen the confirmation and review the current state. Existing files remain until import
 completes; the import then keeps them as the private previous version, which the
 transcript page can restore (see "Previous transcript version"). After regeneration,

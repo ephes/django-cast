@@ -1,12 +1,18 @@
 # Round 110: transcript consent and glossary imports
 
-Status: implemented locally; external browser/PostgreSQL acceptance pending.
+Status: done; merge review follow-up applied and PostgreSQL/browser acceptance passed
+(see "Merge acceptance").
 
 The three slices run in order from `develop` (`939e6d7e`):
 
 - `transcript-regeneration-confirmation-generation`: signed transcript/review,
   immutable audio-source and attempt evidence, compared under enqueue write locks;
   stale consent returns HTTP 409 before submission. Completion fences remain in place.
+  Merge review follow-up: the Voxhelm submission runs after the locks are released
+  (failed submissions keep their FAILED generation, autocommit enqueue failures still
+  reach the caller), and the reviewed attempt is claimed by one compare-and-swap right
+  before submission or resumption, so a same-token replay cannot submit twice and a
+  configuration error leaves the confirmation usable.
 - `glossary-import-one-database-transaction`: select one write alias and refuse
   incompatible read/write routing. Parent lock, validation, inserts, conditional
   updates and dry-run/failure rollback use that alias.
@@ -55,7 +61,7 @@ six dependency combinations plus Python 3.13; all seven environments pass on the
 final implementation, including the existing Wagtail v3 experiment subruns.
 No workflow was changed or used.
 
-The merge clerk must run these outside the worker sandbox:
+The worker sandbox could not run these (both passed at merge acceptance below):
 
 ```sh
 just check-postgres
@@ -70,10 +76,17 @@ initdb -D /Users/jochen/workspaces/ws-cx-cx-r110-django-cast/.cache/postgres -A 
 ```
 
 `shmget` reports that no shared-memory segment can be created. Chromium starts
-but its Mach-port `bootstrap_check_in` is refused by the sandbox. These are
-uncompleted environment-dependent acceptance checks, not passing tests.
+but its Mach-port `bootstrap_check_in` is refused by the sandbox. Inside the
+sandbox these remained environment-dependent checks, not passing tests.
 The two-alias rollback fixtures run in the regular Python suite; the existing
 PostgreSQL glossary concurrency fixtures remain in `just check-postgres`.
 
-No owner decision is required. Everything remains on the local
-`codex-q/r110-django-cast` branch for clerk review; nothing is pushed or merged.
+No owner decision is required.
+
+## Merge acceptance
+
+Outside the sandbox, with the merge-review follow-up applied: `just check`,
+`just check-compatibility`, `just check-python`, `just check-postgres` (against a
+disposable PostgreSQL 17 container via `CAST_TEST_DB_PORT`) and
+`CAST_RUN_BROWSER=1 uv run pytest -q tests/transcript_admin_browser_test.py`
+all pass. The changed consent and glossary test files also pass on PostgreSQL.

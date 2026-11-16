@@ -6,6 +6,7 @@ import hashlib
 import json
 
 from django.core import signing
+from django.utils.translation import gettext_lazy as _
 
 from cast.models import Audio, Transcript, TranscriptGeneration
 
@@ -14,8 +15,14 @@ from .editing import transcript_evidence
 SALT = "cast.transcript-regeneration"
 
 
+STALE_CONFIRMATION_MESSAGE = _("Reload and confirm replacement of the current transcript first.")
+
+
 class StaleRegenerationConfirmation(ValueError):
     """The editor must review a fresh replacement confirmation."""
+
+    def __init__(self, message: object = STALE_CONFIRMATION_MESSAGE) -> None:
+        super().__init__(message)
 
 
 def regeneration_revision(audio: Audio, transcript: Transcript) -> str:
@@ -35,7 +42,7 @@ def regeneration_revision(audio: Audio, transcript: Transcript) -> str:
     generation = TranscriptGeneration.objects.using(audio._state.db).filter(audio_id=audio.pk).first()
     evidence = {
         "database": audio._state.db,
-        **transcript_evidence(transcript),
+        **transcript_evidence(transcript, enforce_byte_budget=False),
         "mappings": mappings,
         "attempt": [generation.pk, str(generation.attempt_id)] if generation else None,
     }
@@ -55,4 +62,4 @@ def check_regeneration(audio: Audio, transcript: Transcript | None, token: str) 
     except signing.BadSignature:
         revision = None
     if transcript is None or revision != regeneration_revision(audio, transcript):
-        raise StaleRegenerationConfirmation("Reload and confirm replacement of the current transcript first.")
+        raise StaleRegenerationConfirmation
