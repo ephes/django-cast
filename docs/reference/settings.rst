@@ -810,6 +810,12 @@ the original public-media behavior.
 media. If omitted, django-cast falls back to ``CAST_PRIVATE_MEDIA_ROOT`` or a
 local ``cast-private-media`` directory next to ``MEDIA_ROOT``.
 
+These fallbacks apply only to omitted aliases. If ``cast_public_transcripts`` or
+``cast_private_media`` is configured but its backend cannot be imported or
+initialized, the error propagates instead of selecting another storage. Correct
+the backend configuration before retrying; files must not silently move to a
+different storage policy.
+
 Uploaded contributor voice-reference clips, the private
 ``Transcript.speakers`` known-speaker sidecar and the private
 ``Transcript.corrections`` glossary sidecar use ``STORAGES["cast_voice_references"]``

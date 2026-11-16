@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from django.conf import settings
-from django.core.files.storage import FileSystemStorage, InvalidStorageError, Storage, default_storage, storages
+from django.core.files.storage import FileSystemStorage, Storage, default_storage, storages
 
 from cast import appsettings
 
@@ -29,10 +29,9 @@ def get_private_filesystem_storage(location: str) -> PrivateFileSystemStorage:
 
 
 def get_private_media_storage() -> Storage:
-    try:
+    if PRIVATE_MEDIA_STORAGE_ALIAS in storages.backends:
         return storages[PRIVATE_MEDIA_STORAGE_ALIAS]
-    except InvalidStorageError:
-        return get_private_filesystem_storage(get_private_media_root())
+    return get_private_filesystem_storage(get_private_media_root())
 
 
 def get_transcript_storage() -> Storage:
@@ -43,11 +42,8 @@ def get_transcript_storage() -> Storage:
     that already configured the former private-media alias for these files, and
     otherwise preserve the original default-storage behavior.
     """
-    try:
+    if TRANSCRIPT_STORAGE_ALIAS in storages.backends:
         return storages[TRANSCRIPT_STORAGE_ALIAS]
-    except InvalidStorageError:
-        pass
-    try:
+    if PRIVATE_MEDIA_STORAGE_ALIAS in storages.backends:
         return storages[PRIVATE_MEDIA_STORAGE_ALIAS]
-    except InvalidStorageError:
-        return default_storage
+    return default_storage

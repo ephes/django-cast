@@ -4,6 +4,10 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Correct broken ``cast_private_media`` and ``cast_public_transcripts`` storage
+  backends before upgrading. Configured backend import/initialization failures
+  now propagate; compatibility storage fallbacks apply only to omitted aliases.
+
 - Custom Audio/Video chooser integrations must consume ``edit_url`` instead of
   ``edit_link`` in modal and telepath state, matching Wagtail's chooser contract.
 
