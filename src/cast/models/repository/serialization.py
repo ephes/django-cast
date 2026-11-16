@@ -52,7 +52,10 @@ def deserialize_audio(data: dict[str, Any]) -> "Audio":
     """Reconstruct an Audio model instance from a serialized dict."""
     from .. import Audio
 
-    return Audio(**data)
+    audio_data = data.copy()
+    if "duration" in audio_data:
+        audio_data["duration"] = Audio._meta.get_field("duration").to_python(audio_data["duration"])
+    return Audio(**audio_data)
 
 
 def serialize_transcript(transcript: "Transcript") -> dict[str, Any]:
@@ -280,6 +283,9 @@ def deserialize_post(data: dict[str, Any]) -> "Post":
 
     post_data = data.copy()
     post_data.pop("type", None)
+    for name in ("uuid", "visible_date", "last_published_at"):
+        if name in post_data:
+            post_data[name] = Post._meta.get_field(name).to_python(post_data[name])
     return Post(**post_data)
 
 
@@ -316,6 +322,9 @@ def deserialize_episode(data: dict[str, Any]) -> "Episode":
     if (season_data := episode_data.get("season")) is not None:
         episode_data["season"] = deserialize_season(season_data)
     assignments_data = episode_data.pop("contributor_assignments", [])
+    for name in ("uuid", "visible_date", "last_published_at"):
+        if name in episode_data:
+            episode_data[name] = Episode._meta.get_field(name).to_python(episode_data[name])
     episode = Episode(**episode_data)
     episode._visible_contributor_assignments = [
         deserialize_episode_contributor(assignment_data) for assignment_data in assignments_data

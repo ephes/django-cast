@@ -525,3 +525,74 @@ def test_create_from_cachable_data_use_audio_player_false():
     }
     repository = BlogIndexContext.create_from_cachable_data(data=data)
     assert repository.use_audio_player is False
+
+
+def test_blog_cache_json_roundtrip_renders_all_media(blog_data, rf, mocker):
+    mocker.patch("django.template.context_processors.get_token", return_value="synthetic-csrf")
+    import json
+
+    from django.core.serializers.json import DjangoJSONEncoder
+
+    # DjangoJSONEncoder represents datetimes at millisecond precision.
+    blog_data["post_by_id"][1]["visible_date"] = blog_data["post_by_id"][1]["visible_date"].replace(microsecond=0)
+    blog_data["cover_by_post_id"] = {1: "/cover.jpg"}
+    blog_data["cover_alt_by_post_id"] = {1: "Synthetic cover"}
+    snapshot = json.loads(json.dumps(blog_data, cls=DjangoJSONEncoder))
+    direct = BlogIndexContext.create_from_cachable_data(data=deepcopy(blog_data))
+    rebuilt = BlogIndexContext.create_from_cachable_data(data=snapshot)
+    post = rebuilt.post_by_id[1]
+    assert post.owner.username == "owner"
+    assert post.page_url == "/some-post/"
+    assert post.cover_image_url == "/cover.jpg"
+    assert post.cover_alt_text_display == "Synthetic cover"
+    assert rebuilt.queryset_data.absolute_page_url_by_id == {1: "http://testserver/some-post/"}
+    assert set(post.media_lookup) == {"image", "video", "audio"}
+    assert all(set(media) == {1} for media in post.media_lookup.values())
+    request = rf.get("/some-blog/")
+    request.htmx = False
+    assert (
+        rebuilt.blog.serve(request, repository=rebuilt).render().content.decode().splitlines()
+        == direct.blog.serve(request, repository=direct).render().content.decode().splitlines()
+    )
+
+
+def test_blog_cache_reconstruction_keeps_snapshot_independent(blog_data):
+    import json
+
+    from django.core.serializers.json import DjangoJSONEncoder
+
+    original = deepcopy(blog_data)
+    first = BlogIndexContext.create_from_cachable_data(data=blog_data)
+    assert blog_data == original
+    first.pagination_context["object_list"].clear()
+    first.audio_by_id[1].data["request"] = "first"
+    first.page_url_by_id[1] = "/changed/"
+    first.root_nav_links.clear()
+    second = BlogIndexContext.create_from_cachable_data(data=blog_data)
+    assert len(second.pagination_context["object_list"]) == 1
+    assert "request" not in second.audio_by_id[1].data
+    assert second.page_url_by_id[1] == "/some-post/"
+    assert second.root_nav_links
+    assert blog_data == original
+    json.dumps(blog_data, cls=DjangoJSONEncoder)
+
+
+@pytest.mark.parametrize("key", ["invalid", "01", True, 1.5, 0, -1])
+def test_blog_cache_rejects_malformed_id_keys(blog_data, key):
+    blog_data["images"] = {key: next(iter(blog_data["images"].values()))}
+    with pytest.raises(ValueError):
+        BlogIndexContext.create_from_cachable_data(data=blog_data)
+
+
+def test_deserialize_old_partial_audio_cache_keeps_defaults():
+    payload = {"id": 1, "title": "Synthetic old cache", "collection": None}
+    rebuilt = deserialize_audio(payload)
+    assert rebuilt.duration is None
+    assert payload == {"id": 1, "title": "Synthetic old cache", "collection": None}
+
+
+def test_blog_cache_refuses_colliding_integer_and_json_keys(blog_data):
+    image = blog_data["images"][1]
+    blog_data["images"] = {1: image, "1": image}
+    with pytest.raises(ValueError, match="duplicate"):
+        BlogIndexContext.create_from_cachable_data(data=blog_data)

@@ -141,3 +141,52 @@ def test_two_sidecar_edits_have_one_winner(concurrent_transcript, monkeypatch):
     assert sorted(results) == ["conflict", "saved"]
     current = Transcript.objects.get(pk=transcript.pk)
     assert len(current.get_known_speaker_editor_decisions()) == 1
+
+
+def test_restore_reserves_backup_before_reading(concurrent_transcript, monkeypatch):
+    from cast.transcripts import versions
+
+    transcript = concurrent_transcript
+    transcript.previous_version.save("previous.json", ContentFile(versions.bundle(transcript)))
+    read = threading.Event()
+    editing = threading.Event()
+    edited = threading.Event()
+    release = threading.Event()
+    original_read = versions.read_previous
+
+    def paused_read(current):
+        result = original_read(current)
+        read.set()
+        assert release.wait(10)
+        return result
+
+    monkeypatch.setattr(versions, "read_previous", paused_read)
+
+    def restore():
+        close_old_connections()
+        try:
+            versions.restore(Transcript.objects.get(pk=transcript.pk))
+        finally:
+            close_old_connections()
+
+    def edit_backup():
+        close_old_connections()
+        try:
+            editing.set()
+            Transcript.objects.filter(pk=transcript.pk).update(previous_version="new-generation.json")
+            edited.set()
+        finally:
+            close_old_connections()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first = pool.submit(restore)
+        try:
+            assert read.wait(10)
+            second = pool.submit(edit_backup)
+            assert editing.wait(10)
+            assert not edited.wait(0.2)
+        finally:
+            release.set()
+        first.result(timeout=20)
+        second.result(timeout=20)
+    assert edited.is_set()

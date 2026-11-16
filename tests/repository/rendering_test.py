@@ -760,3 +760,11 @@ def test_feed_repository_last_build_date_uses_newest_visible_date(rf, episode):
 
 
 # Small tests for repository coverage
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("referer", ["http://[", "http://[not-ipv6]/", "http://example.com\uff1a80/"])
+def test_post_detail_malformed_referer_falls_back(rf, post_in_blog, referer):
+    request = rf.get(post_in_blog.get_url(), HTTP_REFERER=referer)
+    repository = PostDetailContext.create_from_django_models(request=request, post=post_in_blog)
+    assert repository.blog_url == post_in_blog.blog.get_url()

@@ -50,7 +50,10 @@ def _blog_url_from_referer(request: HttpRequest, base_blog_url: str) -> str:
     referer = request.headers.get("referer", "")
     if not referer:
         return base_blog_url
-    parsed = urlparse(referer)
+    try:
+        parsed = urlparse(referer)
+    except ValueError:
+        return base_blog_url
     # Only use referer from the same host (prevent open redirect)
     if parsed.netloc and parsed.netloc != request.get_host():
         return base_blog_url

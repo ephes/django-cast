@@ -436,7 +436,10 @@ filters for rendering comments in templates.
     post-submission by the spam filter).
 
 ``{{ object|comments_count }}``
-    Filter that returns the number of comments for the object.
+    Filter that returns the public comment count for the object using the same
+    policy as ``get_comment_list``: the configured Django ``SITE_ID``, public
+    moderation state and ``COMMENTS_HIDE_REMOVED``. It does not expose hidden
+    moderation totals.
 
 .. _comments_moderation:
 

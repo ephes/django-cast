@@ -71,7 +71,7 @@ class StagedFileReplacementGroup:
     def stage(self, field: Any, filename: str, content: bytes) -> StagedFileReplacement:
         try:
             replacement = stage_file_replacement(field, filename, content)
-        except Exception:
+        except BaseException:
             self.rollback()
             raise
         self.replacements.append(replacement)
@@ -103,12 +103,13 @@ class StagedFileReplacementGroup:
                 else:
                     save(model, **save_kwargs)
                 self._pending_using = using
-                transaction.on_commit(self._commit, using=using)
+                transaction.on_commit(self.commit, using=using)
         except Exception:
             self.rollback()
             raise
 
-    def _commit(self) -> None:
+    def commit(self) -> None:
+        """Finalize owned files after the database transaction commits."""
         if self._rolled_back:
             return
         self._saved = True
@@ -211,7 +212,7 @@ def stage_file_replacement(field: Any, filename: str, content: bytes) -> StagedF
             attempted_name = replacement_filename
             field.save(replacement_filename, ContentFile(content), save=False)
             new_name = field.name
-    except Exception:
+    except BaseException:
         failed_name = field.name if field and field.name else ""
         if failed_name and failed_name != old_name:
             _delete_file(field.storage, failed_name)

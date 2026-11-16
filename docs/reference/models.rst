@@ -581,6 +581,15 @@ BlogIndexContext
 
 Repository for blog index pages with filtering.
 
+Cached reconstruction accepts integer primary keys and their canonical JSON
+string equivalents in every ID-keyed map, including media, renditions, owner,
+URL and cover maps. Invalid or duplicate identities are refused. Hydration
+copies the snapshot before attaching live models and request state, so the same
+serialized snapshot can be reused without cross-request mutation.
+
+The return-to-blog link preserves a same-blog Referer query. Missing, malformed
+or foreign-host Referer values fall back to the base blog URL.
+
 **Features:**
 
 - Filtered and paginated posts
