@@ -13,11 +13,13 @@ import logging
 from collections import OrderedDict
 from typing import Any, cast
 
+from django.db import transaction
 from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.cache import patch_cache_control, patch_vary_headers
+from django.utils.decorators import method_decorator
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
@@ -292,6 +294,9 @@ class FacetCountListView(generics.ListAPIView):
         return Blog.objects.all().live().public().order_by("-first_published_at")
 
 
+# Read-only: the modal calculator owns a short repeatable-read snapshot, which
+# PostgreSQL only allows outside an ``ATOMIC_REQUESTS`` transaction.
+@method_decorator(transaction.non_atomic_requests, name="dispatch")
 class FacetCountsDetailView(generics.RetrieveAPIView):
     serializer_class = FacetCountSerializer
     permission_classes = (AllowAny,)

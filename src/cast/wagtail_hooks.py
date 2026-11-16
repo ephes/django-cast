@@ -341,10 +341,14 @@ class PageLinkHandlerWithCache(PageLinkHandler):
             return self._get_cache()[key]
 
         def __setitem__(self, key: int, value: str | None) -> None:
-            self._get_cache()[key] = value
+            cache = self._get_cache().copy()
+            cache[key] = value
+            self._storage.set((get_language(), cache))
 
         def __delitem__(self, key: int) -> None:
-            del self._get_cache()[key]
+            cache = self._get_cache().copy()
+            del cache[key]
+            self._storage.set((get_language(), cache))
 
         def __iter__(self) -> Iterator[int]:
             return iter(self._get_cache())
@@ -358,6 +362,12 @@ class PageLinkHandlerWithCache(PageLinkHandler):
         def clear(self) -> None:
             self._storage.set((get_language(), {}))
 
+        def publish_many(self, entries: Mapping[int, str | None]) -> None:
+            """Copy once for a batch so filling a feed's cache stays linear."""
+            cache = self._get_cache().copy()
+            cache.update(entries)
+            self._storage.set((get_language(), cache))
+
         @overload
         def pop(self, key: int) -> str | None: ...  # pragma: no cover
 
@@ -368,12 +378,13 @@ class PageLinkHandlerWithCache(PageLinkHandler):
         def pop(self, key: int, default: _T) -> str | None | _T: ...  # pragma: no cover
 
         def pop(self, key: int, default: object = _missing) -> object:
-            if default is self._missing:
-                return self._get_cache().pop(key)
-            return self._get_cache().pop(key, default)
+            cache = self._get_cache().copy()
+            value = cache.pop(key) if default is self._missing else cache.pop(key, default)
+            self._storage.set((get_language(), cache))
+            return value
 
-    cache: MutableMapping[int, str | None] = _ContextLocalCache("page_link_handler_cache")
-    absolute_cache: MutableMapping[int, str | None] = _ContextLocalCache("page_link_handler_absolute_cache")
+    cache: _ContextLocalCache = _ContextLocalCache("page_link_handler_cache")
+    absolute_cache: _ContextLocalCache = _ContextLocalCache("page_link_handler_absolute_cache")
     _render_absolute_urls: ContextVar[bool] = ContextVar("page_link_handler_absolute_urls", default=False)
 
     @classmethod
@@ -381,6 +392,14 @@ class PageLinkHandlerWithCache(PageLinkHandler):
         cls.cache[page_id] = url
         if absolute_url is not None:
             cls.absolute_cache[page_id] = absolute_url
+
+    @classmethod
+    def cache_urls(cls, urls: Mapping[int, str], absolute_urls: Mapping[int, str]) -> None:
+        """Cache many page URLs with one copy per context-local cache."""
+        cls.cache.publish_many(urls)
+        cls.absolute_cache.publish_many(
+            {page_id: absolute_urls[page_id] for page_id in urls if page_id in absolute_urls}
+        )
 
     @classmethod
     def clear_cache(cls) -> None:

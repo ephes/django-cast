@@ -755,6 +755,7 @@ class TestMediaProbeBudget:
 @pytest.fixture(params=["test.png", "long" * 23 + ".png"])
 def image_upload_storage(db, mocker, image_1px, request):
     """Overwrite-capable, in-memory storage with an unrelated existing image."""
+    Collection.get_first_root_node() or Collection.add_root(instance=Collection(name="Synthetic root"))
     image_model = editor_media.get_image_model()
     storage = InMemoryStorage()
     mocker.patch.object(image_model._meta.get_field("file"), "storage", storage)
@@ -899,3 +900,78 @@ def test_upload_lease_blocks_retries_until_expiry(api_client, superuser, mocker,
     assert api_client.post(url, {}, format="multipart").status_code == 429
     mocker.patch("django.core.cache.backends.base.time.time", return_value=time.time() + 6)
     assert api_client.post(url, {}, format="multipart").status_code == 400
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("revocation", ["choose", "add", "inactive", "deleted"])
+def test_image_publication_rechecks_committed_authority(
+    api_client, image_1px, image_upload_storage, monkeypatch, revocation
+):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.contrib.auth import get_user_model
+    from django.db import close_old_connections
+
+    storage, existing, original_bytes = image_upload_storage
+    user = UserFactory(is_staff=True)
+    grant_wagtail_admin_access(user)
+    collection = Collection.get_first_root_node()
+    for action in ("add", "choose"):
+        grant_collection_permission(user, collection, app_label="wagtailimages", codename=f"{action}_image")
+    original_ingest = editor_media.ingest_upload
+
+    def revoke():
+        close_old_connections()
+        try:
+            if revocation == "inactive":
+                get_user_model().objects.filter(pk=user.pk).update(is_active=False)
+            elif revocation == "deleted":
+                get_user_model().objects.filter(pk=user.pk).delete()
+            else:
+                GroupCollectionPermission.objects.filter(
+                    group__user=user, permission__codename=f"{revocation}_image"
+                ).delete()
+        finally:
+            close_old_connections()
+
+    def ingest_then_revoke(*args, **kwargs):
+        image = original_ingest(*args, **kwargs)
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(revoke).result(timeout=10)
+        return image
+
+    monkeypatch.setattr(editor_media, "ingest_upload", ingest_then_revoke)
+    api_client.force_authenticate(user=user)
+    response = api_client.post(
+        reverse("cast:api:editor_media_images"),
+        {"title": "Revoked", "file": image_1px, "collection": collection.pk},
+        format="multipart",
+    )
+    assert response.status_code == 403, response.content
+    assert response.json()["code"] == "post_save_permission_denied"
+    assert not editor_media.get_image_model().objects.filter(title="Revoked").exists()
+    assert storage.open(existing.file.name).read() == original_bytes
+    assert storage.listdir("original_images")[1] == [existing.file.name.split("/")[-1]]
+
+
+@pytest.mark.django_db
+def test_image_permission_refusal_reports_cleanup_failure(
+    api_client, superuser, image_1px, image_upload_storage, mocker
+):
+    storage, existing, original_bytes = image_upload_storage
+    mocker.patch.object(
+        editor_media, "_usable_image_collections", side_effect=[Collection.objects.all(), Collection.objects.none()]
+    )
+    cleanup = mocker.patch.object(editor_media, "_cleanup_media_object", return_value=False)
+    api_client.force_authenticate(user=superuser)
+    response = api_client.post(
+        reverse("cast:api:editor_media_images"),
+        {"title": "Recovery image", "file": image_1px, "collection": existing.collection_id},
+        format="multipart",
+    )
+    assert response.status_code == 500
+    assert response.json()["code"] == "cleanup_failed"
+    image = editor_media.get_image_model().objects.get(title="Recovery image")
+    cleanup.assert_called_once_with(image, ("file",))
+    assert storage.exists(image.file.name)
+    assert storage.open(existing.file.name).read() == original_bytes

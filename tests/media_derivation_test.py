@@ -213,7 +213,7 @@ def test_derivation_services_preserve_default_keyword_duplicates_on_django_51_an
         force_insert=True,
         force_update=True,
         using="archive",
-        update_fields=["duration"],
+        update_fields=("duration",),
     )
 
 
@@ -365,3 +365,143 @@ def test_legacy_media_serializers_use_derivation_services(user, mocker):
 
     save_audio.assert_called_once_with(audio)
     save_video.assert_called_once_with(video)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["audio", "video"])
+@pytest.mark.parametrize("direct", [True, False])
+@pytest.mark.parametrize("empty", [list, lambda: iter(())])
+def test_empty_partial_media_save_is_complete_noop(audio, video, mocker, kind, direct, empty):
+    obj = audio if kind == "audio" else video
+    obj.title = "Must not persist"
+    probes = [
+        mocker.patch.object(obj, name)
+        for name in (("create_duration", "size_to_metadata") if kind == "audio" else ("create_poster",))
+    ]
+    save = mocker.spy(obj, "save")
+    validate = mocker.patch(f"cast.media_derivation.validate_{kind}_upload")
+    if direct:
+        helper = save_audio_with_derivations if kind == "audio" else save_video_with_derivations
+        helper(obj, update_fields=empty())
+        save.assert_not_called()
+    else:
+        options = {"duration": True, "cache_file_sizes": True} if kind == "audio" else {"poster": True}
+        obj.save(update_fields=empty(), **options)
+        assert save.call_count == 1
+    for probe in probes:
+        probe.assert_not_called()
+    validate.assert_not_called()
+    obj.refresh_from_db()
+    assert obj.title != "Must not persist"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["audio", "video"])
+def test_title_only_save_excludes_unsaved_media_and_derivations(audio, video, mocker, kind):
+    from django.core.files.uploadedfile import SimpleUploadedFile
+
+    obj = audio if kind == "audio" else video
+    source = "mp3" if kind == "audio" else "original"
+    setattr(obj, source, f"persisted-source.{source}")
+    obj.save()
+    previous = getattr(obj, source).name
+    setattr(obj, source, SimpleUploadedFile("excluded.bin", b"synthetic excluded upload"))
+    obj.title = "Title only"
+    validate = mocker.patch(f"cast.media_derivation.validate_{kind}_upload")
+    if kind == "video":
+        poster = obj.poster.name or ""
+
+        def make_poster():
+            obj.poster.name = "wrong-source-poster.jpg"
+
+        derive = mocker.patch.object(obj, "create_poster", side_effect=make_poster)
+        save_video_with_derivations(obj, update_fields=iter(["title"]))
+    else:
+        derive = mocker.patch.object(obj, "create_duration")
+        sizes = mocker.patch.object(obj, "size_to_metadata")
+        save_audio_with_derivations(obj, update_fields=iter(["title"]))
+        sizes.assert_not_called()
+    derive.assert_not_called()
+    validate.assert_not_called()
+    assert not getattr(obj, source)._committed
+    obj.refresh_from_db()
+    assert obj.title == "Title only"
+    assert getattr(obj, source).name == previous
+    if kind == "video":
+        assert (obj.poster.name or "") == poster
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("kind", ["audio", "video"])
+@pytest.mark.parametrize("explicit", [False, True])
+def test_derivations_follow_write_router_for_replica_instances(audio, video, settings, mocker, kind, explicit):
+    from datetime import timedelta
+
+    from django.contrib.auth import get_user_model
+    from wagtail.models import Collection
+
+    from cast.models import Audio, Video
+
+    alias = "migration_other"
+    original = audio if kind == "audio" else video
+    model = Audio if kind == "audio" else Video
+    get_user_model().objects.using(alias).create(pk=original.user_id, username="synthetic-replica")
+    Collection.objects.using(alias).create(
+        pk=original.collection_id, path="0001", depth=1, numchild=0, name="Synthetic"
+    )
+    model.objects.using(alias).create(
+        pk=original.pk, user_id=original.user_id, collection_id=original.collection_id, title="Replica"
+    )
+    loaded = model.objects.using(alias).get(pk=original.pk)
+    loaded.title = "Routed write"
+
+    class WriteRouter:
+        def db_for_write(self, model, **hints):
+            return "default"
+
+    settings.DATABASE_ROUTERS = [WriteRouter()]
+    spy = mocker.spy(loaded, "save")
+    if kind == "audio":
+        mocker.patch.object(
+            loaded, "create_duration", side_effect=lambda: setattr(loaded, "duration", timedelta(seconds=4))
+        )
+        mocker.patch.object(loaded, "size_to_metadata")
+        save_audio_with_derivations(loaded, **({"using": alias} if explicit else {}))
+    else:
+        mocker.patch.object(loaded, "create_poster", side_effect=lambda: setattr(loaded.poster, "name", "derived.jpg"))
+        save_video_with_derivations(loaded, **({"using": alias} if explicit else {}))
+    destination = alias if explicit else "default"
+    assert [call.kwargs["using"] for call in spy.call_args_list] == [destination, destination]
+    assert model.objects.using(destination).get(pk=original.pk).title == "Routed write"
+    other = "default" if explicit else alias
+    assert model.objects.using(other).get(pk=original.pk).title != "Routed write"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["audio", "video"])
+def test_partial_save_with_all_sources_can_derive(audio, video, mocker, kind):
+    from datetime import timedelta
+
+    if kind == "audio":
+        audio.duration = None
+        duration = mocker.patch.object(
+            audio, "create_duration", side_effect=lambda: setattr(audio, "duration", timedelta(seconds=7))
+        )
+        sizes = mocker.patch.object(
+            audio, "size_to_metadata", side_effect=lambda: setattr(audio, "data", {"size": {}})
+        )
+        save_audio_with_derivations(audio, update_fields=iter([*audio.audio_formats, "title"]))
+        duration.assert_called_once_with()
+        sizes.assert_called_once_with()
+        audio.refresh_from_db()
+        assert audio.duration == timedelta(seconds=7)
+        assert audio.data == {"size": {}}
+    else:
+        video.poster.name = ""
+        derive = mocker.patch.object(
+            video, "create_poster", side_effect=lambda: setattr(video.poster, "name", "derived.jpg")
+        )
+        save_video_with_derivations(video, update_fields=iter(["original"]))
+        derive.assert_called_once_with()
+        video.refresh_from_db()
+        assert video.poster.name == "derived.jpg"

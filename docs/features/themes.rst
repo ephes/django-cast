@@ -574,3 +574,10 @@ in your project's settings:
 .. code-block:: python
 
     CSRF_FAILURE_VIEW = "cast.views.defaults.csrf_failure"
+
+Blog HTMX targets
+-----------------
+
+Blog listing requests with ``HX-Request: true`` select the paging fragment only
+for ``HX-Target: paging-area``. Missing, empty and unknown targets render the
+full blog page. Existing response cache variation remains unchanged.

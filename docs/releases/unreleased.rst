@@ -50,6 +50,25 @@ Unreleased
 - Require confirmation before regenerating an existing transcript in the admin;
   leave stale speaker choices empty until explicitly reviewed again.
 
+- Honor the write router before an instance's read database throughout media
+  derivations. Recheck current collection add/choose authority after editor image
+  ingest and clean up newly owned uploads when permission is withdrawn.
+
+- Honor empty audio/video ``update_fields`` as a complete no-op, including
+  validation and storage work. Derive posters and audio metadata only when their
+  source fields are included in a partial save, preserving source coherence.
+
+- Reject repeated editor JSON members before mutation, render a full blog page
+  for unknown HTMX targets, and isolate warmed rich-text URL caches across copied
+  contexts and async tasks.
+
+- Keep modal facet membership in database subqueries and compute all groups in a
+  single read snapshot. The facet counts view opts out of ``ATOMIC_REQUESTS`` so
+  PostgreSQL sites with the default isolation keep working. Database backends
+  other than SQLite/PostgreSQL and search backends without a database queryset
+  return HTTP 503 instead of unbounded ID lists or inconsistent counts. Filling
+  the rich-text link cache for a feed copies each context-local cache once.
+
 - Bound editorial transcript evidence hashing to 10 MiB per artifact and 30 MiB
   total, with bounded reads and an editorial error before signing partial
   evidence. Saving transcripts and public speaker-mapping checks still hash the

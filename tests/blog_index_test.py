@@ -310,3 +310,27 @@ class TestBlogIndexPagination:
         blog_url_with_invalid_pagenum = f"{blog_url}?page=666"
         r = client.get(blog_url_with_invalid_pagenum)
         assert r.status_code == 404
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("target", ["unrecognized", "", None, "paging-area"])
+def test_htmx_template_target_is_allowlisted(rf, target):
+    from django_htmx.middleware import HtmxDetails
+
+    request = rf.get("/", HTTP_HX_REQUEST="true", **({"HTTP_HX_TARGET": target} if target is not None else {}))
+    request.htmx = HtmxDetails(request)
+    template = Blog(template_base_dir="plain").get_template(request)
+    filename = "_list_of_posts_and_paging_controls.html" if target == "paging-area" else "blog_list_of_posts.html"
+    assert template == f"cast/plain/{filename}"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("target", ["unrecognized", None, "paging-area"])
+def test_htmx_target_response_uses_full_page_or_paging_fragment(client, blog, post, target):
+    headers = {"HTTP_HX_REQUEST": "true"}
+    if target is not None:
+        headers["HTTP_HX_TARGET"] = target
+    response = client.get(blog.get_url(), **headers)
+    assert response.status_code == 200
+    assert (b"<html" in response.content.lower()) is (target != "paging-area")
+    assert post.title in response.content.decode()

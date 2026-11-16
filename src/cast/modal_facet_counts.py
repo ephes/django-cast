@@ -1,20 +1,23 @@
 import logging
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal, TypedDict, cast
 
 from django.core import validators
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import connections, models, transaction
 from django.db.models import Expression
 from django.db.models.functions import TruncMonth
+from rest_framework.exceptions import APIException
 from taggit.models import Tag
 
 from cast import appsettings
-from cast.filters import PostFilterset, parse_date_facets
-from cast.models import Blog
+from cast.filters import parse_date_facets
+from cast.models import Blog, Post
 from cast.models.snippets import PostCategory
+from cast.search_utils import ModelSearchQuerySet, safe_modelsearch_results
 
 logger = logging.getLogger(__name__)
 
@@ -64,10 +67,51 @@ class AggregationQueryResolver:
         return _queryset_from_pk_fallback(queryset)
 
 
+class FacetSnapshotUnavailable(APIException):
+    status_code = 503
+    default_detail = "Exact modal facet snapshots are unavailable on this database or search backend."
+    default_code = "facet_snapshot_unavailable"
+
+    def __init__(self) -> None:
+        super().__init__({"code": self.default_code, "detail": self.default_detail})
+
+
+@contextmanager
+def _facet_snapshot(using: str) -> Iterator[None]:
+    """Own a short repeatable-read transaction when the caller has none.
+
+    Inside a caller's PostgreSQL transaction the isolation level can no longer
+    change. Repeatable read or serializable already give one snapshot; under a
+    weaker level each read sees its own committed state, as before exact
+    snapshots existed, instead of failing a public endpoint. The public view
+    opts out of ``ATOMIC_REQUESTS`` so requests always own the snapshot.
+    """
+    connection = connections[using]
+    if connection.vendor not in {"sqlite", "postgresql"}:
+        raise FacetSnapshotUnavailable()
+    nested = connection.in_atomic_block
+    with transaction.atomic(using=using):
+        if connection.vendor == "postgresql":
+            with connection.cursor() as cursor:
+                if nested:
+                    cursor.execute("SHOW transaction_isolation")
+                    if cursor.fetchone()[0] not in {"repeatable read", "serializable"}:
+                        logger.debug("Modal facets share the caller's weaker transaction; reads are per statement.")
+                else:
+                    cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+        yield
+
+
 def get_modal_facet_counts(blog: Blog, params: Mapping[str, str]) -> ModalFacetResponse:
+    using = Post.objects.db
+    with _facet_snapshot(using):
+        return _get_modal_facet_counts(blog, params, using)
+
+
+def _get_modal_facet_counts(blog: Blog, params: Mapping[str, str], using: str) -> ModalFacetResponse:
     selection = _normalize_selection(params)
     configured_groups = _get_configured_modal_groups()
-    base_queryset = blog.unfiltered_published_posts
+    base_queryset = blog.unfiltered_published_posts.using(using)
     aggregation_resolver = AggregationQueryResolver()
 
     result_queryset = _apply_selection(base_queryset, selection)
@@ -145,7 +189,18 @@ def _apply_selection(
 ) -> models.QuerySet:
     selected_queryset = queryset
     if selection.search:
-        selected_queryset = PostFilterset.fulltext_search(selected_queryset, "search", selection.search)
+        results = safe_modelsearch_results(cast(ModelSearchQuerySet, selected_queryset), selection.search)
+        if isinstance(results, models.QuerySet):
+            # The results helper returns the input queryset for normalized-empty
+            # searches. Facet filtering historically treats those as no matches.
+            selected_queryset = results.none()
+        else:
+            get_queryset = getattr(results, "get_queryset", None)
+            if get_queryset is None:
+                raise FacetSnapshotUnavailable()
+            selected_queryset = get_queryset()
+            if not isinstance(selected_queryset, models.QuerySet):
+                raise FacetSnapshotUnavailable()
 
     if excluded_group != "date_facets" and selection.date_facets:
         year_month = parse_date_facets(selection.date_facets)
@@ -217,9 +272,8 @@ def _fetch_date_universe(base_queryset: models.QuerySet, resolver: AggregationQu
 def _fetch_tag_counts(queryset: models.QuerySet, resolver: AggregationQueryResolver) -> dict[str, int]:
     aggregation_queryset = _queryset_for_aggregation(queryset, resolver)
     rows = (
-        Tag.objects.annotate(
-            num_posts=models.Count("post", filter=models.Q(post__in=aggregation_queryset), distinct=True)
-        )
+        Tag.objects.using(aggregation_queryset.db)
+        .annotate(num_posts=models.Count("post", filter=models.Q(post__in=aggregation_queryset), distinct=True))
         .filter(num_posts__gt=0)
         .values_list("slug", "num_posts")
     )
@@ -229,9 +283,8 @@ def _fetch_tag_counts(queryset: models.QuerySet, resolver: AggregationQueryResol
 def _fetch_tag_universe(base_queryset: models.QuerySet, resolver: AggregationQueryResolver) -> list[tuple[str, str]]:
     aggregation_queryset = _queryset_for_aggregation(base_queryset, resolver)
     rows = (
-        Tag.objects.annotate(
-            num_posts=models.Count("post", filter=models.Q(post__in=aggregation_queryset), distinct=True)
-        )
+        Tag.objects.using(aggregation_queryset.db)
+        .annotate(num_posts=models.Count("post", filter=models.Q(post__in=aggregation_queryset), distinct=True))
         .filter(num_posts__gt=0)
         .values_list("slug", "name")
     )
@@ -241,9 +294,8 @@ def _fetch_tag_universe(base_queryset: models.QuerySet, resolver: AggregationQue
 def _fetch_category_counts(queryset: models.QuerySet, resolver: AggregationQueryResolver) -> dict[str, int]:
     aggregation_queryset = _queryset_for_aggregation(queryset, resolver)
     rows = (
-        PostCategory.objects.annotate(
-            num_posts=models.Count("post", filter=models.Q(post__in=aggregation_queryset), distinct=True)
-        )
+        PostCategory.objects.using(aggregation_queryset.db)
+        .annotate(num_posts=models.Count("post", filter=models.Q(post__in=aggregation_queryset), distinct=True))
         .filter(num_posts__gt=0)
         .values_list("slug", "num_posts")
     )
@@ -255,9 +307,8 @@ def _fetch_category_universe(
 ) -> list[tuple[str, str]]:
     aggregation_queryset = _queryset_for_aggregation(base_queryset, resolver)
     rows = (
-        PostCategory.objects.annotate(
-            num_posts=models.Count("post", filter=models.Q(post__in=aggregation_queryset), distinct=True)
-        )
+        PostCategory.objects.using(aggregation_queryset.db)
+        .annotate(num_posts=models.Count("post", filter=models.Q(post__in=aggregation_queryset), distinct=True))
         .filter(num_posts__gt=0)
         .values_list("slug", "name")
     )
@@ -270,7 +321,8 @@ def _queryset_for_aggregation(queryset: models.QuerySet, resolver: AggregationQu
 
 def _supports_aggregation_on_queryset(queryset: models.QuerySet) -> bool:
     try:
-        list(queryset.order_by().values("pk").annotate(num_posts=models.Count("pk"))[:1])
+        with transaction.atomic(using=queryset.db):
+            list(queryset.order_by().values("pk").annotate(num_posts=models.Count("pk"))[:1])
     except Exception:
         logger.debug("Modal facet aggregation probe failed; using PK fallback.", exc_info=True)
         return False
@@ -278,7 +330,8 @@ def _supports_aggregation_on_queryset(queryset: models.QuerySet) -> bool:
 
 
 def _queryset_from_pk_fallback(queryset: models.QuerySet) -> models.QuerySet:
-    matching_pks = list(queryset.values_list("pk", flat=True))
-    if not matching_pks:
-        return queryset.model.objects.none()
-    return queryset.model.objects.filter(pk__in=matching_pks)
+    # Database search adapters expose a public QuerySet; never materialize IDs.
+    # External adapters without this contract cannot promise exact DB snapshots.
+    if not isinstance(queryset, models.QuerySet):
+        raise FacetSnapshotUnavailable()
+    return queryset.model.objects.using(queryset.db).filter(pk__in=queryset.order_by().values("pk"))

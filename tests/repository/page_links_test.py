@@ -313,3 +313,64 @@ def test_request_signals_clear_positive_and_negative_link_entries():
         signal.send(sender=object)
         assert len(PageLinkHandlerWithCache.cache) == 0
         assert len(PageLinkHandlerWithCache.absolute_cache) == 0
+
+
+def test_warmed_parent_cache_isolated_from_copied_context():
+    from contextvars import copy_context
+
+    handler = PageLinkHandlerWithCache
+    handler.cache_url(42, "/parent/", "https://example.com/parent/")
+    child = copy_context()
+    child.run(handler.cache_url, 42, "/child/", "https://example.com/child/")
+    assert handler.expand_db_attributes({"id": 42}) == '<a href="/parent/">'
+    with handler.absolute_urls():
+        assert handler.expand_db_attributes({"id": 42}) == '<a href="https://example.com/parent/">'
+    handler.cache_url(42, "/parent-new/")
+    assert child.run(handler.expand_db_attributes, {"id": 42}) == '<a href="/child/">'
+    child.run(handler.cache.__delitem__, 42)
+    assert handler.cache[42] == "/parent-new/"
+    child.run(handler.cache_url, 42, "/again/")
+    assert child.run(handler.cache.pop, 42, None) == "/again/"
+    assert handler.cache[42] == "/parent-new/"
+
+
+def test_async_link_renders_keep_warmed_context_snapshot():
+    import asyncio
+
+    handler = PageLinkHandlerWithCache
+    handler.cache_url(42, "/parent/")
+
+    async def render(url, ready, resume):
+        handler.cache_url(42, url)
+        ready.set()
+        await resume.wait()
+        return handler.expand_db_attributes({"id": 42})
+
+    async def interleave():
+        first_ready, second_ready = asyncio.Event(), asyncio.Event()
+        first = asyncio.create_task(render("/first/", first_ready, second_ready))
+        await first_ready.wait()
+        second = asyncio.create_task(render("/second/", second_ready, first_ready))
+        return await asyncio.gather(first, second)
+
+    assert asyncio.run(interleave()) == ['<a href="/first/">', '<a href="/second/">']
+    assert handler.expand_db_attributes({"id": 42}) == '<a href="/parent/">'
+
+
+def test_cache_urls_publishes_batches_once_per_context():
+    import contextvars
+
+    from cast.wagtail_hooks import PageLinkHandlerWithCache
+
+    def fill():
+        PageLinkHandlerWithCache.clear_cache()
+        before = PageLinkHandlerWithCache.cache._get_cache()
+        PageLinkHandlerWithCache.cache_urls({1: "/a/", 2: "/b/"}, {2: "https://example.com/b/", 3: "https://x/"})
+        after = PageLinkHandlerWithCache.cache._get_cache()
+        return before, after, dict(PageLinkHandlerWithCache.absolute_cache)
+
+    before, after, absolute = contextvars.copy_context().run(fill)
+    assert before == {}
+    assert after == {1: "/a/", 2: "/b/"}
+    assert after is not before
+    assert absolute == {2: "https://example.com/b/"}

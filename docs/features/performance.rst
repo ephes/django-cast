@@ -289,3 +289,12 @@ Common Performance Issues
 
    - Rebuild search indexes
    - Check database indexes
+
+Rich-text link cache ownership
+------------------------------
+
+Page-link caches belong to the current context and language. Writes publish a
+new cache dictionary so an async task or ``copy_context()`` child inherits a
+snapshot and cannot mutate its parent's entries. Relative page links and
+absolute feed links use separate caches; nested feed rendering restores the
+previous URL mode.

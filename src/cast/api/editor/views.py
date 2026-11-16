@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils.text import slugify
 from rest_framework import serializers, status
 from rest_framework.exceptions import ValidationError as DRFValidationError
+from rest_framework.parsers import BaseParser, FormParser, MultiPartParser
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -41,6 +42,7 @@ from .errors import (
     EditorValidationError,
     editor_exception_handler,
 )
+from .parsers import EditorJSONParser
 from .scopes import HasEditorScope
 from .serializers import (
     EpisodeCreateSerializer,
@@ -120,6 +122,7 @@ class HasWagtailAdminAccess(BasePermission):
 class EditorAPIView(PrivateAPIView):
     """Base view for the content editing API; renders structured error envelopes."""
 
+    parser_classes: tuple[type[BaseParser], ...] = (EditorJSONParser, FormParser, MultiPartParser)
     permission_classes = (IsAuthenticated, HasWagtailAdminAccess, HasEditorScope)
     required_scopes: dict[str, str | None] = {}
 

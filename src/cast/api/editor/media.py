@@ -7,12 +7,13 @@ from pathlib import PurePosixPath
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.db.models import F, Q, QuerySet
 from django.http import HttpResponse, HttpResponseBase
 from django.urls import NoReverseMatch, reverse
 from rest_framework import status
-from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from taggit.utils import edit_string_for_tags
@@ -41,6 +42,7 @@ from ...media_permissions import get_image_permission_policy
 from ...models import Audio, Video
 from ..views import StandardResultsSetPagination
 from .errors import EditorFlatError, EditorNotFound, EditorPermissionDenied, EditorValidationError
+from .parsers import EditorJSONParser
 from .views import EditorAPIView
 
 logger = logging.getLogger(__name__)
@@ -330,7 +332,13 @@ class EditorImageListCreateView(EditorMediaListMixin, EditorAPIView):
             image = ingest_upload(form, policy=IngestPolicy(probe_seconds=None, file_fields=("file",)))
         except MediaIngestCleanupFailed:
             return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
-        return Response(serialize_image(image, user=request.user), status=status.HTTP_201_CREATED)
+        # Permission policies cache grants on the user; reload at publication.
+        current_user = get_user_model().objects.using(image._state.db).filter(pk=request.user.pk).first()
+        if current_user is None or not _usable_image_collections(current_user).filter(pk=image.collection_id).exists():
+            if not _cleanup_media_object(image, ("file",)):
+                return _flat_error("cleanup_failed", "Upload cleanup failed.", http_status=500)
+            return _flat_error("post_save_permission_denied", "Uploaded image is not selectable.", http_status=403)
+        return Response(serialize_image(image, user=current_user), status=status.HTTP_201_CREATED)
 
 
 AUDIO_UPDATE_FIELDS = ("title", "subtitle", "transcript_diarization_mode", "tags", "chaptermarks")
@@ -437,7 +445,7 @@ class EditorAudioDetailView(EditorAPIView):
     """Read one selectable audio, or update its metadata and add/replace one audio file."""
 
     required_scopes = {"GET": None, "PATCH": "write"}
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    parser_classes = (MultiPartParser, FormParser, EditorJSONParser)
 
     def _get_audio(self, request: Request, pk: int) -> Audio:
         audio = (
