@@ -632,10 +632,11 @@ Fixes
 
 - Restrict reference-site reset to verified seed-user roots under the selected
   Site, preserving unrelated matching slugs and refusing ambiguous ownership.
-  Prepare media before deletion and roll back the complete database rebuild on
-  failure. File storage side effects remain outside the transaction. Media option
-  flags now restore prior settings on every exit and post counts use the reference
-  blog subtree.
+  Prepare media (including remote fetches) before the page transaction, so no
+  page locks are held during remote downloads, and roll back the complete page
+  rebuild on failure. Prepared media and storage side effects (transcript files,
+  renditions) remain. Media option flags now restore prior settings on every exit
+  and post counts use the reference blog subtree.
 
 - Reconstruct blog snapshots after JSON key conversion (including dates and
   audio durations) and keep cache inputs independent from hydrated models.

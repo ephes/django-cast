@@ -113,9 +113,14 @@ def test_reset_refuses_ambiguous_reference_roots(site, user, collision):
         # Simulate ambiguous legacy data, bypassing Wagtail's sibling slug validation.
         Page.objects.filter(pk=duplicate.pk).update(slug=STYLEGUIDE_BLOG_SLUG)
     before = list(Page.objects.values())
+    from cast.models import Audio, Video
+
+    media_before = (Audio.objects.count(), Video.objects.count())
     with pytest.raises(CommandError, match="ownership"):
         call_command("ensure_reference_site", reset=True)
     assert list(Page.objects.values()) == before
+    # The refusal happens before any media is prepared.
+    assert (Audio.objects.count(), Video.objects.count()) == media_before
 
 
 @pytest.mark.parametrize("failure", ["delete", "posts", "context", "media"])
@@ -224,3 +229,23 @@ def test_reference_builder_does_not_adopt_foreign_roots(site, blog, user):
     assert reference_podcast.pk != foreign_podcast.pk
     assert not Post.objects.descendant_of(foreign_blog).exists()
     assert not Episode.objects.descendant_of(foreign_podcast).exists()
+
+
+@pytest.mark.parametrize("reset", [False, True])
+def test_media_preparation_runs_outside_the_page_transaction(site, monkeypatch, reset):
+    """Remote downloads must not hold page row locks or SQLite's write lock."""
+    from django.db import connection
+
+    from cast.views import styleguide as styleguide_view
+
+    call_command("ensure_reference_site")
+    test_depth = len(connection.atomic_blocks)
+    depths = []
+
+    def fetch(user):
+        depths.append(len(connection.atomic_blocks))
+        return styleguide_view._empty_styleguide_remote_media()
+
+    monkeypatch.setattr(styleguide_view, "_fetch_styleguide_remote_media", fetch)
+    call_command("ensure_reference_site", reset=reset)
+    assert depths == [test_depth]

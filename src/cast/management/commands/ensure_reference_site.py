@@ -73,15 +73,18 @@ class Command(BaseCommand):
         factory = RequestFactory()
         request = cast(HtmxHttpRequest, factory.get("/cast/styleguide/", HTTP_HOST="localhost:8000"))
 
-        with override_settings(**overrides), transaction.atomic():
+        with override_settings(**overrides):
             if options.get("reset"):
-                roots = self._reference_roots()
-                assets = _prepare_styleguide_assets()
-                self._reset_reference_site(roots)
+                # Refuse ambiguous roots before any download or media write.
+                self._reference_roots(lock=False)
+            # Remote fetches and storage writes run before the page transaction, so
+            # no row locks (or SQLite's write lock) are held during downloads.
+            assets = _prepare_styleguide_assets()
+            with transaction.atomic():
+                if options.get("reset"):
+                    self._reset_reference_site(self._reference_roots())
                 styleguide_data = _build_styleguide_data(request, assets=assets)
-            else:
-                styleguide_data = _build_styleguide_data(request)
-            _styleguide_context(styleguide_data, request, theme)
+                _styleguide_context(styleguide_data, request, theme)
 
         if options.get("reset"):
             self.stdout.write(self.style.WARNING("Reference site data replaced."))
@@ -94,14 +97,19 @@ class Command(BaseCommand):
         self.stdout.write(f"  Blog:    {blog_url} ({post_count} posts)")
         self.stdout.write(f"  Podcast: {podcast_url}")
 
-    def _reference_roots(self) -> list[Page]:
-        """Admit only the seed user's designated roots under the selected Site."""
+    def _reference_roots(self, *, lock: bool = True) -> list[Page]:
+        """Admit only the seed user's designated roots under the selected Site.
+
+        ``lock=False`` is the side-effect-free pre-check; the locked call inside the
+        rebuild transaction re-validates the same roots.
+        """
         site = Site.objects.first()
         if site is None:
             return []
         roots = []
         for slug, model in ((STYLEGUIDE_BLOG_SLUG, Blog), (STYLEGUIDE_PODCAST_SLUG, Podcast)):
-            candidates = list(Page.objects.child_of(site.root_page).filter(slug=slug).select_for_update())
+            queryset = Page.objects.child_of(site.root_page).filter(slug=slug)
+            candidates = list(queryset.select_for_update() if lock else queryset)
             if not candidates:
                 continue
             if (

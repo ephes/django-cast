@@ -499,14 +499,18 @@ Options:
     The selected Site is the first Site, as in the styleguide builder. Each existing
     root must have the expected page type and belong to the ``styleguide`` seed user;
     duplicate roots, another owner or a different page type cause refusal before
-    deletion. Matching slugs elsewhere in the page tree are preserved and are not
-    reused by the builder.
+    any media is prepared or any page is deleted. Matching slugs elsewhere in the
+    page tree are preserved and are not reused by the builder.
 
-    Media is prepared before deleting pages. Deletion, content creation and context
-    preparation share one database transaction: a failed rebuild restores the old
-    reference pages and their identities. File storage writes are not transactional;
-    a failed run can leave generated media files and does not undo external storage
-    side effects.
+    Media (including any remote fetch) is prepared and committed before the page
+    transaction starts, so no page locks are held during remote downloads. Root
+    checks, deletion, content creation and context preparation share one database
+    transaction: a failed rebuild restores the old reference pages and their
+    identities. Content creation and context preparation still write to storage
+    inside that transaction (the Podlove transcript file and, with
+    ``--with-renditions``, image renditions).
+    Prepared media rows and files stay in place after a failed rebuild; storage
+    side effects are not undone.
 
 ``--with-renditions``
     Generate missing image renditions while creating content.
