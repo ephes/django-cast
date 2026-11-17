@@ -1,6 +1,8 @@
 import pytest
 from django.urls import reverse
 
+from tests.theme_compare_helpers import LOCAL_COMPARE_PATHS, UNSAFE_COMPARE_PATHS
+
 
 @pytest.mark.django_db
 def test_components_view_disabled_returns_404(settings, client):
@@ -174,3 +176,37 @@ def test_dev_views_with_deprecated_styleguide_setting(settings, client):
     assert response.status_code == 200
     response = client.get(reverse("cast:dev-health"))
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("path", UNSAFE_COMPARE_PATHS)
+@pytest.mark.parametrize("encoded", [False, True])
+def test_theme_compare_rejects_browser_unsafe_paths(settings, client, path, encoded):
+    from urllib.parse import quote
+
+    from bs4 import BeautifulSoup
+
+    settings.CAST_ENABLE_DEV_TOOLS = True
+    url = reverse("cast:theme-compare")
+    response = client.get(
+        f"{url}?path={quote(path, safe='')}" if encoded else url, None if encoded else {"path": path}
+    )
+    assert response.status_code == 200
+    assert response.context["path"] == "/styleguide-blog/"
+    frames = BeautifulSoup(response.content, "html.parser").select("iframe")
+    assert frames
+    assert all(frame["src"].startswith("/styleguide-blog/?theme=") for frame in frames)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("path", LOCAL_COMPARE_PATHS)
+def test_theme_compare_preserves_local_paths(settings, client, path):
+    from bs4 import BeautifulSoup
+
+    settings.CAST_ENABLE_DEV_TOOLS = True
+    response = client.get(reverse("cast:theme-compare"), {"path": path})
+    assert response.context["path"] == path
+    separator = "&" if "?" in path else "?"
+    frames = BeautifulSoup(response.content, "html.parser").select("iframe")
+    assert frames
+    assert all(frame["src"].startswith(f"{path}{separator}theme=") for frame in frames)

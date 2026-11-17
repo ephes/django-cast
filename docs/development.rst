@@ -249,6 +249,17 @@ Compare themes side-by-side in the browser:
 
    http://localhost:8000/cast/theme-compare/?path=/styleguide-blog/
 
+The comparison ``path`` must be a local absolute path (starting with one
+``/``); query strings are supported. External/network paths, backslashes,
+control characters and leading/trailing whitespace fall back to
+``/styleguide-blog/``. The comparison route requires enabled development tools
+and returns 404 when they are disabled.
+
+Run the browser URL-boundary regression locally with
+``CAST_RUN_BROWSER=1 uv run pytest tests/theme_compare_browser_test.py``
+(after ``uv run playwright install chromium``). It resolves the rendered
+iframe URLs in Chromium without navigating to the supplied destinations.
+
 Use Playwright helpers for screenshots and console-error checks:
 
 .. code-block:: bash

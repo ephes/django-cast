@@ -74,7 +74,12 @@ Options:
 
 ``--force``
     Regenerate transcripts even when Podlove, WebVTT, and DOTe files already
-    exist for the selected audio object.
+    exist for the selected audio object. This bypasses the old artifacts'
+    completeness read, so it can recover malformed stored JSON.
+
+Without ``--force``, malformed JSON or non-object Podlove/DOTe data counts as
+incomplete and is regenerated. A Voxhelm failure is reported for that audio;
+other targets continue, and the command exits with an error after the summary.
 
 The command prints per-audio status lines and a final summary in the form
 ``processed=<n> created=<n> updated=<n> skipped=<n> errors=<n>``.

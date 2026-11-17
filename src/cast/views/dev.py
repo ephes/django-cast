@@ -6,6 +6,8 @@ All views in this module:
 - Serve ``X-Robots-Tag: noindex`` to prevent indexing.
 """
 
+import unicodedata
+
 from django.db import connection
 from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import render
@@ -31,6 +33,8 @@ def _add_noindex(response: HttpResponse) -> HttpResponse:
 def _sanitize_theme_compare_path(path: str | None) -> str:
     """Return a safe relative path for theme comparison iframes."""
     if not path:
+        return DEFAULT_THEME_COMPARE_PATH
+    if "\\" in path or path != path.strip() or any(unicodedata.category(char) == "Cc" for char in path):
         return DEFAULT_THEME_COMPARE_PATH
     if not path.startswith("/"):
         return DEFAULT_THEME_COMPARE_PATH
