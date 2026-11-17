@@ -111,18 +111,27 @@ instance (C locale, trust auth, port 55432):
 - The first browser run failed in both cases at the Clear step: current Wagtail
   dropdowns move their actions into a popup that exists only while it is open, and
   the draft button has no `action-save-draft` name. The journey now opens the
-  widget dropdown before clicking Clear and clicks the "Save draft" button by role.
-  The chooser scripts needed no change; their handlers bind before the dropdown
-  detaches its content.
-- `CAST_RUN_BROWSER=1 uv run pytest tests/media_chooser_browser_test.py` passes
-  (2 tests). With the previous develop chooser scripts it fails in both cases
-  while waiting for the scoped search response.
-- `CAST_TEST_DB_PORT=55432 just check-postgres` passes both environments.
-- On PostgreSQL (`-p tests.postgres_check`, `CAST_TEST_DB_ENGINE=django.db.backends.postgresql`)
+  widget dropdown for Choose another and Clear, clicks the popup actions and
+  clicks the "Save draft" button by role. The chooser handlers still bind before
+  the dropdown detaches its content.
+- Review then found that the Choose/Clear handlers returned `false`, which stops
+  the click before Wagtail's dropdown closes on clicks inside it. The handlers
+  no longer stop propagation. The journey asserts that the popup is hidden
+  after Choose another; with the previous handlers that check fails in both cases.
+- Video upload titles are filled only from the `original` file input, not from
+  the poster image. A Vitest case covers this (red before the change).
+  `just js-test` now runs 265 tests, one skipped (the audio variant of the
+  video-only case); the chooser file has 39 passing cases.
+- Final tree: `CAST_RUN_BROWSER=1 uv run pytest tests/media_chooser_browser_test.py`
+  passes (2 tests). With the previous develop chooser scripts the journey fails in
+  both cases while waiting for the scoped search response.
+- Final tree: `CAST_TEST_DB_PORT=55432 just check-postgres` passes both environments.
+- Final tree on PostgreSQL (`-p tests.postgres_check`, `CAST_TEST_DB_ENGINE=django.db.backends.postgresql`):
   the media chooser, transcript admin and comment browser journeys pass together
   with `tests/widget_test.py`, `tests/ensure_reference_site_test.py` and
   `tests/management_command_test.py` (146 tests). This also completes the
   round 105 acceptance.
+- Final tree: `just check` passes (5,554 Python tests, 100% coverage).
 
 Release notes stay in `docs/releases/0.2.68.rst`: version 0.2.68 is not tagged,
 so `AGENTS.md` requires its own notes page rather than `unreleased.rst`.
