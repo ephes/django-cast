@@ -9,6 +9,7 @@ solely by the comment id (as a string) being present in the current session's
 from __future__ import annotations
 
 import hashlib
+import logging
 from collections.abc import Collection, Iterable
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
@@ -25,6 +26,8 @@ if TYPE_CHECKING:
 SESSION_KEY = "cast_owned_comments"
 
 SIGNED_COOKIES_BACKEND = "django.contrib.sessions.backends.signed_cookies"
+
+logger = logging.getLogger(__name__)
 
 
 def uses_signed_cookie_sessions() -> bool:
@@ -182,16 +185,20 @@ def rate_limited(request: HttpRequest, action: str) -> bool:
     ident = getattr(session, "session_key", None) or request.META.get("REMOTE_ADDR", "anon")
     key = f"cast_author_edit_rl:{action}:{ident}"
     try:
-        count = cache.incr(key)
-    except ValueError:
-        if cache.add(key, 1, appsettings.EDIT_RATE_WINDOW):
-            count = 1
-        else:
-            try:
-                count = cache.incr(key)
-            except ValueError:
-                # The competing counter expired/was evicted before the retry.
+        try:
+            count = cache.incr(key)
+        except ValueError:
+            if cache.add(key, 1, appsettings.EDIT_RATE_WINDOW):
                 count = 1
+            else:
+                try:
+                    count = cache.incr(key)
+                except ValueError:
+                    # The competing counter expired/was evicted before the retry.
+                    count = 1
+    except Exception:
+        logger.warning("Author comment action rate-limit cache unavailable")
+        return True
     return count > limit
 
 

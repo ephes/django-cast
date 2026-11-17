@@ -490,6 +490,9 @@ Each environment runs the editor schedule-approval race, publication-policy,
 editor publication-lock, editor creation parent-authority and episode-numbering
 tests, candidate voice-reference deduplication, chapter synchronization,
 transcript/glossary races, and the isolated v3 adapter races.
+They also run the two-connection comment training/deletion snapshot regression
+and reply/author-action races. The snapshot regression runs on SQLite in the
+regular suite too, using real independent committed connections.
 Numbering tests use two committed connections: the second first-publication
 waits on the podcast counter lock, while another podcast can publish before the
 first transaction is released. They check revision/live numbers and counter

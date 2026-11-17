@@ -8,6 +8,7 @@ from typing import Any, Optional
 
 from django.core.serializers.json import DjangoJSONEncoder
 from django.db import models, router
+from django.db.models.functions import Cast
 from django.utils import timezone
 from model_utils.models import TimeStampedModel
 
@@ -296,16 +297,23 @@ class SpamFilter(TimeStampedModel):
         """
         from django_comments import get_model as get_comments_model
 
-        from cast.comments import author_edits
+        from cast.comments.models import CommentAuthorMeta
 
         comment_class = get_comments_model()
         # Author-deleted comments are excluded entirely: a legitimate comment the
         # author removed must not be labelled spam and poison the filter.
-        deleted_pks = author_edits.deleted_comment_pks()
+        # Project moderation fields and exclude deletion metadata in the same
+        # statement, so a concurrent author deletion cannot become spam data.
+        deleted = CommentAuthorMeta.objects.filter(
+            comment_pk=Cast(models.OuterRef("pk"), output_field=models.CharField()), deleted_at__isnull=False
+        )
+        comments = (
+            comment_class.objects.filter(~models.Exists(deleted))
+            .select_related("user")
+            .only("user", "user_name", "user_email", "user_url", "title", "comment", "is_public", "is_removed")
+        )
         train = []
-        for comment in comment_class.objects.all():
-            if str(comment.pk) in deleted_pks:
-                continue
+        for comment in comments:
             label = "ham" if (comment.is_public and not comment.is_removed) else "spam"
             message = cls.comment_to_message(comment)
             train.append((label, message))
