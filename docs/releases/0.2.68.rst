@@ -637,8 +637,11 @@ Fixes
 
 - Keep repository subtype, contributor, visibility and feed queries on the source
   database. Preserve that identity through request-scoped serialized pages, media,
-  sites, renditions and nested contributor/season/artwork projections.
-- Refuse glossary imports whose opened file changes during the read, while keeping
+  sites, renditions and nested contributor/season/artwork projections. A request
+  site resolved on another alias (for example a read replica) is re-resolved by
+  hostname and port on the source database; a site without a match there is refused.
+- Refuse glossary imports whose opened file visibly changes (size, modification or
+  change time, best effort on coarse filesystem clocks) during the read, while keeping
   symlinks and coherent old generations after atomic pathname replacement usable.
   Bind ``apply_transcript_glossary --podcast`` selection to the podcast database
   and refuse incompatible routing before accessing transcript artifacts.

@@ -1,6 +1,7 @@
 """Import one coherent opened generation, including intentional symlinks."""
 
 import os
+import time
 from contextlib import contextmanager
 
 import pytest
@@ -19,6 +20,9 @@ def test_import_admits_only_coherent_opened_generation(podcast, tmp_path, monkey
     old = b'[{"term":"Alpha","notes":"old"}]'
     new = b'[{"term":"Bravo","notes":"new"}]'
     path.write_bytes(old)
+    # Keep the in-place rewrite detectable regardless of timestamp granularity:
+    # the opened generation carries an explicit past modification time.
+    os.utime(path, ns=(1_000_000_000, 1_000_000_000))
     source_path = path
     if change == "symlink":
         source_path = tmp_path / "link.json"
@@ -34,6 +38,10 @@ def test_import_admits_only_coherent_opened_generation(podcast, tmp_path, monkey
                     prefix = source.read(17)
                     if change in {"rewrite", "restored_mtime"}:
                         before = path.stat()
+                        if change == "restored_mtime":
+                            # Only the change time reveals this rewrite; step past
+                            # coarse filesystem clocks (1-10 ms) so it can tick.
+                            time.sleep(0.05)
                         with path.open("r+b") as writer:
                             writer.write(new)
                         if change == "restored_mtime":

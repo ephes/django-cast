@@ -15,12 +15,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
-- [ ] Complete external PostgreSQL acceptance for round 116 database generations
-  - Repository/glossary fixes and two-alias regressions are implemented.
-  - The sandbox blocks temporary PostgreSQL shared memory; rerun the PostgreSQL
-    gates and new ownership fixtures outside it before integration.
-  - Commands and evidence: [round 116](backlog/2026-11-16-round116-database-generations.md).
-
 - [ ] Complete external browser/PostgreSQL acceptance from rounds 91 and 97
   - Integration is finished; the handoffs still record sandbox-blocked browser and PostgreSQL checks.
   - Run the two-editor comment journey and the publication/comment locking checks outside the sandbox.

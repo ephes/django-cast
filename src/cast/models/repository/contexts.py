@@ -32,7 +32,7 @@ from .serialization import (
 )
 from .snapshot import (
     PostQuerySnapshot,
-    _require_site_database,
+    _site_for_database,
     cache_page_url,
     cache_page_urls,
     clear_cached_page_urls,
@@ -149,8 +149,7 @@ class PostDetailContext:
             # Prime the podcast audio/transcript cache for no-query repository rendering.
             post.get_transcript_or_none()
         # Like the other builders, navigate from the root page of the request's site.
-        site = Site.find_for_request(request) or blog.get_site()
-        _require_site_database(site, post._state.db)
+        site = _site_for_database(Site.find_for_request(request) or blog.get_site(), post._state.db)
         root_nav_links: LinkTuples = []
         if site is not None:
             root_nav_links = [
@@ -266,7 +265,7 @@ class FeedContext:
         """Build a ``FeedContext`` from live Django models and a post queryset."""
         # The page-link cache is request-scoped and repopulated by this repository.
         clear_cached_page_urls()
-        site = Site.find_for_request(request)
+        site = _site_for_database(Site.find_for_request(request), post_queryset.db)
         queryset_data = PostQuerySnapshot.create_from_post_queryset(request=request, site=site, queryset=post_queryset)
         visible_dates = [post.visible_date for post in queryset_data.queryset]
         if visible_dates:
@@ -652,8 +651,7 @@ class BlogIndexContext:
                 use_audio_player = True
         template_base_dir = blog.get_template_base_dir(cast("HtmxHttpRequest", request))
         root_nav_links = []
-        site = blog.get_site()
-        _require_site_database(site, blog._state.db)
+        site = _site_for_database(blog.get_site(), blog._state.db)
         if site is not None:
             for page in public_posts(site.root_page.get_children().using(site._state.db).live()):
                 root_nav_links.append((page.get_url(request), page.title))

@@ -22,7 +22,7 @@ from .serialization import (
     serialize_transcript,
     serialize_video,
 )
-from .snapshot import PostQuerySnapshot, _require_site_database
+from .snapshot import PostQuerySnapshot, _site_for_database
 from .types import (
     AudioById,
     AudiosByPostID,
@@ -123,7 +123,8 @@ def add_site_raw(data: dict[str, Any], *, request: HttpRequest | None = None, bl
         )
     if site is None:
         raise ImproperlyConfigured("django-cast needs at least one Wagtail Site, but the Site table is empty.")
-    _require_site_database(site, blog._state.db if blog is not None else None)
+    site = _site_for_database(site, blog._state.db if blog is not None else None)
+    assert site is not None
     data["site"] = {
         **_database_fields(site),
         "id": site.id,

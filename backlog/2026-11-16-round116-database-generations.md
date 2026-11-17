@@ -90,3 +90,13 @@ Logs are outside the clone in
 `/Users/jochen/workspaces/ws-work-planning/coordination/codex/logs/cx-r116-django-cast/`.
 The external clerk performs the cross-family review and merge. No worker review
 CLI, push, PR, merge, deployment or host access was used.
+
+## Integration acceptance (2026-11-17)
+
+`just check-postgres` passed against a disposable PostgreSQL 17 container, and the
+three two-alias regression files above passed on PostgreSQL and SQLite. The fixture
+now pins the colliding podcast/episode page IDs, because PostgreSQL sequences do
+not follow explicit inserts. Integration review also bound the
+`CAST_REPOSITORY = "django"` feed path and the `Blog.last_build_date` fallback to
+the blog database, and re-resolves replica-routed sites on the source database
+instead of refusing them.

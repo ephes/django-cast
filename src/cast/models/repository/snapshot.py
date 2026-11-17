@@ -60,10 +60,26 @@ def clear_cached_page_urls() -> None:
     PageLinkHandlerWithCache.clear_cache()
 
 
-def _require_site_database(site: Site | None, using: str | None) -> None:
-    """Refuse a bound site from another repository source database."""
-    if site is not None and site._state.db is not None and using is not None and site._state.db != using:
+def _site_for_database(site: Site | None, using: str | None) -> Site | None:
+    """Return ``site`` bound to the repository source database.
+
+    Site discovery (``Site.find_for_request``/``Page.get_site``) routes without an
+    instance hint, so a router may read the site from another alias than the
+    page (for example a read replica). Re-resolve such a site by hostname and
+    port on the source database; refuse it only when that database has no
+    matching site, because then the site belongs to an independent database.
+    """
+    if site is None or site._state.db is None or using is None or site._state.db == using:
+        return site
+    source_site = (
+        Site.objects.using(using)
+        .filter(hostname=site.hostname, port=site.port)
+        .order_by("-is_default_site", "pk")
+        .first()
+    )
+    if source_site is None:
         raise ValueError("Repository site must use the source database.")
+    return source_site
 
 
 class PostQuerySnapshot:
@@ -133,7 +149,7 @@ class PostQuerySnapshot:
         from ..pages import Episode, Post
 
         using = queryset.db
-        _require_site_database(site, using)
+        site = _site_for_database(site, using)
         queryset = queryset.select_related("owner", "cover_image", "content_type")
         queryset_model = getattr(queryset, "model", None)
         if isinstance(queryset_model, type) and issubclass(queryset_model, Episode):

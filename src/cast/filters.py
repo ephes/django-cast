@@ -284,7 +284,7 @@ class CategoryFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter
         Fetch the facet counts for all facets with post count > 0
         and set the choices on the field.
         """
-        self.facet_counts = self.fetch_facet_counts(queryset, PostCategory.objects.all())
+        self.facet_counts = self.fetch_facet_counts(queryset, PostCategory.objects.using(queryset.db))
         choices = self.transform_facet_counts_to_choices(self.facet_counts)
         self.set_field_choices(choices)
 
@@ -307,7 +307,7 @@ class TagFacetFilter(CountChoicesMixin, django_filters.filters.ChoiceFilter):
         Cannot use PostTag.objects.annotate here because the group by clause
         would be wrong (GROUP BY "cast_posttag"."id" instead of "tag"."id")
         """
-        self.facet_counts = self.fetch_facet_counts(queryset, Tag.objects.all())
+        self.facet_counts = self.fetch_facet_counts(queryset, Tag.objects.using(queryset.db))
         choices = self.transform_facet_counts_to_choices(self.facet_counts)
         self.set_field_choices(choices)
 

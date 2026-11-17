@@ -41,6 +41,9 @@ def independent_podcasts(settings):
         models.Model.save(root, using=alias)
         podcast = root.add_child(
             instance=Podcast(
+                # Explicit IDs keep pages colliding on backends whose sequences
+                # ignore explicit inserts (PostgreSQL), not only on SQLite.
+                pk=90002,
                 title=alias,
                 template_base_dir="plain",
                 slug="synthetic",
@@ -53,6 +56,7 @@ def independent_podcasts(settings):
         season = Season.objects.create(pk=90001, podcast=podcast, number=1, name=alias)
         episode = podcast.add_child(
             instance=Episode(
+                pk=90003,
                 title=alias,
                 slug="episode",
                 owner=owner,
@@ -268,3 +272,123 @@ def test_repository_refuses_a_site_from_another_database(independent_podcasts, r
                 )
             else:
                 FeedContext.data_for_feed_cachable(request=request, blog=podcast, is_podcast=True)
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("builder", ["snapshot", "feed"])
+def test_repository_rebinds_a_replica_site_to_the_source_database(independent_podcasts, rf, monkeypatch, builder):
+    # A read-replica router can resolve the request site on another alias than
+    # the page. When the source database holds the same site, use that copy.
+    podcast, episode, _ = independent_podcasts["migration_other"]
+    source_site = Site.objects.using("migration_other").create(hostname="synthetic.invalid", root_page_id=90001)
+    replica_site = Site.objects.using("default").create(hostname="synthetic.invalid", root_page_id=90001)
+    request = rf.get("/")
+    request._wagtail_site = replica_site
+    url_sites = []
+
+    def get_url(self, *args, current_site=None, **kwargs):
+        url_sites.append(current_site)
+        return "/synthetic/episode/"
+
+    # Wagtail's global URL registry is outside the repository data projection.
+    monkeypatch.setattr(Post, "get_url", get_url)
+    monkeypatch.setattr(Post, "full_url", property(lambda self: "http://testserver/synthetic/episode/"))
+    monkeypatch.setattr(Page, "get_url", lambda *a, **kw: "/synthetic/")
+    with connections["default"].execute_wrapper(refuse_default):
+        if builder == "snapshot":
+            snapshot = PostQuerySnapshot.create_from_post_queryset(
+                request=request,
+                site=replica_site,
+                queryset=Post.objects.using("migration_other").filter(pk=episode.pk),
+            )
+            assert snapshot.post_by_id[episode.pk].title == "migration_other"
+        else:
+            data = FeedContext.data_for_feed_cachable(request=request, blog=podcast, is_podcast=True)
+            assert data["site"]["id"] == source_site.pk
+            assert data["site"]["_database"] == "migration_other"
+    assert url_sites
+    assert all(site.pk == source_site.pk and site._state.db == "migration_other" for site in url_sites)
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("is_podcast", [False, True])
+def test_django_repository_feed_selection_follows_blog_database(
+    independent_podcasts, rf, monkeypatch, settings, is_podcast
+):
+    from cast import appsettings
+    from cast.feeds import LatestEntriesFeed, PodcastFeed
+
+    podcast, episode, _ = independent_podcasts["migration_other"]
+    monkeypatch.setattr(appsettings, "CAST_REPOSITORY", "django")
+
+    def capture(**kwargs):
+        queryset = kwargs["post_queryset"]
+        assert queryset.db == "migration_other"
+        assert list(queryset.values_list("pk", "title")) == [(episode.pk, "migration_other")]
+        return "repository"
+
+    monkeypatch.setattr(FeedContext, "create_from_django_models", capture)
+    monkeypatch.setattr("cast.feeds.get_default_template_base_dir", lambda request, base: base)
+    feed = PodcastFeed() if is_podcast else LatestEntriesFeed()
+    with connections["default"].execute_wrapper(refuse_default):
+        assert feed.get_repository(rf.get("/"), podcast) == "repository"
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_last_build_date_fallback_follows_blog_database(independent_podcasts):
+    podcast, episode, _ = independent_podcasts["migration_other"]
+    stored = Episode.objects.using("migration_other").get(pk=episode.pk).visible_date
+    with connections["default"].execute_wrapper(refuse_default):
+        assert podcast.last_build_date == stored
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_django_feed_context_rebinds_a_replica_site_to_the_source_database(independent_podcasts, rf, monkeypatch):
+    podcast, episode, _ = independent_podcasts["migration_other"]
+    source_site = Site.objects.using("migration_other").create(hostname="synthetic.invalid", root_page_id=90001)
+    replica_site = Site.objects.using("default").create(hostname="synthetic.invalid", root_page_id=90001)
+    request = rf.get("/")
+    request._wagtail_site = replica_site
+    url_sites = []
+
+    def get_url(self, *args, current_site=None, **kwargs):
+        url_sites.append(current_site)
+        return "/synthetic/"
+
+    # Wagtail's global URL registry is outside the repository data projection.
+    monkeypatch.setattr(Page, "get_url", get_url)
+    monkeypatch.setattr(Post, "full_url", property(lambda self: "http://testserver/synthetic/episode/"))
+    with connections["default"].execute_wrapper(refuse_default):
+        repository = FeedContext.create_from_django_models(
+            request=request,
+            blog=podcast,
+            post_queryset=Episode.objects.using("migration_other").filter(pk=episode.pk),
+        )
+        assert [post.pk for post in repository.post_queryset] == [episode.pk]
+    assert repository.site.pk == source_site.pk
+    assert repository.site._state.db == "migration_other"
+    assert repository.root_nav_links == [("/synthetic/", "migration_other")]
+    assert all(site is None or site._state.db == "migration_other" for site in url_sites)
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_blog_index_facet_counts_follow_blog_database(independent_podcasts):
+    from django.http import QueryDict
+    from taggit.models import Tag
+
+    from cast.blog_index import create_blog_filterset
+    from cast.models import PostCategory
+    from cast.models.pages import PostTag
+
+    podcast, episode, _ = independent_podcasts["migration_other"]
+    for alias in ("default", "migration_other"):
+        category = PostCategory.objects.using(alias).create(name=f"{alias} category", slug="synthetic-category")
+        Post.categories.through.objects.using(alias).create(post_id=episode.pk, postcategory_id=category.pk)
+        tag = Tag.objects.using(alias).create(name=f"{alias} tag", slug="synthetic-tag")
+        PostTag.objects.using(alias).create(content_object_id=episode.pk, tag=tag)
+    with connections["default"].execute_wrapper(refuse_default):
+        filterset = create_blog_filterset(podcast, QueryDict(""))
+        category_choices = filterset.form.fields["category_facets"].choices
+        tag_choices = filterset.form.fields["tag_facets"].choices
+    assert ("synthetic-category", "migration_other category (1)") in category_choices
+    assert ("synthetic-tag", "migration_other tag (1)") in tag_choices

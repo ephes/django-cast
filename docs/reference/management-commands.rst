@@ -97,7 +97,8 @@ Options:
 ``--dry-run``
     Validate and report without saving.
 
-In-place input changes are refused before writes, including in dry runs.
+In-place input changes visible in the file's size or modification/change time are
+refused before writes, including in dry runs (best effort on coarse filesystem clocks).
 Symlinks and atomic pathname replacements retain the coherent opened generation.
 
 The command prints a summary in the form

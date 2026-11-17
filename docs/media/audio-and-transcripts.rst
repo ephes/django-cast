@@ -688,7 +688,9 @@ opened descriptor, and closes it on refusal (including FIFOs, directories and
 devices). Symlinks to regular files are intentionally supported. Descriptor
 identity, size and nanosecond modification/change metadata are checked around
 the read, and the consumed byte count must match. An in-place rewrite or
-truncation is refused before writes, including in dry runs. Atomic pathname
+truncation that changes this metadata is refused before writes, including in dry
+runs. Detection is best effort: a same-size rewrite within one tick of a coarse
+filesystem clock leaves the metadata unchanged. Atomic pathname
 replacement may retain the complete opened old generation; an unlink-only
 change to its link count/change time does not invalidate that generation. Duplicate JSON
 object members, including escaped spellings and nested objects, reject the whole

@@ -494,10 +494,12 @@ Database identity
 
 ``PostQuerySnapshot`` binds subtype hydration, visible contributor assignments,
 avatars and media prefetches to the source queryset's database. Feed and index
-selection, visibility restrictions and navigation use the blog/site database.
-A bound site from a different database is refused. Supply a request/site from
-that same database; Wagtail's global site discovery
-and URL registry still require the site's normal routing configuration.
+selection (including feeds built with ``CAST_REPOSITORY = "django"`` and the
+``Blog.last_build_date`` fallback), visibility restrictions and navigation use the
+blog/site database. A site resolved on another alias, for example by a
+read-replica router, is re-resolved by hostname and port on the source database;
+it is refused only when that database has no matching site. Wagtail's global site
+discovery and URL registry still require the site's normal routing configuration.
 
 Request-scoped serialized projections retain a trusted ``_database`` alias.
 Use the matching ``deserialize_*`` helpers rather than passing these dictionaries
