@@ -273,12 +273,13 @@ class PostEditorMixin:
                 {"database": [{"code": "unsupported", "message": "The editor user must belong to the page database."}]}
             )
 
-    def _check_current_add_permission(self, parent: Any, user: Any, *, noun: str) -> None:
+    def _check_current_add_permission(self, parent: Any, user: Any, *, noun: str) -> Any:
         # Wagtail caches page grants on the request user. A fresh user avoids
         # reusing admission-time grants after a parent move or withdrawal.
         current_user = get_user_model()._default_manager.using(user._state.db).get(pk=user.pk)
         if not parent.permissions_for_user(current_user).can_add_subpage():
             raise EditorPermissionDenied(f"You cannot add {noun} under this page.", parent_id=parent.id)
+        return current_user
 
     def _check_unique_slug(self, parent: Any, slug: str, *, exclude_id: int | None = None) -> None:
         from wagtail.models import Page
@@ -606,16 +607,18 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
         self._check_write_user(parent, user)
         title = data["title"]
         slug = data.get("slug") or slugify(title)
-        cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
-        body_sections = self._submitted_body_sections(data, user=user)
 
         # Assign body as a JSON string (the proven pattern in tests/conftest.py);
         # the StreamField parses it on access. Each section value is the list of
         # internal block dicts produced by the canonical block conversion.
         with transaction.atomic(using=_page_write_database(parent)):
             parent = self._lock_parent_for_slug_check(parent, noun="Post")
-            self._check_current_add_permission(parent, user, noun="posts")
+            user = self._check_current_add_permission(parent, user, noun="posts")
+            # Resolve submitted media only after the writer wait, using fresh
+            # permission state and a new conversion-local media cache.
+            cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
+            body_sections = self._submitted_body_sections(data, user=user)
             self._check_unique_slug(parent, slug)
             post = Post(
                 title=title,

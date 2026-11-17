@@ -502,7 +502,10 @@ plus episode-specific fields; see **Episode endpoints** below.
 Referenced media — ``cover_image`` and inline ``image``, ``gallery``,
 ``audio``, and ``video`` blocks — must be choosable by the caller. Missing and
 inaccessible media references are reported the same way (``not_found``) so the
-API does not leak objects outside the caller's permissions.
+API does not leak objects outside the caller's permissions. Body and gallery
+reference IDs must be JSON integers (booleans are refused) within the media
+model's integer range on its routed database. Out-of-range references return
+``not_found`` before SQL binding, without creating a page or revision.
 
 ``paragraph`` HTML is sanitized on create and PATCH through Wagtail's
 ContentState converter before normal block validation. The converter rebuilds
@@ -549,7 +552,12 @@ formats. Review the feature list before resubmitting existing content.
 Creation rechecks add-subpage permission using the locked current parent and
 fresh user grants immediately before writing pages or revisions. A concurrent
 parent move or permission withdrawal returns 403 without page, tag or revision
-writes. Media conversion precedes the parent write lock.
+writes. Post creation also resolves submitted cover, body and gallery media
+inside that transaction, after acquiring the parent write lock, with the fresh
+user and a new permission-resolution cache. A collection move or media grant
+withdrawal committed while creation waits returns ``400`` with the usual
+``not_found`` field error and rolls back the entire creation. An authorized
+retry can create the draft normally.
 
 Editor page writes, sibling slug checks, revisions and publication use one
 transaction on the routed page write database. Page/revision/related models
