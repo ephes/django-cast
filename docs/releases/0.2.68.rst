@@ -385,6 +385,10 @@ Features
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
 
+- Keep enabled development theme-comparison iframes on local paths: reject
+  backslashes, control characters and surrounding whitespace before rendering
+  a destination, including query-decoded browser network-path spellings.
+
 - Resolve submitted post and episode cover/body/gallery media (and episode
   ``podcast_audio``) after the parent writer lock, using fresh user
   permissions. Concurrent collection moves or permission withdrawals reject the
@@ -661,6 +665,10 @@ Security and hardening
 
 Fixes
 ~~~~~
+
+- Let ``generate_transcripts --force`` bypass old-artifact completeness reads.
+  Treat malformed or non-object Podlove/DOTe JSON as incomplete in normal
+  batches, allowing regeneration and independent targets to continue.
 
 - Make ``sync_renditions`` compensate acknowledged, unreferenced repair and
   creation files after an image transaction rolls back. Retain uncertain

@@ -7,6 +7,7 @@ submodules, never the ``cast.models`` package or ``cast.voxhelm``.
 
 from __future__ import annotations
 
+from json import JSONDecodeError
 from typing import TYPE_CHECKING
 
 from django.urls import reverse
@@ -22,9 +23,14 @@ if TYPE_CHECKING:
 def transcript_complete(transcript: Transcript) -> bool:
     if not (transcript.podlove and transcript.vtt and transcript.dote):
         return False
-    podlove_transcripts = transcript.podlove_data.get("transcripts")
-    dote_lines = transcript.dote_data.get("lines")
-    return bool(podlove_transcripts) and bool(dote_lines)
+    try:
+        podlove_data = transcript.podlove_data
+        dote_data = transcript.dote_data
+    except JSONDecodeError:
+        return False
+    if not isinstance(podlove_data, dict) or not isinstance(dote_data, dict):
+        return False
+    return bool(podlove_data.get("transcripts")) and bool(dote_data.get("lines"))
 
 
 def get_transcript_generation(audio: Audio) -> TranscriptGeneration | None:

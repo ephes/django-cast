@@ -59,7 +59,7 @@ class Command(BaseCommand):
         for target in targets:
             audio = target.audio
             existing = self._get_existing_transcript(audio=audio)
-            if existing is not None and transcript_complete(existing) and not options["force"]:
+            if not options["force"] and existing is not None and transcript_complete(existing):
                 skipped += 1
                 self.stdout.write(f"skipped audio={audio.pk} transcript={existing.pk}")
                 continue
