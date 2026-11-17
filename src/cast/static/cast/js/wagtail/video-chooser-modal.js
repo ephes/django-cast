@@ -1,143 +1,197 @@
 VIDEO_CHOOSER_MODAL_ONLOAD_HANDLERS = {
     'chooser': function(modal, jsonData) {
-        var searchUrl = $('form.media-search', modal.body).attr('action');
-
-        /* currentTag stores the tag currently being filtered on, so that we can
-        preserve this when paginating */
+        if (modal.castMediaChooserCleanup) modal.castMediaChooserCleanup();
+        var body = $(modal.body);
+        var searchForm = $('form.media-search', body);
+        var searchUrl = searchForm.attr('action');
+        var uploadForm = $('form.media-upload', body);
+        var submitButtons = uploadForm.find(':submit');
+        var closeTarget = $(modal.dialog || modal.container);
         var currentTag;
+        var searchTimer;
+        var resultsRequest;
+        var uploadAttempt;
+        var generation = 0;
+        var retired = false;
 
-        function ajaxifyLinks (context) {
-            $('a.media-choice', context).on('click', function(e) {
-                modal.loadUrl(this.href);
+        function newIntent() {
+            clearTimeout(searchTimer);
+            generation += 1;
+            if (resultsRequest) {
+                var request = resultsRequest;
+                resultsRequest = null;
+                request.abort();
+            }
+            return generation;
+        }
+
+        function retire() {
+            if (retired) return;
+            retired = true;
+            newIntent();
+            if (uploadAttempt) {
+                var attempt = uploadAttempt;
+                uploadAttempt = null;
+                attempt.request.abort();
+            }
+            body.find('*').addBack().off('.castMediaChooser');
+            closeTarget.off('.castMediaChooser');
+            observer.disconnect();
+            if (modal.castMediaChooserCleanup === retire) delete modal.castMediaChooserCleanup;
+        }
+
+        function isCurrent() {
+            if (!retired && (!body[0].isConnected || !body[0].contains(searchForm[0]))) retire();
+            return !retired;
+        }
+
+        // Wagtail supports both Bootstrap modal and dialog-backed ModalWorkflow.
+        closeTarget.on('hide.bs.modal.castMediaChooser w-dialog:hide.castMediaChooser', retire);
+        var observer = new MutationObserver(isCurrent);
+        observer.observe(body[0], {childList: true});
+        // ModalWorkflow removes a previous modal when opening a replacement.
+        if (closeTarget[0] && closeTarget[0].parentNode) {
+            observer.observe(closeTarget[0].parentNode, {childList: true});
+        }
+        modal.castMediaChooserCleanup = retire;
+
+        function ajaxifyLinks(context) {
+            $('a.media-choice', context).on('click.castMediaChooser', function(e) {
                 e.preventDefault();
+                if (!isCurrent()) return;
+                var intent = newIntent();
+                resultsRequest = $.ajax({
+                    url: this.href,
+                    dataType: 'text',
+                    success: function(response) {
+                        if (!isCurrent() || intent !== generation) return;
+                        resultsRequest = null;
+                        retire();
+                        modal.loadResponseText(response);
+                    },
+                    error: function() {
+                        if (!isCurrent() || intent !== generation) return;
+                        resultsRequest = null;
+                        $('#search-results', body).prepend(
+                            $('<p class="help-block help-critical"></p>').text(jsonData.error_message)
+                        );
+                    }
+                });
             });
-
-            $('.pagination a', context).on('click', function(e) {
-                var page = this.getAttribute("data-page");
-                setPage(page);
+            $('.pagination a', context).on('click.castMediaChooser', function(e) {
                 e.preventDefault();
+                setPage(this.getAttribute('data-page'));
             });
         }
 
         function fetchResults(requestData) {
-            $.ajax({
+            if (!isCurrent()) return;
+            var intent = newIntent();
+            resultsRequest = $.ajax({
                 url: searchUrl,
                 data: requestData,
-                success: function(data, status) {
-                    $('#search-results').html(data);
-                    ajaxifyLinks($('#search-results'));
+                success: function(data) {
+                    if (!isCurrent() || intent !== generation) return;
+                    resultsRequest = null;
+                    $('#search-results', body).html(data);
+                    ajaxifyLinks($('#search-results', body));
                 }
             });
         }
 
         function search() {
-            /* Searching causes currentTag to be cleared - otherwise there's
-            no way to de-select a tag */
             currentTag = null;
             fetchResults({
-                q: $('#id_q').val(),
-                collection_id: $('#collection_chooser_collection_id').val()
+                q: $('#id_q', body).val(),
+                collection_id: $('#collection_chooser_collection_id', body).val()
             });
             return false;
         }
 
         function setPage(page) {
-            params = {p: page};
-            if ($('#id_q').val().length){
-                params['q'] = $('#id_q').val();
-            }
-            if (currentTag) {
-                params['tag'] = currentTag;
-            }
-            params['collection_id'] = $('#collection_chooser_collection_id').val();
+            var params = {p: page};
+            if ($('#id_q', body).val().length) params.q = $('#id_q', body).val();
+            if (currentTag) params.tag = currentTag;
+            params.collection_id = $('#collection_chooser_collection_id', body).val();
             fetchResults(params);
-            return false;
         }
 
-        ajaxifyLinks(modal.body);
-
-        $('form.media-upload', modal.body).on('submit', function() {
-            var formdata = new FormData(this);
-
-            if ($('#id_title', modal.body).val() == '') {
-                var li = $('#id_title', modal.body).closest('li');
-                if (!li.hasClass('error')) {
-                    li.addClass('error');
-                    $('#id_title', modal.body).closest('.field-content').append('<p class="error-message"><span>This field is required.</span></p>')
+        ajaxifyLinks(body);
+        uploadForm.on('submit.castMediaChooser', function(e) {
+            e.preventDefault();
+            if (!isCurrent() || uploadAttempt) return false;
+            var title = uploadForm.find('[name="title"], [name$="-title"]');
+            if (title.val() === '') {
+                var field = title.closest('li');
+                if (!field.hasClass('error')) {
+                    field.addClass('error');
+                    title.after('<p class="error-message"><span>This field is required.</span></p>');
                 }
-                setTimeout(cancelSpinner, 500);
-            } else {
-                $.ajax({
-                    url: this.action,
-                    data: formdata,
-                    processData: false,
-                    contentType: false,
-                    type: 'POST',
-                    dataType: 'text',
-                    success: modal.loadResponseText,
-                    error: function(response, textStatus, errorThrown) {
-                        message = jsonData['error_message'] + '<br />' + errorThrown + ' - ' + response.status;
-                        $('#upload').append(
-                            '<div class="help-block help-critical">' +
-                            '<strong>' + jsonData['error_label'] + ': </strong>' + message + '</div>');
-                    }
-                });
+                return false;
             }
-
-            return false;
-        });
-
-        $('form.media-search', modal.body).on('submit', search);
-
-        $('#id_q').on('input', function() {
-            clearTimeout($.data(this, 'timer'));
-            var wait = setTimeout(search, 200);
-            $(this).data('timer', wait);
-        });
-        $('#collection_chooser_collection_id').on('change', search);
-        $('a.suggested-tag').on('click', function() {
-            currentTag = $(this).text();
-            $('#id_q').val('');
-            fetchResults({
-                'tag': currentTag,
-                collection_id: $('#collection_chooser_collection_id').val()
-            });
-            return false;
-        });
-
-        function populateTitle(context) {
-            // Note: There are two inputs with `#id_title` on the page.
-            // The page title and media title. Select the input inside the modal body.
-            var fileWidget = $('#id_file', context);
-            fileWidget.on('change', function () {
-                var titleWidget = $('#id_title', context);
-                var title = titleWidget.val();
-                if (title === '') {
-                    // The file widget value example: `C:\fakepath\media.jpg`
-                    var parts = fileWidget.val().split('\\');
-                    var fileName = parts[parts.length - 1];
-                    titleWidget.val(fileName);
+            var attempt = {};
+            uploadAttempt = attempt;
+            submitButtons.prop('disabled', true);
+            attempt.request = $.ajax({
+                url: this.action,
+                data: new FormData(this),
+                processData: false,
+                contentType: false,
+                type: 'POST',
+                dataType: 'text',
+                success: function(response) {
+                    if (!isCurrent() || uploadAttempt !== attempt) return;
+                    uploadAttempt = null;
+                    retire();
+                    modal.loadResponseText(response);
+                },
+                error: function(response, textStatus, errorThrown) {
+                    if (!isCurrent() || uploadAttempt !== attempt) return;
+                    uploadAttempt = null;
+                    submitButtons.prop('disabled', false);
+                    var error = $('<div class="help-block help-critical"></div>');
+                    error.append($('<strong></strong>').text(jsonData.error_label + ': '));
+                    error.append(document.createTextNode(jsonData.error_message + ' ' + errorThrown + ' - ' + response.status));
+                    uploadForm.append(error);
                 }
             });
-        }
-
-        populateTitle(modal.body);
-
-        /* Add tag entry interface (with autocompletion) to the tag field of the media upload form */
-        $('#id_tags', modal.body).tagit({
-            autocomplete: {source: jsonData['tag_autocomplete_url']}
+            return false;
         });
+
+        searchForm.on('submit.castMediaChooser', search);
+        $('#id_q', body).on('input.castMediaChooser', function() {
+            if (!isCurrent()) return;
+            newIntent();
+            searchTimer = setTimeout(search, 200);
+        });
+        $('#collection_chooser_collection_id', body).on('change.castMediaChooser', search);
+        $('a.suggested-tag', body).on('click.castMediaChooser', function() {
+            currentTag = $(this).text();
+            $('#id_q', body).val('');
+            fetchResults({tag: currentTag, collection_id: $('#collection_chooser_collection_id', body).val()});
+            return false;
+        });
+
+        // Only the video file names the item; the poster image must not.
+        var fileWidget = uploadForm.find('input[type="file"][name="original"], input[type="file"][name$="-original"]');
+        fileWidget.on('change.castMediaChooser', function() {
+            var titleWidget = uploadForm.find('[name="title"], [name$="-title"]');
+            if (titleWidget.val() === '') {
+                var parts = $(this).val().split('\\');
+                titleWidget.val(parts[parts.length - 1]);
+            }
+        });
+        uploadForm.find('[name="tags"], [name$="-tags"]').tagit({autocomplete: {source: jsonData.tag_autocomplete_url}});
     },
     'video_chosen': function(modal, jsonData) {
-        modal.respond('videoChosen', jsonData['result']);
+        if (modal.castMediaChooserCleanup) modal.castMediaChooserCleanup();
+        modal.respond('videoChosen', jsonData.result);
         modal.close();
     },
     'select_format': function(modal) {
+        if (modal.castMediaChooserCleanup) modal.castMediaChooserCleanup();
         $('form', modal.body).on('submit', function() {
-            var formdata = new FormData(this);
-
             $.post(this.action, $(this).serialize(), modal.loadResponseText, 'text');
-
             return false;
         });
     }

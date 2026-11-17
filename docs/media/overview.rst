@@ -532,3 +532,34 @@ when reopening the Wagtail editor. Their server, modal and telepath state use
 If a saved Audio or Video ID no longer exists, the chooser opens empty so an
 editor can replace it while editing the rest of the page. Invalid IDs and database
 errors still propagate; this recovery does not grant access to media.
+
+Search, collection, tag and pagination controls belong to their own modal, even
+when another editor or chooser has matching field IDs. The latest action wins:
+new input immediately invalidates previous results, including during the search
+debounce. Closing or replacing a modal, or advancing to another chooser step,
+retires its event handlers, timers and pending requests. Late responses cannot
+publish results or upload errors into another chooser.
+
+Upload fields are resolved within their form, including prefixed field names.
+Each upload form admits one pending submission and disables its submit controls.
+A failed request enables a deliberate retry; success advances the modal once.
+Closing a modal aborts its client request; a server upload already accepted may
+still finish, so cancellation does not promise deletion of an uploaded object.
+An empty upload title is filled from the chosen media file name; the Video
+poster image never names the item.
+
+Clearing a chooser resets its hidden value, title, Edit destination and telepath
+state together. ``setState(null)`` also restores this empty state. Initial render
+and programmatic ``setState`` hydration are silent. A user choice or Clear emits
+one bubbling native ``change`` event when the submitted ID changes, allowing
+Wagtail's editor to observe media-only edits. Choosing the same ID or clearing
+an already empty chooser does not emit another change. Choose and Clear let the
+click reach Wagtail's action dropdown, so the menu closes after either action.
+
+For local regression checks, run ``just js-test``. The opt-in real Wagtail
+StreamField journey (choose, clear, duplicate, reorder, save and reopen) is::
+
+    CAST_RUN_BROWSER=1 uv run pytest tests/media_chooser_browser_test.py -v
+
+It requires Playwright Chromium and permission to bind a local test server.
+All media and editor records in that journey are synthetic.
