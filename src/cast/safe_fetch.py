@@ -22,6 +22,9 @@ if TYPE_CHECKING:
         @overload
         def read(self, size: int, /) -> bytes: ...
 
+        status: int
+        headers: HTTPMessage
+
         def __enter__(self) -> Self: ...
 
         def __exit__(
@@ -54,6 +57,7 @@ class FetchPolicy:
     max_bytes: int
     timeout: float
     max_error_bytes: int = 16 * 1024
+    require_complete_response: bool = False
     follow_redirects: bool = False
     block_private_addresses: bool = True
 
@@ -126,16 +130,11 @@ def _require_public_addresses(hostname: str, port: int) -> None:
             raise FetchError("Fetch URL host resolved to a private or non-global address.")
 
 
-def fetch_bytes(
-    url: str,
-    *,
-    policy: FetchPolicy,
-    headers: dict[str, str] | None = None,
-    method: str = "GET",
-    data: bytes | None = None,
-) -> bytes:
-    """Fetch bounded bytes from an allowed HTTP(S) origin."""
+def validate_fetch_url(url: str, *, policy: FetchPolicy) -> None:
+    """Admit an HTTP(S) destination before dispatch or external reference use."""
     parts = urlsplit(url)
+    if parts.username is not None or parts.password is not None:
+        raise FetchError("Fetch URL must not include userinfo.")
     origin = (parts.scheme.lower(), parts.netloc.lower())
     if origin[0] not in {"http", "https"} or not origin[1]:
         raise FetchError("Fetch URL must use HTTP or HTTPS.")
@@ -149,9 +148,24 @@ def fetch_bytes(
         except ValueError as exc:
             raise FetchError("Fetch URL has an invalid port.") from exc
         _require_public_addresses(parts.hostname, port or (443 if parts.scheme.lower() == "https" else 80))
+
+
+def fetch_bytes(
+    url: str,
+    *,
+    policy: FetchPolicy,
+    headers: dict[str, str] | None = None,
+    method: str = "GET",
+    data: bytes | None = None,
+) -> bytes:
+    """Fetch bounded bytes from an allowed HTTP(S) origin."""
+    validate_fetch_url(url, policy=policy)
     request = Request(url, data=data, headers=headers or {}, method=method)
     try:
         with open_url(request, timeout=policy.timeout, follow_redirects=policy.follow_redirects) as response:
+            if policy.require_complete_response:
+                if response.status != 200 or response.headers.get("Content-Range") is not None:
+                    raise FetchError("Fetch requires a complete HTTP 200 response.")
             return read_response_bytes(response, max_bytes=policy.max_bytes)
     except HTTPError as exc:
         detail = read_http_error_detail(exc, max_bytes=policy.max_error_bytes)

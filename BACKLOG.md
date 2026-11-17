@@ -87,7 +87,7 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 - [ ] Close the `safe_fetch` DNS-rebinding gap before remote-import use
   - Related design:
     [backlog/2026-09-16-media-ingestion-service.md](backlog/2026-09-16-media-ingestion-service.md)
-  - Status: defense-in-depth; `fetch_bytes()` currently has no production caller. Complete this before accepting
+  - Status: defense-in-depth; `fetch_bytes()` serves trusted Voxhelm/styleguide origins. Complete this before accepting
     attacker-controlled remote URLs through an importer or other production feature.
   - Scope: remove the separate validation/connect DNS lookups by pinning the HTTP connection to an address that was
     resolved and approved, while preserving correct HTTP host handling and HTTPS SNI/certificate verification.
@@ -96,18 +96,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
   - Done when: tests demonstrate that a hostname cannot pass public-address validation and then connect to a private
     or otherwise non-global address after a DNS change, for both supported IP families and HTTPS.
 
-- [ ] Bound and validate styleguide remote downloads
-  - Related design:
-    [backlog/2026-09-16-media-ingestion-service.md](backlog/2026-09-16-media-ingestion-service.md)
-  - Status: low-priority defense-in-depth. These URLs are operator-configured and the routes are disabled unless
-    `CAST_ENABLE_DEV_TOOLS` is enabled, but the four current `urlopen()` paths follow redirects and read responses
-    without byte limits.
-  - Scope: route image, video, podcast, and transcript downloads through a shared bounded fetch policy; allow only
-    intended HTTP(S) schemes, cap response and error-body sizes, define redirect behavior, and reject non-global
-    destinations by default. Preserve intentional local development sources only through an explicit documented
-    opt-in.
-  - Done when: focused tests cover oversized responses, private/non-global destinations, redirect handling, and the
-    explicit local-source policy, and the settings/development documentation describes the limits.
 
 - [ ] Reconcile shared proxy security headers for production consumers
   - Review record:

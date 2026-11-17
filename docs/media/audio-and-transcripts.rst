@@ -251,6 +251,12 @@ transcript generation directly from:
 * an episode edit view
 * an audio edit view
 
+Audio-only Voxhelm requests infer contributor context only when exactly one
+episode uses the audio. The uniqueness probe reads at most two episode rows and
+reuses an already prefetched collection without additional queries. Zero or
+multiple episodes supply no inferred context; an explicit episode always wins.
+
+
 The "Generate transcript" action only appears when Voxhelm is configured for
 the request's site — the API base URL must resolve from Django settings or
 environment variables, and the API key from site settings, Django settings, or

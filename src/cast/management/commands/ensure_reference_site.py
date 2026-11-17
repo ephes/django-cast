@@ -14,7 +14,6 @@ from argparse import ArgumentParser
 from typing import Any, cast
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db import transaction
 from django.test import RequestFactory, override_settings
 from wagtail.models import Page, Site
 
@@ -26,6 +25,7 @@ from cast.views.styleguide import (
     STYLEGUIDE_USER_NAME,
     _build_styleguide_data,
     _prepare_styleguide_assets,
+    _reference_seed_writer,
     _styleguide_context,
     _styleguide_default_theme,
 )
@@ -80,7 +80,7 @@ class Command(BaseCommand):
             # Remote fetches and storage writes run before the page transaction, so
             # no row locks (or SQLite's write lock) are held during downloads.
             assets = _prepare_styleguide_assets()
-            with transaction.atomic():
+            with _reference_seed_writer():
                 if options.get("reset"):
                     self._reset_reference_site(self._reference_roots())
                 styleguide_data = _build_styleguide_data(request, assets=assets)

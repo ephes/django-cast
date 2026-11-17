@@ -889,9 +889,19 @@ Additional Resources
 - `Example Project <https://github.com/ephes/django-cast/tree/main/example>`_
 
 Frontend build maintenance
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+==========================
 
 ``just js-build-vite`` and the manual workflow both use
 ``scripts/build_frontend.sh`` for Vite build, manifest normalization and copying.
 ``just js-build-all`` also builds the comments bundle. Test modules use the
 ``*_test.py`` naming convention. The django-upgrade hook targets Django 5.2.
+
+Remote styleguide configuration
+===============================
+
+Existing remote-demo configurations may need explicit media CDN origins in
+``CAST_STYLEGUIDE_REMOTE_ALLOWED_ORIGINS``. Configured page origins are admitted
+automatically; scraped markup cannot extend that list. Leave
+``CAST_STYLEGUIDE_REMOTE_ALLOW_PRIVATE`` at its default ``False`` except for
+trusted local development sources. Refused remote data uses synthetic demo
+content. See :doc:`reference/settings` for response, schema and attempt limits.

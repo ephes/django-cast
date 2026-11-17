@@ -3,6 +3,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from cast import safe_fetch
 from cast.devdata import create_audio, create_gallery, create_image, create_user
 from cast.views import styleguide as styleguide_view
 from cast.views.styleguide import StyleguideRemoteFile, StyleguideRemoteVideo
@@ -12,8 +13,11 @@ class DummyResponse:
     def __init__(self, data: bytes) -> None:
         self._data = data
 
-    def read(self) -> bytes:
-        return self._data
+    status = 200
+    headers = {}
+
+    def read(self, size=-1) -> bytes:
+        return self._data if size < 0 else self._data[:size]
 
     def __enter__(self):
         return self
@@ -94,22 +98,29 @@ def test_styleguide_setting_helpers(settings):
     assert styleguide_view._styleguide_transcript_max_segments() == 5
 
 
-def test_styleguide_request_sets_user_agent():
-    request = styleguide_view._styleguide_request("https://example.com")
-    assert request.headers.get("User-agent") == styleguide_view.STYLEGUIDE_USER_AGENT
+def test_styleguide_request_sets_user_agent(monkeypatch):
+    requests = []
+
+    def open_response(request, **kwargs):
+        requests.append(request)
+        return DummyResponse(b"ok")
+
+    monkeypatch.setattr(safe_fetch, "open_url", open_response)
+    assert styleguide_view._fetch_remote_html("https://example.com") == "ok"
+    assert requests[0].get_header("User-agent") == styleguide_view.STYLEGUIDE_USER_AGENT
 
 
 def test_styleguide_fetch_remote_html_success_and_failure(monkeypatch):
-    def fake_urlopen(_request, timeout=0):
+    def fake_urlopen(_request, timeout=0, **kwargs):
         return DummyResponse(b"<html>ok</html>")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen)
     assert styleguide_view._fetch_remote_html("https://example.com") == "<html>ok</html>"
 
-    def fake_error(_request, timeout=0):
+    def fake_error(_request, timeout=0, **kwargs):
         raise OSError("boom")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_error)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_error)
     assert styleguide_view._fetch_remote_html("https://example.com") is None
 
 
@@ -630,16 +641,16 @@ def test_styleguide_remote_media_flag(settings):
 
 
 def test_styleguide_fetch_podlove_data(monkeypatch):
-    def fake_urlopen(_request, timeout=0):
+    def fake_urlopen(_request, timeout=0, **kwargs):
         return DummyResponse(json.dumps({"ok": True}).encode("utf-8"))
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen)
     assert styleguide_view._fetch_podlove_data("https://example.com/api") == {"ok": True}
 
-    def fake_error(_request, timeout=0):
+    def fake_error(_request, timeout=0, **kwargs):
         raise OSError("boom")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_error)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_error)
     assert styleguide_view._fetch_podlove_data("https://example.com/api") is None
 
 

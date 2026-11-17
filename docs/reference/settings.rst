@@ -763,6 +763,55 @@ CAST_STYLEGUIDE_TRANSCRIPT_EXCERPT_SEGMENTS
 Maximum number of transcript segments shown in the styleguide audio preview.
 Defaults to ``2``.
 
+Remote styleguide response admission
+====================================
+
+All remote styleguide reads are bounded before decoding or storage: HTML is
+limited to 2 MiB, Podlove control JSON to 1 MiB, images to 20 MiB and audio to
+100 MiB. The actual received bytes determine admission, independently of
+``Content-Length``. Only complete HTTP 200 responses without ``Content-Range``
+are accepted. Refused downloads use the synthetic demo fallback.
+
+Sources configured through the styleguide source URL settings allow their own
+HTTP(S) origins. Add any intended media CDN origins explicitly, for example::
+
+    CAST_STYLEGUIDE_REMOTE_ALLOWED_ORIGINS = ["https://media.example.org"]
+
+The additional-origin list defaults to ``[]``. Derived URLs cannot add origins.
+URL userinfo and redirects are refused.
+Non-global/private destinations are blocked by default. For trusted local demo
+sources only, ``CAST_STYLEGUIDE_REMOTE_ALLOW_PRIVATE = True`` disables that
+address check while retaining the explicit origin allowlist. This is separate
+from Voxhelm's trusted server policy. The DNS check does not pin connections;
+keep configured origins trusted (see :doc:`../architecture`).
+
+One remote-media invocation permits at most 24 distinct attempted URLs, including
+failed pages and assets. It stops dispatching after 30 monotonic seconds;
+the per-request timeout still applies separately. Duplicate URLs are not fetched
+again during that invocation; an HTML page that was already read (for example an
+image source page reused as the video fallback) reuses its first result. Gallery
+success limits still apply. These limits
+bound attempts, not the lifetime of a slow response within one request.
+
+Podlove control JSON must be an object with unique members, an optional object
+``show`` with a string ``poster``, and an optional list of transcript objects.
+Each transcript requires string ``start`` and ``text``; ``end``, ``speaker`` and
+``voice``, when present, must also be strings. Versions must be integers and
+non-finite JSON numbers are refused. Invalid control data refuses that remote
+podcast page's audio and cover before media writes and uses demo content; an
+explicitly configured transcript source is still read. Unavailable control data
+(timeouts, HTTP errors, refused destinations) only skips the Podlove poster and
+transcript.
+
+New remote files use fresh names. Their owning save transaction removes only its
+unreferenced output on persistence or derivation failure. Committed files survive
+postcommit callback errors; cleanup errors remain secondary. Remote acquisition
+must run outside an ambient application transaction: the styleguide view opts out
+of ``ATOMIC_REQUESTS``, and a caller that is already inside a transaction (for
+example ``call_command("ensure_reference_site")`` within ``atomic()``) gets the
+demo fallback without remote fetches.
+
+
 ********
 Storages
 ********

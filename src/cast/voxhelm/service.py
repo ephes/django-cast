@@ -187,7 +187,7 @@ def resolve_audio_episode(audio: Audio, *, episode: Any | None = None) -> Any | 
     if episode_manager is None:
         return None
 
-    episodes = list(episode_manager.all())
+    episodes = list(episode_manager.all()[:2])
     if len(episodes) != 1:
         return None
     return episodes[0]

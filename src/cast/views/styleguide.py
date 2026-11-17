@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
-from dataclasses import dataclass
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from datetime import datetime
 from html.parser import HTMLParser
 from io import BytesIO
+from math import isfinite
+from time import monotonic
 from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request, urlopen
+from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
@@ -18,6 +24,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.template import TemplateDoesNotExist
@@ -65,8 +72,11 @@ from cast.models.image_renditions import (
 )
 from cast.models.repository import BlogIndexContext
 from cast.post_media import prepare_post_media
+from cast.safe_fetch import FetchError, FetchPolicy, fetch_bytes, validate_fetch_url
 
 from .htmx_helpers import HtmxHttpRequest
+
+logger = logging.getLogger(__name__)
 
 STYLEGUIDE_BLOG_SLUG = "styleguide-blog"
 STYLEGUIDE_PODCAST_SLUG = "styleguide-podcast"
@@ -75,6 +85,12 @@ STYLEGUIDE_EPISODE_SLUG = "styleguide-episode-1"
 STYLEGUIDE_USER_NAME = "styleguide"
 STYLEGUIDE_FALLBACK_THEMES = ("bootstrap5", "bootstrap4", "plain")
 STYLEGUIDE_USER_AGENT = "django-cast-styleguide/1.0"
+STYLEGUIDE_REMOTE_BYTE_LIMITS = {
+    "html": 2 * 1024**2,
+    "control": 1024**2,
+    "image": 20 * 1024**2,
+    "audio": 100 * 1024**2,
+}
 
 
 @dataclass(frozen=True)
@@ -188,6 +204,7 @@ class StyleguideSeedData:
     video_poster_url: str | None = None
 
 
+@transaction.non_atomic_requests
 def styleguide(request: HtmxHttpRequest) -> HttpResponse:
     if not _styleguide_is_enabled():
         raise Http404("Styleguide disabled")
@@ -293,12 +310,24 @@ class StyleguideAssets:
     media: StyleguideMedia
 
 
+@contextmanager
+def _reference_seed_writer() -> Iterator[None]:
+    """Reserve the stable Wagtail root before reading Site or seed pages.
+
+    A no-op UPDATE locks the root row on PostgreSQL and obtains SQLite's
+    writer reservation before a read snapshot can be established.
+    """
+    with transaction.atomic():
+        Page.objects.filter(depth=1).update(numchild=F("numchild"))
+        yield
+
+
 def _prepare_styleguide_assets() -> StyleguideAssets:
     """Create media before a command replaces any existing reference pages.
 
     Storage writes are not transactional; the caller owns the database transaction.
     """
-    with transaction.atomic():
+    with _reference_seed_writer():
         user = create_user(name=STYLEGUIDE_USER_NAME, password=STYLEGUIDE_USER_NAME)
         user = _harden_styleguide_user(user)
 
@@ -314,8 +343,13 @@ def _prepare_styleguide_assets() -> StyleguideAssets:
 
 
 def _ensure_styleguide_seed_data(*, assets: StyleguideAssets | None = None) -> StyleguideSeedData:
-    site = _ensure_site()
     assets = assets or _prepare_styleguide_assets()
+    with _reference_seed_writer():
+        return _seed_styleguide_pages(assets)
+
+
+def _seed_styleguide_pages(assets: StyleguideAssets) -> StyleguideSeedData:
+    site = _ensure_site()
     user, remote_media, galleries, media = assets.user, assets.remote_media, assets.galleries, assets.media
     blog = _ensure_blog(site, user)
     include_video_in_body = False
@@ -1117,16 +1151,75 @@ def _styleguide_transcript_max_segments() -> int:
     return int(appsettings.CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS)
 
 
-def _styleguide_request(url: str) -> Request:
-    return Request(url, headers={"User-Agent": STYLEGUIDE_USER_AGENT})
+@dataclass
+class _RemoteAttemptBudget:
+    deadline: float = field(default_factory=lambda: monotonic() + 30)
+    seen: set[str] = field(default_factory=set)
+    html_pages: dict[str, str | None] = field(default_factory=dict)
+
+    def admit(self, url: str) -> None:
+        if url in self.seen or len(self.seen) >= 24 or monotonic() >= self.deadline:
+            raise FetchError("Styleguide remote attempt envelope exhausted or URL already attempted.")
+        self.seen.add(url)
+
+
+_remote_budget: ContextVar[_RemoteAttemptBudget | None] = ContextVar("styleguide_remote_budget", default=None)
+
+
+@contextmanager
+def _remote_fetch_scope() -> Iterator[None]:
+    if _remote_budget.get() is not None:
+        yield
+        return
+    token = _remote_budget.set(_RemoteAttemptBudget())
+    try:
+        yield
+    finally:
+        _remote_budget.reset(token)
+
+
+def _styleguide_fetch_policy(kind: str) -> FetchPolicy:
+    sources = [
+        *_styleguide_image_source_urls(),
+        _styleguide_podcast_source_url(),
+        _styleguide_transcript_source_url(),
+        _styleguide_video_source_url(),
+        *appsettings.CAST_STYLEGUIDE_REMOTE_ALLOWED_ORIGINS,
+    ]
+    origins = frozenset((urlparse(url).scheme.lower(), urlparse(url).netloc.lower()) for url in sources if url)
+    return FetchPolicy(
+        allowed_origins=origins,
+        max_bytes=STYLEGUIDE_REMOTE_BYTE_LIMITS[kind],
+        timeout=_styleguide_remote_timeout(),
+        block_private_addresses=not appsettings.CAST_STYLEGUIDE_REMOTE_ALLOW_PRIVATE,
+        require_complete_response=True,
+    )
+
+
+def _styleguide_fetch(url: str, kind: str) -> bytes:
+    budget = _remote_budget.get()
+    if budget is not None:
+        budget.admit(url)
+    return fetch_bytes(
+        url,
+        policy=_styleguide_fetch_policy(kind),
+        headers={"User-Agent": STYLEGUIDE_USER_AGENT},
+    )
 
 
 def _fetch_remote_html(url: str) -> str | None:
+    budget = _remote_budget.get()
+    if budget is not None and url in budget.html_pages:
+        # Gallery and video fallback read the same configured pages; reuse the
+        # first outcome instead of refusing the repeated URL as a new attempt.
+        return budget.html_pages[url]
     try:
-        with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
-            return response.read().decode("utf-8", "ignore")
+        html: str | None = _styleguide_fetch(url, "html").decode("utf-8", "ignore")
     except Exception:
-        return None
+        html = None
+    if budget is not None:
+        budget.html_pages[url] = html
+    return html
 
 
 def _extract_image_urls(html: str, page_url: str) -> list[str]:
@@ -1286,12 +1379,87 @@ def _extract_podlove_player_api_url(html: str, page_url: str) -> str | None:
     return None
 
 
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate control member.")
+        result[key] = value
+    return result
+
+
+def _validate_podlove_control(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("Control root must be an object.")
+    if "version" in data and type(data["version"]) is not int:
+        raise ValueError("Control version must be an integer.")
+    show = data.get("show", {})
+    if not isinstance(show, dict) or ("poster" in show and not isinstance(show["poster"], str)):
+        raise ValueError("Invalid show metadata.")
+    transcripts = data.get("transcripts", [])
+    if not isinstance(transcripts, list):
+        raise ValueError("Transcripts must be a list.")
+    for segment in transcripts:
+        if not isinstance(segment, dict) or not all(isinstance(segment.get(k), str) for k in ("start", "text")):
+            raise ValueError("Invalid transcript segment.")
+        if any(k in segment and not isinstance(segment[k], str) for k in ("end", "speaker", "voice")):
+            raise ValueError("Invalid transcript field.")
+    return data
+
+
+def _finite_json_float(value: str) -> float:
+    number = float(value)
+    if not isfinite(number):
+        raise ValueError("Non-finite control number.")
+    return number
+
+
+def _refuse_json_constant(value: str) -> Any:
+    raise ValueError("Non-finite control number.")
+
+
+class _PodloveControlRefused(Exception):
+    """Fetched Podlove control data failed admission."""
+
+
 def _fetch_podlove_data(url: str) -> dict[str, Any] | None:
+    """Return ``None`` when control data is unavailable; raise when it is invalid."""
     try:
-        with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
-            return json.loads(response.read().decode("utf-8", "ignore"))
+        content = _styleguide_fetch(url, "control")
     except Exception:
         return None
+    try:
+        data = json.loads(
+            content.decode("utf-8", "strict"),
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_refuse_json_constant,
+            parse_float=_finite_json_float,
+        )
+        return _validate_podlove_control(data)
+    except Exception as exc:
+        raise _PodloveControlRefused from exc
+
+
+@contextmanager
+def _remote_file_save(model: Any, field_name: str, filename: str, content: bytes) -> Iterator[None]:
+    """Own a fresh storage name through persistence and postcommit failures."""
+    field = getattr(model, field_name)
+    name = None
+    try:
+        # Refuse ambient application transactions before creating a file: cleanup
+        # needs to inspect committed row references after the owning rollback.
+        with transaction.atomic(durable=True):
+            field.save(f"{uuid4().hex}-{filename}", ContentFile(content), save=False)
+            name = field.name
+            yield
+    except Exception:
+        if name:
+            try:
+                if not type(model).objects.filter(**{field_name: name}).exists():
+                    field.storage.delete(name)
+            except Exception:
+                logger.warning("Could not compensate a remote styleguide file.", exc_info=True)
+        raise
 
 
 def _extract_transcript_data(html: str) -> dict[str, Any] | None:
@@ -1309,8 +1477,7 @@ def _get_or_create_remote_image(url: str, user: User) -> Image | None:
     if existing is not None:
         return existing
     try:
-        with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
-            content = response.read()
+        content = _styleguide_fetch(url, "image")
     except Exception:
         return None
     try:
@@ -1320,10 +1487,10 @@ def _get_or_create_remote_image(url: str, user: User) -> Image | None:
         return None
     filename = urlparse(url).path.rsplit("/", 1)[-1] or "styleguide-image.jpg"
     image = Image(title=title)
-    image.file.save(filename, ContentFile(content), save=False)
-    image.width = width
-    image.height = height
-    image.save()
+    with _remote_file_save(image, "file", filename, content):
+        image.width = width
+        image.height = height
+        image.save()
     return image
 
 
@@ -1363,13 +1530,12 @@ def _get_or_create_remote_audio(url: str, user: User) -> Audio | None:
         transitional.save()
         return transitional
     try:
-        with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
-            content = response.read()
+        content = _styleguide_fetch(url, "audio")
     except Exception:
         return None
     audio = Audio(user=user, title=clean_title, data={"styleguide_source_url": url})
-    audio.m4a.save(filename, ContentFile(content), save=False)
-    save_audio_with_derivations(audio)
+    with _remote_file_save(audio, "m4a", filename, content):
+        save_audio_with_derivations(audio)
     return audio
 
 
@@ -1387,7 +1553,7 @@ def _empty_styleguide_remote_media() -> StyleguideRemoteMedia:
 
 def _styleguide_remote_html_pages(urls: list[str]) -> list[tuple[str, str]]:
     pages: list[tuple[str, str]] = []
-    for page_url in urls:
+    for page_url in urls[:24]:
         if not page_url:
             continue
         html = _fetch_remote_html(page_url)
@@ -1397,6 +1563,7 @@ def _styleguide_remote_html_pages(urls: list[str]) -> list[tuple[str, str]]:
     return pages
 
 
+@_remote_fetch_scope()
 def _fetch_styleguide_remote_gallery_media(user: User) -> tuple[list[Image] | None, list[str] | None]:
     gallery_images: list[Image] = []
     image_urls: list[str] = []
@@ -1405,7 +1572,10 @@ def _fetch_styleguide_remote_gallery_media(user: User) -> tuple[list[Image] | No
         image_urls.extend(_extract_image_urls(html, page_url))
         gallery_blocks.extend(_extract_gallery_blocks(html))
 
-    for url in image_urls:
+    for url in dict.fromkeys(image_urls):
+        budget = _remote_budget.get()
+        if budget is not None and (len(budget.seen) >= 24 or monotonic() >= budget.deadline):
+            break
         if len(gallery_images) >= _styleguide_remote_image_limit():
             break
         image = _get_or_create_remote_image(url, user)
@@ -1421,6 +1591,13 @@ def _fetch_styleguide_remote_video_media() -> tuple[str | None, str | None]:
     for page_url, html in _styleguide_remote_html_pages(video_sources):
         candidate_url, candidate_poster = _extract_video_data(html, page_url)
         if candidate_url:
+            try:
+                policy = _styleguide_fetch_policy("html")
+                validate_fetch_url(candidate_url, policy=policy)
+                if candidate_poster:
+                    validate_fetch_url(candidate_poster, policy=policy)
+            except FetchError:
+                continue
             return candidate_url, candidate_poster
     return None, None
 
@@ -1438,12 +1615,14 @@ def _fetch_styleguide_remote_podcast_media(
     cover_image: Image | None = None
     html = _fetch_remote_html(podcast_url)
     if html is not None:
-        audio_url = _extract_audio_url(html)
-        if audio_url:
-            audio = _get_or_create_remote_audio(audio_url, user)
         podlove_api_url = _extract_podlove_player_api_url(html, podcast_url)
         if podlove_api_url:
-            podlove_data = _fetch_podlove_data(podlove_api_url)
+            try:
+                podlove_data = _fetch_podlove_data(podlove_api_url)
+            except _PodloveControlRefused:
+                # Invalid control data refuses this podcast page's media; an
+                # explicitly configured transcript source is still used.
+                return None, None, None, transcript_url
             if podlove_data:
                 poster_url = podlove_data.get("show", {}).get("poster")
                 if poster_url:
@@ -1454,6 +1633,9 @@ def _fetch_styleguide_remote_podcast_media(
                         "version": podlove_data.get("version", 1),
                         "transcripts": transcripts,
                     }
+        audio_url = _extract_audio_url(html)
+        if audio_url:
+            audio = _get_or_create_remote_audio(audio_url, user)
         cover_url = _extract_cover_image_url(html, podcast_url)
         if cover_url and cover_image is None:
             cover_image = _get_or_create_remote_image(cover_url, user)
@@ -1485,8 +1667,22 @@ def _fetch_styleguide_remote_transcript_media(
     return transcript_data, cover_image
 
 
+def _remote_acquisition_allowed() -> bool:
+    """Remote files need their own durable save transaction (see ``_remote_file_save``)."""
+    try:
+        with transaction.atomic(durable=True):
+            pass
+    except RuntimeError:
+        return False
+    return True
+
+
+@_remote_fetch_scope()
 def _fetch_styleguide_remote_media(user: User) -> StyleguideRemoteMedia:
     if not _styleguide_remote_media_enabled():
+        return _empty_styleguide_remote_media()
+    if not _remote_acquisition_allowed():
+        logger.warning("Styleguide remote media skipped inside an ambient transaction; using demo content.")
         return _empty_styleguide_remote_media()
 
     gallery_images, gallery_blocks = _fetch_styleguide_remote_gallery_media(user)

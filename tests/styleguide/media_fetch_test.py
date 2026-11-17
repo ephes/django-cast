@@ -4,6 +4,7 @@ import pytest
 from django.core.files.base import ContentFile
 from django.test import RequestFactory
 
+from cast import safe_fetch
 from cast.devdata import create_audio, create_image, create_user
 from cast.models import Audio
 from cast.views import styleguide as styleguide_view
@@ -14,8 +15,11 @@ class DummyResponse:
     def __init__(self, data: bytes) -> None:
         self._data = data
 
-    def read(self) -> bytes:
-        return self._data
+    status = 200
+    headers = {}
+
+    def read(self, size=-1) -> bytes:
+        return self._data if size < 0 else self._data[:size]
 
     def __enter__(self):
         return self
@@ -76,10 +80,10 @@ def test_styleguide_get_or_create_remote_image_and_audio(monkeypatch):
     user = create_user(name="remote-user", password="remote-user")
     png_bytes = _tiny_png_bytes()
 
-    def fake_urlopen(_request, timeout=0):
+    def fake_urlopen(_request, timeout=0, **kwargs):
         return DummyResponse(png_bytes)
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen)
     image = styleguide_view._get_or_create_remote_image("https://example.com/image.png", user)
     assert image is not None
     existing = styleguide_view._get_or_create_remote_image("https://example.com/image.png", user)
@@ -94,16 +98,16 @@ def test_styleguide_get_or_create_remote_image_and_audio(monkeypatch):
 def test_styleguide_get_or_create_remote_image_errors(monkeypatch):
     user = create_user(name="remote-image-error", password="remote-image-error")
 
-    def fake_urlopen_error(_request, timeout=0):
+    def fake_urlopen_error(_request, timeout=0, **kwargs):
         raise OSError("boom")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen_error)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen_error)
     assert styleguide_view._get_or_create_remote_image("https://example.com/image.png", user) is None
 
-    def fake_urlopen_bad(_request, timeout=0):
+    def fake_urlopen_bad(_request, timeout=0, **kwargs):
         return DummyResponse(b"not-an-image")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen_bad)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen_bad)
     monkeypatch.setattr(styleguide_view.PilImage, "open", lambda *_args, **_kwargs: (_ for _ in ()).throw(OSError()))
     assert styleguide_view._get_or_create_remote_image("https://example.com/bad.png", user) is None
 
@@ -112,20 +116,20 @@ def test_styleguide_get_or_create_remote_image_errors(monkeypatch):
 def test_styleguide_get_or_create_remote_audio_existing_and_error(monkeypatch):
     user = create_user(name="remote-audio-error", password="remote-audio-error")
 
-    def fake_urlopen(_request, timeout=0):
+    def fake_urlopen(_request, timeout=0, **kwargs):
         return DummyResponse(b"audio-bytes")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen)
     monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda _url: timedelta(seconds=1)))
     audio = styleguide_view._get_or_create_remote_audio("https://example.com/audio.m4a", user)
     assert audio is not None
     existing = styleguide_view._get_or_create_remote_audio("https://example.com/audio.m4a", user)
     assert existing.pk == audio.pk
 
-    def fake_urlopen_error(_request, timeout=0):
+    def fake_urlopen_error(_request, timeout=0, **kwargs):
         raise OSError("boom")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen_error)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen_error)
     assert styleguide_view._get_or_create_remote_audio("https://example.com/missing.m4a", user) is None
 
 
@@ -206,10 +210,10 @@ def test_styleguide_get_or_create_remote_audio_does_not_adopt_other_users_row(mo
     other_audio.m4a.save("audio.m4a", ContentFile(b"audio-bytes"), save=True)
     other_audio.save()
 
-    def fake_urlopen(_request, timeout=0):
+    def fake_urlopen(_request, timeout=0, **kwargs):
         return DummyResponse(b"new-audio-bytes")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen)
     result = styleguide_view._get_or_create_remote_audio(url, styleguide_user)
     assert result is not None
     assert result.pk != other_audio.pk  # must be a new row
@@ -225,10 +229,10 @@ def test_styleguide_get_or_create_remote_audio_same_filename_different_urls(monk
     monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda _url: timedelta(seconds=1)))
     user = create_user(name="remote-audio-same-fn", password="remote-audio-same-fn")
 
-    def fake_urlopen(_request, timeout=0):
+    def fake_urlopen(_request, timeout=0, **kwargs):
         return DummyResponse(b"audio-bytes")
 
-    monkeypatch.setattr(styleguide_view, "urlopen", fake_urlopen)
+    monkeypatch.setattr(safe_fetch, "open_url", fake_urlopen)
     url_a = "https://example.com/path-one/audio.m4a"
     url_b = "https://another.example.org/path-two/audio.m4a"
     audio_a = styleguide_view._get_or_create_remote_audio(url_a, user)

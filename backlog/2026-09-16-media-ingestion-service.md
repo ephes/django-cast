@@ -293,9 +293,9 @@ Every slice keeps `just check` green; 5 and 7 can be reordered freely. Slices 1-
 
 - Remote media import, feed import, embed blocks and editor media replacement themselves (this note only builds the
   primitives they need); connect-time IP pinning for `safe_fetch` (a hook is left for the first remote importer).
-- `views/styleguide.py` remote fetches (`:1096`, `:1261`, `:1282`, `:1336`; operator-configured URLs, unbounded
-  `response.read()`, redirects on): a follow-up `safe_fetch` consumer with `block_private_addresses=False`, not moved
-  here because 20 test sites patch `styleguide_view.urlopen`.
+- Styleguide remote acquisition was implemented separately in round 129: bounded complete responses,
+  configured origin allowlists, default private-address refusal, finite invocation attempts, control schema
+  validation and owned-file compensation. See `docs/reference/settings.rst`; connection pinning remains open.
 - Changing the editor API contract, codes, messages or pagination; moving `forms.py` into a package (review D-item);
   registering the `CAST_VOXHELM_*` settings (X7).
 - Backfilling durations or cleaning already orphaned storage files (`media_stale` covers that separately).

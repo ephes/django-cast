@@ -70,7 +70,7 @@ def test_styleguide_ensure_seed_data_orchestrates_seed_flow(monkeypatch):
     calls: dict[str, object] = {}
 
     monkeypatch.setattr(styleguide_view, "_ensure_site", lambda: site)
-    monkeypatch.setattr(styleguide_view.transaction, "atomic", nullcontext)
+    monkeypatch.setattr(styleguide_view, "_reference_seed_writer", nullcontext)
     monkeypatch.setattr(styleguide_view, "create_user", lambda **_kwargs: raw_user)
     monkeypatch.setattr(styleguide_view, "_harden_styleguide_user", lambda _user: user)
     monkeypatch.setattr(styleguide_view, "_ensure_blog", lambda _site, _user: blog)

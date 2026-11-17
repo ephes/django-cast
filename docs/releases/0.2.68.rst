@@ -1,6 +1,24 @@
 0.2.68 (unreleased)
 -------------------
 
+- Bound styleguide HTML, control JSON, image and audio response bodies before
+  decode/storage; refuse unsolicited partial responses and use demo fallback.
+
+- Admit styleguide derived URLs through an explicit HTTP(S) origin policy;
+  disable redirects and bound failed gallery/page attempts across each invocation.
+  Configure extra CDN origins with ``CAST_STYLEGUIDE_REMOTE_ALLOWED_ORIGINS``.
+
+- Validate Podlove control objects, duplicate members and transcript shapes before
+  acquiring media. Compensate only fresh, unreferenced remote files after failed
+  persistence/derivation; retain committed files after callback errors.
+  The styleguide view opts out of ``ATOMIC_REQUESTS``; remote acquisition inside
+  an ambient transaction falls back to demo content.
+
+- Serialize reference view/command root and post seeding through one Wagtail
+  root writer reservation, with remote preparation outside the page transaction.
+- Bound the audio-only Voxhelm episode uniqueness query to two rows while
+  preserving explicit episode precedence and prefetched results.
+
 Upgrade actions
 ~~~~~~~~~~~~~~~
 

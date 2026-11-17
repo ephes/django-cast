@@ -273,7 +273,9 @@ error-body byte caps, timeouts, and private-address blocking. When
 module classifies as non-global, plus multicast addresses, are rejected before
 the request opens. Redirect following cannot be combined with this check.
 Operator-configured Voxhelm origins deliberately disable it while retaining
-same-origin and size controls.
+same-origin and size controls. Styleguide acquisition uses configured source and
+additional CDN origins, default private-address blocking, complete-response
+admission and per-invocation attempt limits (see :doc:`reference/settings`).
 
 The resolution check does not pin the connection to the validated address, so
 it is not by itself a complete defense against DNS rebinding. Before accepting
