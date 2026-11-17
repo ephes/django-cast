@@ -12,7 +12,7 @@ type Request = {
   error: (response: { status: number }, status: string, error: string) => void;
   abort: ReturnType<typeof vi.fn>;
 };
-function markup(name: string) {
+function markup(name: string, extra = "") {
   return `<div class="modal"><div class="modal-body" data-owner="${name}">
     <form class="media-search" action="/search/${name}"><input id="id_q" value="${name}">
       <select id="collection_chooser_collection_id"><option>${name}</option><option>B</option></select></form>
@@ -21,12 +21,12 @@ function markup(name: string) {
     <a class="suggested-tag" href="#">tag-${name}</a>
     <section id="upload-${name}"><form class="media-upload" action="/upload/${name}">
       <li><div class="field-content"><input id="id_media-chooser-upload-title" name="media-chooser-upload-title" value="Title"></div></li>
-      <input id="id_media-chooser-upload-tags" name="media-chooser-upload-tags"><input id="id_media-chooser-upload-original" name="media-chooser-upload-original" type="file"><button type="submit">Upload</button>
+      <input id="id_media-chooser-upload-tags" name="media-chooser-upload-tags"><input id="id_media-chooser-upload-original" name="media-chooser-upload-original" type="file">${extra}<button type="submit">Upload</button>
     </form></section></div></div>`;
 }
 let requests: Request[];
-function mount(type: string, name: string) {
-  $(document.body).append(markup(name));
+function mount(type: string, name: string, extra = "") {
+  $(document.body).append(markup(name, extra));
   const body = $(`[data-owner="${name}"]`);
   const modal = { body, container: body.parent(), loadUrl: vi.fn(), loadResponseText: vi.fn(), close: vi.fn(), respond: vi.fn() };
   const handlers = new Function("$", "FormData", `${script(type, "-modal")}; return ${type.toUpperCase()}_CHOOSER_MODAL_ONLOAD_HANDLERS;`)($, FormData);
@@ -280,6 +280,19 @@ describe.each(["audio", "video"])("%s chooser integration boundaries", (type) =>
     file.trigger("change");
     expect(title.val()).toBe("synthetic.mp4");
     expect(a.body.find('[name="media-chooser-upload-title"]').val()).toBe("Title");
+  });
+  it.runIf(type === "video")("ignores the poster image when populating the title", () => {
+    const { body } = mount(type, "a", '<input name="media-chooser-upload-poster" type="file">');
+    const title = body.find('[name="media-chooser-upload-title"]');
+    title.val("");
+    const poster = body.find('[name="media-chooser-upload-poster"]');
+    Object.defineProperty(poster[0], "value", { value: "C:\\fakepath\\poster.jpg", configurable: true });
+    poster.trigger("change");
+    expect(title.val()).toBe("");
+    const original = body.find('[name="media-chooser-upload-original"]');
+    Object.defineProperty(original[0], "value", { value: "C:\\fakepath\\clip.mp4", configurable: true });
+    original.trigger("change");
+    expect(title.val()).toBe("clip.mp4");
   });
   it("hydrates a duplicated cleared state through the shipped telepath adapter silently", () => {
     const { chooser, choose, clear } = widget(type);

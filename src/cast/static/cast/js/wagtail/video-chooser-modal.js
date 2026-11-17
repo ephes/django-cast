@@ -172,7 +172,8 @@ VIDEO_CHOOSER_MODAL_ONLOAD_HANDLERS = {
             return false;
         });
 
-        var fileWidget = uploadForm.find('input[type="file"]');
+        // Only the video file names the item; the poster image must not.
+        var fileWidget = uploadForm.find('input[type="file"][name="original"], input[type="file"][name$="-original"]');
         fileWidget.on('change.castMediaChooser', function() {
             var titleWidget = uploadForm.find('[name="title"], [name$="-title"]');
             if (titleWidget.val() === '') {

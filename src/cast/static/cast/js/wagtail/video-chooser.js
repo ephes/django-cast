@@ -62,12 +62,10 @@ function createVideoChooser(id) {
 
     $('.action-choose, [data-chooser-action-choose]', chooserElement).on('click', function() {
         chooser.openChooserModal();
-        return false;
     });
 
     $('.action-clear, [data-chooser-action-clear]', chooserElement).on('click', function() {
         setUserState(null);
-        return false;
     });
 
     return chooser;

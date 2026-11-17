@@ -545,13 +545,16 @@ Each upload form admits one pending submission and disables its submit controls.
 A failed request enables a deliberate retry; success advances the modal once.
 Closing a modal aborts its client request; a server upload already accepted may
 still finish, so cancellation does not promise deletion of an uploaded object.
+An empty upload title is filled from the chosen media file name; the Video
+poster image never names the item.
 
 Clearing a chooser resets its hidden value, title, Edit destination and telepath
 state together. ``setState(null)`` also restores this empty state. Initial render
 and programmatic ``setState`` hydration are silent. A user choice or Clear emits
 one bubbling native ``change`` event when the submitted ID changes, allowing
 Wagtail's editor to observe media-only edits. Choosing the same ID or clearing
-an already empty chooser does not emit another change.
+an already empty chooser does not emit another change. Choose and Clear let the
+click reach Wagtail's action dropdown, so the menu closes after either action.
 
 For local regression checks, run ``just js-test``. The opt-in real Wagtail
 StreamField journey (choose, clear, duplicate, reorder, save and reopen) is::

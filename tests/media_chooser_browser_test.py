@@ -85,7 +85,10 @@ def test_media_chooser_streamfield_journey(
             expect(page.locator(".modal-body")).to_have_count(0)
             assert page.evaluate("window.mediaChanges") == [str(media.pk)]
             # Open and retire a second chooser with a debounce pending.
-            widgets.first.locator("[data-chooser-action-choose], .action-choose").first.evaluate("el => el.click()")
+            widgets.first.locator('[data-w-dropdown-target="toggle"]').click()
+            page.locator(".tippy-box [data-chooser-action-choose]:visible").click()
+            # The action must not swallow the click that closes Wagtail's dropdown.
+            expect(page.locator(".tippy-box [data-chooser-action-choose]")).to_be_hidden()
             expect(modal.locator("#id_q")).to_be_visible()
             modal.locator("#id_q").fill("retired search")
             page.locator(".modal [data-dismiss=modal]").click()
@@ -93,6 +96,7 @@ def test_media_chooser_streamfield_journey(
             # Wagtail moves dropdown actions into a popup that exists only while open.
             widgets.first.locator('[data-w-dropdown-target="toggle"]').click()
             page.locator(".tippy-box [data-chooser-action-clear]:visible").click()
+            expect(page.locator(".tippy-box [data-chooser-action-clear]")).to_be_hidden()
             expect(widgets.first).to_have_class(re.compile(r"\bblank\b"))
             expect(widgets.first.locator(".title")).to_have_text("")
             expect(widgets.first.locator("[data-chooser-edit-link]")).not_to_have_attribute("href")
