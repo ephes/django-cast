@@ -552,9 +552,10 @@ formats. Review the feature list before resubmitting existing content.
 Creation rechecks add-subpage permission using the locked current parent and
 fresh user grants immediately before writing pages or revisions. A concurrent
 parent move or permission withdrawal returns 403 without page, tag or revision
-writes. Post creation also resolves submitted cover, body and gallery media
-inside that transaction, after acquiring the parent write lock, with the fresh
-user and a new permission-resolution cache. A collection move or media grant
+writes. Post and episode creation also resolve submitted cover, body and gallery
+media (and an episode's ``podcast_audio``) inside that transaction, after
+acquiring the parent write lock, with the fresh user and a new
+permission-resolution cache. A collection move or media grant
 withdrawal committed while creation waits returns ``400`` with the usual
 ``not_found`` field error and rolls back the entire creation. An authorized
 retry can create the draft normally.

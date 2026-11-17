@@ -14,7 +14,7 @@ from wagtail.models import Collection, GroupCollectionPermission, Page, Revision
 
 from cast.api.editor.views import PostEditorMixin
 from cast.content.media_refs import get_choosable_image
-from cast.models import Post
+from cast.models import Episode, Post
 from tests.api.editor_posts_helpers import (
     grant_collection_permission,
     grant_wagtail_admin_access,
@@ -22,9 +22,7 @@ from tests.api.editor_posts_helpers import (
 )
 
 
-@pytest.fixture
-def create_media_case(pg_editor_actors, image, audio, video):
-    _, parent = pg_editor_actors
+def media_actor(image, audio, video):
     actor = page_permission_user(codenames=("add_page",))
     grant_wagtail_admin_access(actor)
     collection = Collection.get_first_root_node().add_child(name="Synthetic allowed media")
@@ -34,7 +32,14 @@ def create_media_case(pg_editor_actors, image, audio, video):
         obj.save(update_fields=["collection"])
     for app_label, codename in (("wagtailimages", "choose_image"), ("cast", "choose_audio"), ("cast", "choose_video")):
         grant_collection_permission(actor, collection, app_label=app_label, codename=codename)
-    return actor, parent, {"image": image, "audio": audio, "video": video}, forbidden
+    return actor, {"image": image, "audio": audio, "video": video}, forbidden
+
+
+@pytest.fixture
+def create_media_case(pg_editor_actors, image, audio, video):
+    _, parent = pg_editor_actors
+    actor, objects, forbidden = media_actor(image, audio, video)
+    return actor, parent, objects, forbidden
 
 
 def media_payload(parent, objects, kind):
@@ -46,18 +51,31 @@ def media_payload(parent, objects, kind):
     }
     if kind == "cover":
         payload["cover_image"] = {"id": objects["image"].pk}
+    elif kind == "podcast_audio":
+        payload["podcast_audio"] = {"id": objects["audio"].pk}
     else:
         ref = {"id": objects["image" if kind == "gallery" else kind].pk}
         payload["detail"] = [{"type": kind, "value": [ref] if kind == "gallery" else ref}]
     return payload
 
 
+def counts():
+    return Page.objects.count(), Post.objects.count(), Episode.objects.count(), Revision.objects.count()
+
+
+def expected_after(before, *, episode):
+    pages, posts, episodes, revisions = before
+    # Episode is a Post subclass, so both post and episode counts grow for episodes.
+    return pages + 1, posts + 1, episodes + int(episode), revisions + 1
+
+
 def assert_refused(response, before, kind):
     assert response.status_code == 400, response.content
-    path = "cover_image.id" if kind == "cover" else "detail.0.value.0.id" if kind == "gallery" else "detail.0.value.id"
+    paths = {"cover": "cover_image.id", "podcast_audio": "podcast_audio.id", "gallery": "detail.0.value.0.id"}
+    path = paths.get(kind, "detail.0.value.id")
     assert path in response.json()["errors"], response.json()
     assert response.json()["errors"][path][0]["code"] == "not_found"
-    assert (Page.objects.count(), Post.objects.count(), Revision.objects.count()) == before
+    assert counts() == before
     from taggit.models import Tag
 
     assert not Tag.objects.filter(name="synthetic-media-tag").exists()
@@ -85,7 +103,7 @@ def test_create_rechecks_media_after_parent_lock(create_media_case, api_client, 
 
     monkeypatch.setattr(PostEditorMixin, "_lock_parent_for_slug_check", before_lock)
     api_client.force_authenticate(user=actor)
-    before = Page.objects.count(), Post.objects.count(), Revision.objects.count()
+    before = counts()
     response = api_client.post(
         reverse("cast:api:editor_post_create"), media_payload(parent, objects, kind), format="json"
     )
@@ -98,7 +116,7 @@ def test_create_rechecks_media_after_parent_lock(create_media_case, api_client, 
         reverse("cast:api:editor_post_create"), media_payload(parent, objects, kind), format="json"
     )
     assert retry.status_code == 201, retry.content
-    assert (Page.objects.count(), Post.objects.count(), Revision.objects.count()) == tuple(n + 1 for n in before)
+    assert counts() == expected_after(before, episode=False)
 
 
 @pytest.mark.parametrize("kind", ["cover", "image", "gallery", "audio", "video"])
@@ -128,7 +146,7 @@ def test_postgres_create_rechecks_media_after_real_parent_wait(create_media_case
         finally:
             close_old_connections()
 
-    before = Page.objects.count(), Post.objects.count(), Revision.objects.count()
+    before = counts()
     monkeypatch.setattr(PostEditorMixin, "_lock_parent_for_slug_check", at_lock)
     with ThreadPoolExecutor(max_workers=1) as executor:
         with transaction.atomic():
@@ -158,4 +176,37 @@ def test_postgres_create_rechecks_media_after_real_parent_wait(create_media_case
     monkeypatch.setattr(PostEditorMixin, "_lock_parent_for_slug_check", original)
     response = create()
     assert response.status_code == 201, response.content
-    assert (Page.objects.count(), Post.objects.count(), Revision.objects.count()) == tuple(n + 1 for n in before)
+    assert counts() == expected_after(before, episode=False)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["cover", "image", "gallery", "audio", "video", "podcast_audio"])
+@pytest.mark.parametrize("change", ["grant", "collection"])
+def test_episode_create_rechecks_media_after_parent_lock(
+    podcast, image, audio, video, api_client, monkeypatch, kind, change
+):
+    actor, objects, forbidden = media_actor(image, audio, video)
+    # Prime Wagtail's request-user permission cache before the lock wait.
+    assert get_choosable_image(objects["image"].pk, actor) is not None
+    original = PostEditorMixin._lock_parent_for_slug_check
+
+    def before_lock(self, selected, *, noun):
+        if change == "collection":
+            for obj in objects.values():
+                type(obj).objects.filter(pk=obj.pk).update(collection=forbidden)
+        else:
+            GroupCollectionPermission.objects.filter(group__user=actor).delete()
+        return original(self, selected, noun=noun)
+
+    monkeypatch.setattr(PostEditorMixin, "_lock_parent_for_slug_check", before_lock)
+    api_client.force_authenticate(user=actor)
+    before = counts()
+    url = reverse("cast:api:editor_episode_create")
+    response = api_client.post(url, media_payload(podcast, objects, kind), format="json")
+    assert_refused(response, before, kind)
+    # The refused transaction rolled back the interleaved change; an authorized retry succeeds.
+    monkeypatch.setattr(PostEditorMixin, "_lock_parent_for_slug_check", original)
+    api_client.force_authenticate(user=get_user_model().objects.get(pk=actor.pk))
+    retry = api_client.post(url, media_payload(podcast, objects, kind), format="json")
+    assert retry.status_code == 201, retry.content
+    assert counts() == expected_after(before, episode=True)

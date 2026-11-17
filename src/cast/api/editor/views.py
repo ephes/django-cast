@@ -935,27 +935,29 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
         title = data["title"]
         slug = data.get("slug") or slugify(title)
 
-        cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
         categories = self._resolve_categories(data["categories"])
-        body_sections = self._submitted_body_sections(data, user=user)
 
-        episode = Episode(
-            title=title,
-            slug=slug,
-            seo_title=data["seo_title"],
-            search_description=data["search_description"],
-            owner=user,
-            live=False,
-            cover_image=cover_image,
-            cover_alt_text=cover_alt_text,
-            body=json.dumps(body_sections),
-        )
-        self._apply_episode_metadata(episode, data, user, get_podcast=lambda: parent)
-        if data.get("visible_date") is not None:
-            episode.visible_date = data["visible_date"]
         with transaction.atomic(using=_page_write_database(parent)):
             parent = self._lock_parent_for_slug_check(parent, noun="Episode")
-            self._check_current_add_permission(parent, user, noun="episodes")
+            user = self._check_current_add_permission(parent, user, noun="episodes")
+            # Resolve submitted media (cover, body, gallery and podcast audio) only
+            # after the writer wait, using fresh permission state, as for posts.
+            cover_image, cover_alt_text = self._resolve_cover_image(data.get("cover_image"), user)
+            body_sections = self._submitted_body_sections(data, user=user)
+            episode = Episode(
+                title=title,
+                slug=slug,
+                seo_title=data["seo_title"],
+                search_description=data["search_description"],
+                owner=user,
+                live=False,
+                cover_image=cover_image,
+                cover_alt_text=cover_alt_text,
+                body=json.dumps(body_sections),
+            )
+            self._apply_episode_metadata(episode, data, user, get_podcast=lambda: parent)
+            if data.get("visible_date") is not None:
+                episode.visible_date = data["visible_date"]
             self._check_unique_slug(parent, slug)
             parent.add_child(instance=episode)
             if data["tags"]:

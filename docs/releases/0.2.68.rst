@@ -385,9 +385,10 @@ Features
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
 
-- Resolve submitted post cover/body/gallery media after the parent writer lock,
-  using fresh user permissions. Concurrent collection moves or permission
-  withdrawals reject the entire creation without page, tag or revision writes.
+- Resolve submitted post and episode cover/body/gallery media (and episode
+  ``podcast_audio``) after the parent writer lock, using fresh user
+  permissions. Concurrent collection moves or permission withdrawals reject the
+  entire creation without page, tag or revision writes.
 
 - Reject body/gallery media IDs outside the model/backend integer domain before
   SQL binding. Create and PATCH return normal unavailable-reference errors for
