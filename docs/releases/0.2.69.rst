@@ -1,0 +1,17 @@
+0.2.69 (unreleased)
+-------------------
+
+Upgrade actions
+~~~~~~~~~~~~~~~
+
+Features
+~~~~~~~~
+
+Security and hardening
+~~~~~~~~~~~~~~~~~~~~~~
+
+Fixes
+~~~~~
+
+Internal
+~~~~~~~~
