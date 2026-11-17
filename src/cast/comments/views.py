@@ -321,7 +321,9 @@ def _author_action_guard(request: HttpRequest, action: str) -> HttpResponse | No
     if not author_edits.author_edits_enabled():
         return HttpResponseNotFound(f"Comment {action} is not enabled.")
     if author_edits.rate_limited(request, action):
-        return HttpResponse("Too many requests.", status=429)
+        response = HttpResponse("Too many requests.", status=429)
+        response["Retry-After"] = str(appsettings.EDIT_RATE_WINDOW)
+        return response
     session = getattr(request, "session", None)
     comment_id = request.POST.get("comment_id")
     if session is None or not comment_id or not author_edits.owns_id(session, comment_id):

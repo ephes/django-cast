@@ -538,6 +538,15 @@ Training data is derived directly from existing comments:
   ``is_removed = False``.
 - All other comments are labeled **spam**.
 
+Author-deleted comments are excluded entirely. The corpus reads comment text,
+moderation flags and the author-deletion exclusion in one database statement.
+A concurrent author deletion is therefore seen coherently: training either
+keeps the earlier public comment as ham or excludes the deleted comment.
+Ordinary moderator-removed comments remain spam examples. This uses the supported
+single-database setup for comments and author metadata; cross-database author
+actions remain unsupported. Fitting runs after collection, without holding
+comment write locks, and retains the latest-attempt publication fence.
+
 The staff-only ``/api/comment_training_data/`` export contains moderation
 training data, including comments' identifying fields. Success and handled
 error responses use ``Cache-Control: private, no-store`` and vary on ``Cookie``
@@ -696,6 +705,11 @@ Author-action concurrency and session revocation
 The author edit/delete rate counter is initialized atomically. Concurrent first
 attempts all count toward the same window; a losing initialization does not
 renew its expiry. Denied attempts continue to count.
+Cache failures refuse edit/delete attempts before moderation or mutation with
+HTTP 429 and a fixed warning that omits backend exception details. Refusals
+include ``Retry-After`` for the full configured edit rate window; clients keep
+their draft and may retry after recovery. A rate limit of ``0`` still disables
+cache admission entirely.
 
 Comment ownership depends on the live server-side session. Revoking that
 session or logging out invalidates its former cookie for edit/delete requests,

@@ -666,6 +666,14 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Refuse author comment edits/deletions on rate-limit cache failures with a
+  controlled HTTP 429, fixed diagnostic and ``Retry-After`` guidance. Disabled
+  limits, atomic counter initialization and counter expiry retain their behavior.
+
+- Collect spam-filter text, moderation flags and author-deletion exclusions in
+  one database snapshot. Concurrent author deletion cannot turn a legitimate
+  comment into a spam training example; moderator-marked spam remains included.
+
 - Let ``generate_transcripts --force`` bypass old-artifact completeness reads.
   Treat malformed or non-object Podlove/DOTe JSON as incomplete in normal
   batches, allowing regeneration and independent targets to continue.

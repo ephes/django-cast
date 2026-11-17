@@ -2,6 +2,7 @@
 
 from datetime import datetime, timedelta
 from importlib import import_module
+from time import time
 from types import SimpleNamespace
 
 import pytest
@@ -1202,6 +1203,101 @@ def test_rate_counter_disappearing_or_nonstoring_cache_does_not_raise(settings, 
     assert author_edits.rate_limited(rf.post("/"), "edit") is False
     assert backend.incr.call_count == (1 if add_wins else 2)
     backend.add.assert_called_once()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("action", ["edit", "delete"])
+@pytest.mark.parametrize("failure_at", ["initial_incr", "add", "retry_incr"])
+def test_author_action_cache_failure_refuses_without_mutation(
+    client, comment, feature_on, settings, mocker, caplog, action, failure_at
+):
+    from django.contrib.admin.models import LogEntry
+    from django.core.cache import cache
+    from django.urls import reverse
+    from django_comments.models import CommentFlag
+
+    from cast.comments.models import CommentAuthorMeta
+
+    settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 1
+    settings.CAST_COMMENTS_EDIT_RATE_WINDOW = 17
+    cache.clear()
+    seed_ownership(client, comment)
+    author_edits.mark_edited(comment)
+    before = (comment.comment, comment.is_public, comment.is_removed)
+    meta = list(CommentAuthorMeta.objects.values())
+    flags = list(CommentFlag.objects.values())
+    audit = list(LogEntry.objects.values())
+    failure = OSError("synthetic backend secret")
+    incr_errors = {
+        "initial_incr": [failure],
+        "add": [ValueError("missing")],
+        "retry_incr": [ValueError("missing"), failure],
+    }
+    mocker.patch.object(cache, "incr", side_effect=incr_errors[failure_at])
+    add = mocker.patch.object(cache, "add", return_value=False)
+    if failure_at == "add":
+        add.side_effect = failure
+    moderation = mocker.patch("cast.comments.views.signals.comment_will_be_posted.send")
+    response = client.post(
+        reverse(f"comments-{action}-comment-ajax"),
+        {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "Changed"},
+        **AJAX,
+    )
+    assert response.status_code == 429
+    assert response["Retry-After"] == "17"
+    assert response.content == b"Too many requests."
+    assert "Author comment action rate-limit cache unavailable" in caplog.text
+    assert "synthetic backend secret" not in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
+    comment.refresh_from_db()
+    assert (comment.comment, comment.is_public, comment.is_removed) == before
+    assert list(CommentAuthorMeta.objects.values()) == meta
+    assert list(CommentFlag.objects.values()) == flags
+    assert list(LogEntry.objects.values()) == audit
+    moderation.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("action", ["edit", "delete"])
+def test_author_action_counter_expiry_permits_retry(client, comment, feature_on, settings, mocker, action):
+    from django.core.cache import cache
+    from django.urls import reverse
+
+    settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 1
+    cache.clear()
+    seed_ownership(client, comment)
+    ident = client.session.session_key
+    counter_action = "editing" if action == "edit" else "deletion"
+    key = f"cast_author_edit_rl:{counter_action}:{ident}"
+    cache.add(key, 1, 60)
+    # Advance the backend clock past the counter's actual expiry, without sleep.
+    now = time()
+    mocker.patch("django.core.cache.backends.locmem.time.time", return_value=now + 61)
+    response = client.post(
+        reverse(f"comments-{action}-comment-ajax"),
+        {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "Changed"},
+        **AJAX,
+    )
+    assert response.status_code == 200
+    assert cache.get(key) == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("action", ["edit", "delete"])
+def test_disabled_author_limit_does_not_contact_failed_cache(client, comment, feature_on, settings, mocker, action):
+    from django.core.cache import cache
+    from django.urls import reverse
+
+    settings.CAST_COMMENTS_EDIT_RATE_LIMIT = 0
+    seed_ownership(client, comment)
+    incr = mocker.patch.object(cache, "incr", side_effect=OSError("unavailable"))
+    response = client.post(
+        reverse(f"comments-{action}-comment-ajax"),
+        {"comment_id": str(comment.pk), "revision": author_edits.comment_revision(comment), "comment": "Changed"},
+        **AJAX,
+    )
+    assert response.status_code == 200
+    incr.assert_not_called()
 
 
 @pytest.mark.django_db
