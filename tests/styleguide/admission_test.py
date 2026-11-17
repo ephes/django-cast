@@ -95,3 +95,106 @@ def test_video_destination_is_admitted(monkeypatch, settings):
         lambda *a: '<video poster="file:///fake"><source src="https://example.com/a.mp4"></video>',
     )
     assert view._fetch_styleguide_remote_video_media() == (None, None)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        b"[]",
+        b'{"show": null}',
+        b'{"show":"x"}',
+        b'{"transcripts":"text"}',
+        b'{"show":{},"show":{}}',
+        b'{"transcripts":[1]}',
+        b'{"transcripts":[{"start":0,"text":"x"}]}',
+        b'{"version":NaN}',
+        b'{"show":{"poster":1}}',
+    ],
+)
+def test_podlove_invalid_control_refused(monkeypatch, payload):
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(payload))
+    assert view._fetch_podlove_data("https://example.com/control") is None
+
+
+@pytest.mark.parametrize("kind", ["image", "audio"])
+def test_remote_file_rollback_cleans_owned_output(monkeypatch, user, tmp_path, kind):
+    from django.core.files.storage import FileSystemStorage
+    from wagtail.images.models import Image
+
+    from cast.models import Audio
+    from tests.styleguide.media_fetch_test import _tiny_png_bytes
+
+    model, field, fetch = (
+        (Image, "file", view._get_or_create_remote_image)
+        if kind == "image"
+        else (Audio, "m4a", view._get_or_create_remote_audio)
+    )
+    storage = FileSystemStorage(location=tmp_path)
+    monkeypatch.setattr(model._meta.get_field(field), "storage", storage)
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(_tiny_png_bytes()))
+
+    def fail(*a, **kw):
+        raise RuntimeError("synthetic persistence failure")
+
+    monkeypatch.setattr(model, "save" if kind == "image" else "create_duration", fail)
+    with pytest.raises(RuntimeError, match="synthetic persistence failure"):
+        fetch(f"https://example.com/{kind}.png", user)
+    assert not [p for p in tmp_path.rglob("*") if p.is_file()]
+
+
+def test_valid_podlove_control(monkeypatch):
+    payload = b'{"version":1,"show":{"poster":"https://example.com/p.png"},"transcripts":[{"start":"0","end":"1","text":"Synthetic","speaker":"A","voice":"v"}]}'
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(payload))
+    assert view._fetch_podlove_data("https://example.com/control")["transcripts"][0]["text"] == "Synthetic"
+
+
+def test_invalid_control_precedes_media_storage(monkeypatch, settings):
+    settings.CAST_STYLEGUIDE_PODCAST_SOURCE_URL = "https://example.com/podcast"
+    monkeypatch.setattr(
+        view,
+        "_fetch_remote_html",
+        lambda *a: (
+            '<meta name="twitter:player:stream" content="https://example.com/a.m4a"><podlove-player data-url="/api"></podlove-player>'
+        ),
+    )
+    monkeypatch.setattr(view, "_fetch_podlove_data", lambda *a: None)
+    monkeypatch.setattr(view, "_get_or_create_remote_audio", lambda *a: pytest.fail("unexpected storage"))
+    assert view._fetch_styleguide_remote_podcast_media(object(), None) == (None, None, None, None)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_remote_file_preserves_committed_callback_failure(monkeypatch, user, tmp_path):
+    from django.core.files.storage import FileSystemStorage
+    from django.db import transaction
+    from wagtail.images.models import Image
+
+    from tests.styleguide.media_fetch_test import _tiny_png_bytes
+
+    storage = FileSystemStorage(location=tmp_path)
+    monkeypatch.setattr(Image._meta.get_field("file"), "storage", storage)
+    original = Image.save
+
+    def fail_after_commit(image, *args, **kwargs):
+        original(image, *args, **kwargs)
+        transaction.on_commit(lambda: (_ for _ in ()).throw(RuntimeError("committed callback")))
+
+    monkeypatch.setattr(Image, "save", fail_after_commit)
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(_tiny_png_bytes()))
+    with pytest.raises(RuntimeError, match="committed callback"):
+        view._get_or_create_remote_image("https://example.com/p.png", user)
+    image = Image.objects.get(title="Styleguide source: https://example.com/p.png")
+    assert storage.exists(image.file.name)
+
+
+def test_remote_file_cleanup_failure_is_secondary(monkeypatch, user, tmp_path, caplog):
+    from django.core.files.storage import FileSystemStorage
+    from wagtail.images.models import Image
+
+    storage = FileSystemStorage(location=tmp_path)
+    monkeypatch.setattr(Image._meta.get_field("file"), "storage", storage)
+    monkeypatch.setattr(storage, "delete", lambda *a: (_ for _ in ()).throw(OSError("cleanup")))
+    image = Image(title="synthetic", width=1, height=1)
+    with pytest.raises(RuntimeError, match="primary"):
+        with view._remote_file_save(image, "file", "p.png", b"synthetic"):
+            raise RuntimeError("primary")
+    assert "Could not compensate" in caplog.text

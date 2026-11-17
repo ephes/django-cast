@@ -1095,3 +1095,15 @@ failed pages and assets. It stops dispatching after 30 monotonic seconds;
 the per-request timeout still applies separately. Duplicate URLs are not fetched
 again during that invocation. Gallery success limits still apply. These limits
 bound attempts, not the lifetime of a slow response within one request.
+
+Podlove control JSON must be an object with unique members, an optional object
+``show`` with a string ``poster``, and an optional list of transcript objects.
+Each transcript requires string ``start`` and ``text``; ``end``, ``speaker`` and
+``voice``, when present, must also be strings. Versions must be integers and
+non-finite JSON constants are refused. Invalid control data refuses that remote
+podcast acquisition before media writes and uses demo content.
+
+New remote files use fresh names. Their owning save transaction removes only its
+unreferenced output on persistence or derivation failure. Committed files survive
+postcommit callback errors; cleanup errors remain secondary. Remote acquisition
+must run outside an ambient application transaction.

@@ -8,6 +8,10 @@
   disable redirects and bound failed gallery/page attempts across each invocation.
   Configure extra CDN origins with ``CAST_STYLEGUIDE_REMOTE_ALLOWED_ORIGINS``.
 
+- Validate Podlove control objects, duplicate members and transcript shapes before
+  acquiring media. Compensate only fresh, unreferenced remote files after failed
+  persistence/derivation; retain committed files after callback errors.
+
 Upgrade actions
 ~~~~~~~~~~~~~~~
 

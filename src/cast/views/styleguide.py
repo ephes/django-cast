@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -13,6 +14,7 @@ from time import monotonic
 from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import urljoin, urlparse
+from uuid import uuid4
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
@@ -71,6 +73,8 @@ from cast.post_media import prepare_post_media
 from cast.safe_fetch import FetchError, FetchPolicy, fetch_bytes, validate_fetch_url
 
 from .htmx_helpers import HtmxHttpRequest
+
+logger = logging.getLogger(__name__)
 
 STYLEGUIDE_BLOG_SLUG = "styleguide-blog"
 STYLEGUIDE_PODCAST_SLUG = "styleguide-podcast"
@@ -1346,11 +1350,70 @@ def _extract_podlove_player_api_url(html: str, page_url: str) -> str | None:
     return None
 
 
+def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("Duplicate control member.")
+        result[key] = value
+    return result
+
+
+def _validate_podlove_control(data: Any) -> dict[str, Any]:
+    if not isinstance(data, dict):
+        raise ValueError("Control root must be an object.")
+    if "version" in data and type(data["version"]) is not int:
+        raise ValueError("Control version must be an integer.")
+    show = data.get("show", {})
+    if not isinstance(show, dict) or ("poster" in show and not isinstance(show["poster"], str)):
+        raise ValueError("Invalid show metadata.")
+    transcripts = data.get("transcripts", [])
+    if not isinstance(transcripts, list):
+        raise ValueError("Transcripts must be a list.")
+    for segment in transcripts:
+        if not isinstance(segment, dict) or not all(isinstance(segment.get(k), str) for k in ("start", "text")):
+            raise ValueError("Invalid transcript segment.")
+        if any(k in segment and not isinstance(segment[k], str) for k in ("end", "speaker", "voice")):
+            raise ValueError("Invalid transcript field.")
+    return data
+
+
+def _refuse_json_constant(value: str) -> Any:
+    raise ValueError("Non-finite control number.")
+
+
 def _fetch_podlove_data(url: str) -> dict[str, Any] | None:
     try:
-        return json.loads(_styleguide_fetch(url, "control").decode("utf-8", "strict"))
+        data = json.loads(
+            _styleguide_fetch(url, "control").decode("utf-8", "strict"),
+            object_pairs_hook=_unique_json_object,
+            parse_constant=_refuse_json_constant,
+        )
+        return _validate_podlove_control(data)
     except Exception:
         return None
+
+
+@contextmanager
+def _remote_file_save(model: Any, field_name: str, filename: str, content: bytes) -> Iterator[None]:
+    """Own a fresh storage name through persistence and postcommit failures."""
+    field = getattr(model, field_name)
+    name = None
+    try:
+        # Refuse ambient application transactions before creating a file: cleanup
+        # needs to inspect committed row references after the owning rollback.
+        with transaction.atomic(durable=True):
+            field.save(f"{uuid4().hex}-{filename}", ContentFile(content), save=False)
+            name = field.name
+            yield
+    except Exception:
+        if name:
+            try:
+                if not type(model).objects.filter(**{field_name: name}).exists():
+                    field.storage.delete(name)
+            except Exception:
+                logger.warning("Could not compensate a remote styleguide file.", exc_info=True)
+        raise
 
 
 def _extract_transcript_data(html: str) -> dict[str, Any] | None:
@@ -1378,10 +1441,10 @@ def _get_or_create_remote_image(url: str, user: User) -> Image | None:
         return None
     filename = urlparse(url).path.rsplit("/", 1)[-1] or "styleguide-image.jpg"
     image = Image(title=title)
-    image.file.save(filename, ContentFile(content), save=False)
-    image.width = width
-    image.height = height
-    image.save()
+    with _remote_file_save(image, "file", filename, content):
+        image.width = width
+        image.height = height
+        image.save()
     return image
 
 
@@ -1425,8 +1488,8 @@ def _get_or_create_remote_audio(url: str, user: User) -> Audio | None:
     except Exception:
         return None
     audio = Audio(user=user, title=clean_title, data={"styleguide_source_url": url})
-    audio.m4a.save(filename, ContentFile(content), save=False)
-    save_audio_with_derivations(audio)
+    with _remote_file_save(audio, "m4a", filename, content):
+        save_audio_with_derivations(audio)
     return audio
 
 
@@ -1506,12 +1569,11 @@ def _fetch_styleguide_remote_podcast_media(
     cover_image: Image | None = None
     html = _fetch_remote_html(podcast_url)
     if html is not None:
-        audio_url = _extract_audio_url(html)
-        if audio_url:
-            audio = _get_or_create_remote_audio(audio_url, user)
         podlove_api_url = _extract_podlove_player_api_url(html, podcast_url)
         if podlove_api_url:
             podlove_data = _fetch_podlove_data(podlove_api_url)
+            if podlove_data is None:
+                return None, None, None, None
             if podlove_data:
                 poster_url = podlove_data.get("show", {}).get("poster")
                 if poster_url:
@@ -1522,6 +1584,9 @@ def _fetch_styleguide_remote_podcast_media(
                         "version": podlove_data.get("version", 1),
                         "transcripts": transcripts,
                     }
+        audio_url = _extract_audio_url(html)
+        if audio_url:
+            audio = _get_or_create_remote_audio(audio_url, user)
         cover_url = _extract_cover_image_url(html, podcast_url)
         if cover_url and cover_image is None:
             cover_image = _get_or_create_remote_image(cover_url, user)
