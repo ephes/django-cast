@@ -102,3 +102,27 @@ close during debounce, clear, duplicate/reorder, save draft and reopen. The
 assertions include editor change events and saved revision values. This browser
 journey has **not** been qualified here. Ordinary and isolated suites intentionally
 skip it when opt-in/Playwright are absent.
+
+## External acceptance (2026-11-17, merge)
+
+Run outside the worker sandbox with Chromium and an isolated PostgreSQL 17
+instance (C locale, trust auth, port 55432):
+
+- The first browser run failed in both cases at the Clear step: current Wagtail
+  dropdowns move their actions into a popup that exists only while it is open, and
+  the draft button has no `action-save-draft` name. The journey now opens the
+  widget dropdown before clicking Clear and clicks the "Save draft" button by role.
+  The chooser scripts needed no change; their handlers bind before the dropdown
+  detaches its content.
+- `CAST_RUN_BROWSER=1 uv run pytest tests/media_chooser_browser_test.py` passes
+  (2 tests). With the previous develop chooser scripts it fails in both cases
+  while waiting for the scoped search response.
+- `CAST_TEST_DB_PORT=55432 just check-postgres` passes both environments.
+- On PostgreSQL (`-p tests.postgres_check`, `CAST_TEST_DB_ENGINE=django.db.backends.postgresql`)
+  the media chooser, transcript admin and comment browser journeys pass together
+  with `tests/widget_test.py`, `tests/ensure_reference_site_test.py` and
+  `tests/management_command_test.py` (146 tests). This also completes the
+  round 105 acceptance.
+
+Release notes stay in `docs/releases/0.2.68.rst`: version 0.2.68 is not tagged,
+so `AGENTS.md` requires its own notes page rather than `unreleased.rst`.

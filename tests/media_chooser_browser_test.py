@@ -90,7 +90,9 @@ def test_media_chooser_streamfield_journey(
             modal.locator("#id_q").fill("retired search")
             page.locator(".modal [data-dismiss=modal]").click()
             expect(page.locator(".modal-body")).to_have_count(0)
-            widgets.first.locator("[data-chooser-action-clear], .action-clear").evaluate("el => el.click()")
+            # Wagtail moves dropdown actions into a popup that exists only while open.
+            widgets.first.locator('[data-w-dropdown-target="toggle"]').click()
+            page.locator(".tippy-box [data-chooser-action-clear]:visible").click()
             expect(widgets.first).to_have_class(re.compile(r"\bblank\b"))
             expect(widgets.first.locator(".title")).to_have_text("")
             expect(widgets.first.locator("[data-chooser-edit-link]")).not_to_have_attribute("href")
@@ -107,7 +109,7 @@ def test_media_chooser_streamfield_journey(
             with page.expect_response(
                 lambda response: response.request.method == "POST" and edit_path in response.url
             ):
-                page.locator('[name="action-save-draft"]').click()
+                page.get_by_role("button", name="Save draft", exact=True).click()
             page.goto(live_server.url + edit_path)
             expect(widgets).to_have_count(2)
             for widget in widgets.all():
