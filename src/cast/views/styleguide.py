@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 from datetime import datetime
 from html.parser import HTMLParser
 from io import BytesIO
+from time import monotonic
 from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import urljoin, urlparse
@@ -64,7 +68,7 @@ from cast.models.image_renditions import (
 )
 from cast.models.repository import BlogIndexContext
 from cast.post_media import prepare_post_media
-from cast.safe_fetch import FetchPolicy, fetch_bytes
+from cast.safe_fetch import FetchError, FetchPolicy, fetch_bytes, validate_fetch_url
 
 from .htmx_helpers import HtmxHttpRequest
 
@@ -1123,16 +1127,57 @@ def _styleguide_transcript_max_segments() -> int:
     return int(appsettings.CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS)
 
 
+@dataclass
+class _RemoteAttemptBudget:
+    deadline: float = field(default_factory=lambda: monotonic() + 30)
+    seen: set[str] = field(default_factory=set)
+
+    def admit(self, url: str) -> None:
+        if url in self.seen or len(self.seen) >= 24 or monotonic() >= self.deadline:
+            raise FetchError("Styleguide remote attempt envelope exhausted or URL already attempted.")
+        self.seen.add(url)
+
+
+_remote_budget: ContextVar[_RemoteAttemptBudget | None] = ContextVar("styleguide_remote_budget", default=None)
+
+
+@contextmanager
+def _remote_fetch_scope() -> Iterator[None]:
+    if _remote_budget.get() is not None:
+        yield
+        return
+    token = _remote_budget.set(_RemoteAttemptBudget())
+    try:
+        yield
+    finally:
+        _remote_budget.reset(token)
+
+
+def _styleguide_fetch_policy(kind: str) -> FetchPolicy:
+    sources = [
+        *_styleguide_image_source_urls(),
+        _styleguide_podcast_source_url(),
+        _styleguide_transcript_source_url(),
+        _styleguide_video_source_url(),
+        *appsettings.CAST_STYLEGUIDE_REMOTE_ALLOWED_ORIGINS,
+    ]
+    origins = frozenset((urlparse(url).scheme.lower(), urlparse(url).netloc.lower()) for url in sources if url)
+    return FetchPolicy(
+        allowed_origins=origins,
+        max_bytes=STYLEGUIDE_REMOTE_BYTE_LIMITS[kind],
+        timeout=_styleguide_remote_timeout(),
+        block_private_addresses=not appsettings.CAST_STYLEGUIDE_REMOTE_ALLOW_PRIVATE,
+        require_complete_response=True,
+    )
+
+
 def _styleguide_fetch(url: str, kind: str) -> bytes:
+    budget = _remote_budget.get()
+    if budget is not None:
+        budget.admit(url)
     return fetch_bytes(
         url,
-        policy=FetchPolicy(
-            allowed_origins=None,
-            max_bytes=STYLEGUIDE_REMOTE_BYTE_LIMITS[kind],
-            timeout=_styleguide_remote_timeout(),
-            block_private_addresses=False,
-            require_complete_response=True,
-        ),
+        policy=_styleguide_fetch_policy(kind),
         headers={"User-Agent": STYLEGUIDE_USER_AGENT},
     )
 
@@ -1399,7 +1444,7 @@ def _empty_styleguide_remote_media() -> StyleguideRemoteMedia:
 
 def _styleguide_remote_html_pages(urls: list[str]) -> list[tuple[str, str]]:
     pages: list[tuple[str, str]] = []
-    for page_url in urls:
+    for page_url in urls[:24]:
         if not page_url:
             continue
         html = _fetch_remote_html(page_url)
@@ -1409,6 +1454,7 @@ def _styleguide_remote_html_pages(urls: list[str]) -> list[tuple[str, str]]:
     return pages
 
 
+@_remote_fetch_scope()
 def _fetch_styleguide_remote_gallery_media(user: User) -> tuple[list[Image] | None, list[str] | None]:
     gallery_images: list[Image] = []
     image_urls: list[str] = []
@@ -1417,7 +1463,10 @@ def _fetch_styleguide_remote_gallery_media(user: User) -> tuple[list[Image] | No
         image_urls.extend(_extract_image_urls(html, page_url))
         gallery_blocks.extend(_extract_gallery_blocks(html))
 
-    for url in image_urls:
+    for url in dict.fromkeys(image_urls):
+        budget = _remote_budget.get()
+        if budget is not None and (len(budget.seen) >= 24 or monotonic() >= budget.deadline):
+            break
         if len(gallery_images) >= _styleguide_remote_image_limit():
             break
         image = _get_or_create_remote_image(url, user)
@@ -1433,6 +1482,13 @@ def _fetch_styleguide_remote_video_media() -> tuple[str | None, str | None]:
     for page_url, html in _styleguide_remote_html_pages(video_sources):
         candidate_url, candidate_poster = _extract_video_data(html, page_url)
         if candidate_url:
+            try:
+                policy = _styleguide_fetch_policy("html")
+                validate_fetch_url(candidate_url, policy=policy)
+                if candidate_poster:
+                    validate_fetch_url(candidate_poster, policy=policy)
+            except FetchError:
+                continue
             return candidate_url, candidate_poster
     return None, None
 
@@ -1497,6 +1553,7 @@ def _fetch_styleguide_remote_transcript_media(
     return transcript_data, cover_image
 
 
+@_remote_fetch_scope()
 def _fetch_styleguide_remote_media(user: User) -> StyleguideRemoteMedia:
     if not _styleguide_remote_media_enabled():
         return _empty_styleguide_remote_media()

@@ -1077,3 +1077,21 @@ limited to 2 MiB, Podlove control JSON to 1 MiB, images to 20 MiB and audio to
 100 MiB. The actual received bytes determine admission, independently of
 ``Content-Length``. Only complete HTTP 200 responses without ``Content-Range``
 are accepted. Refused downloads use the synthetic demo fallback.
+
+Sources configured through the styleguide source URL settings allow their own
+HTTP(S) origins. Add any intended media CDN origins explicitly, for example::
+
+    CAST_STYLEGUIDE_REMOTE_ALLOWED_ORIGINS = ["https://media.example.org"]
+
+Derived URLs cannot add origins. URL userinfo and redirects are refused.
+Non-global/private destinations are blocked by default. For trusted local demo
+sources only, ``CAST_STYLEGUIDE_REMOTE_ALLOW_PRIVATE = True`` disables that
+address check while retaining the explicit origin allowlist. This is separate
+from Voxhelm's trusted server policy. The DNS check does not pin connections;
+keep configured origins trusted (see :doc:`../architecture`).
+
+One remote-media invocation permits at most 24 distinct attempted URLs, including
+failed pages and assets. It stops dispatching after 30 monotonic seconds;
+the per-request timeout still applies separately. Duplicate URLs are not fetched
+again during that invocation. Gallery success limits still apply. These limits
+bound attempts, not the lifetime of a slow response within one request.
