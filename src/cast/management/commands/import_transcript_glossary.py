@@ -79,16 +79,31 @@ class Command(BaseCommand):
             # Follow symlinks intentionally, but admit the opened target before reading.
             fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
             try:
-                if not stat.S_ISREG(os.fstat(fd).st_mode):
+                before = os.fstat(fd)
+                if not stat.S_ISREG(before.st_mode):
                     raise CommandError("Glossary input must be a regular file.")
                 with os.fdopen(fd, "rb", closefd=False) as source:
                     raw = source.read(MAX_INPUT_BYTES + 1)
+                after = os.fstat(fd)
             finally:
                 os.close(fd)
         except OSError as exc:
             raise CommandError(f"Cannot read {path}: {exc.strerror or 'unreadable file'}.") from exc
         if len(raw) > MAX_INPUT_BYTES:
             raise CommandError(f"Glossary input exceeds {MAX_INPUT_BYTES} bytes.")
+
+        # Unlinking the opened old inode during atomic pathname replacement can
+        # change ctime alone. Permit that link-count change while retaining the
+        # old descriptor; in-place size/mtime/ctime changes must be refused.
+        def generation(info: os.stat_result) -> tuple[int, int, int, int]:
+            return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+
+        if (
+            generation(before) != generation(after)
+            or len(raw) != after.st_size
+            or (before.st_ctime_ns != after.st_ctime_ns and before.st_nlink <= after.st_nlink)
+        ):
+            raise CommandError("Glossary input changed while reading; retry with a stable file.")
         try:
             data = json.loads(raw.decode("utf-8"), object_pairs_hook=_unique_members)
         except json.JSONDecodeError as exc:

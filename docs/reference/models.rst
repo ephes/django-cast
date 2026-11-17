@@ -489,6 +489,26 @@ Repository Models
 
 The repository pattern provides optimized data access with minimal queries.
 
+Database identity
+=================
+
+``PostQuerySnapshot`` binds subtype hydration, visible contributor assignments,
+avatars and media prefetches to the source queryset's database. Feed and index
+selection (including feeds built with ``CAST_REPOSITORY = "django"`` and the
+``Blog.last_build_date`` fallback), visibility restrictions and navigation use the
+blog/site database. A site resolved on another alias, for example by a
+read-replica router, is re-resolved by hostname and port on the source database;
+it is refused only when that database has no matching site. Wagtail's global site
+discovery and URL registry still require the site's normal routing configuration.
+
+Request-scoped serialized projections retain a trusted ``_database`` alias.
+Use the matching ``deserialize_*`` helpers rather than passing these dictionaries
+to model constructors. Django's ``from_db()`` restores database affinity for
+pages, media, sites, renditions and nested seasons/contributors/artwork, including
+later related lookups. Unknown aliases fail instead of falling back. Projection
+payloads are internal read models, not client input or objects intended for saving.
+Concrete built-in Wagtail image support is unchanged.
+
 Public import surface
 =====================
 

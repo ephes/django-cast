@@ -32,6 +32,7 @@ from cast.http_types import HtmxHttpRequest
 from cast.presenters import render_post_description
 from cast.site_lookup import get_site_specific_unrestricted_page_or_404
 
+from .blog_index import public_posts
 from .models import Audio, Blog, Episode, EpisodeContributor, Podcast, Post
 from .models.repository import FeedContext, limit_blog_feed_posts
 from .models.theme import get_default_template_base_dir
@@ -106,8 +107,7 @@ class RepositoryMixin(Feed):
                 from .models import Episode
 
                 post_queryset = (
-                    Episode.objects.live()
-                    .public()
+                    public_posts(Episode.objects.using(blog._state.db).live())
                     .descendant_of(blog)
                     .select_related("podcast_audio__transcript", "season")
                     .filter(podcast_audio__isnull=False)
@@ -115,7 +115,9 @@ class RepositoryMixin(Feed):
                 )
             else:
                 post_queryset = limit_blog_feed_posts(
-                    Post.objects.live().public().descendant_of(blog).order_by("-visible_date", "-pk")
+                    public_posts(Post.objects.using(blog._state.db).live())
+                    .descendant_of(blog)
+                    .order_by("-visible_date", "-pk")
                 )
             return FeedContext.create_from_django_models(
                 request=request,

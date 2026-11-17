@@ -1,6 +1,8 @@
 import json
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
+from django.db import connections
+from django.db.models import ForeignKey, Model
 from wagtail.images.models import Image, Rendition
 
 from .types import RenditionsForPosts, SerializedRenditions
@@ -20,6 +22,32 @@ if TYPE_CHECKING:
     )
 
 
+_Model = TypeVar("_Model", bound=Model)
+
+
+def _database_fields(instance: Model) -> dict[str, Any]:
+    """Keep source identity in trusted, request-scoped projections only."""
+    using = getattr(getattr(instance, "_state", None), "db", None)
+    return {} if using is None else {"_database": using}
+
+
+def _model_from_data(model: type[_Model], data: dict[str, Any]) -> _Model:
+    """Restore a projection with Django's supported database hydration hook."""
+    fields = data.copy()
+    using = fields.pop("_database", None)
+    if using is not None and using not in connections:
+        raise ValueError("Unknown repository database.")
+    # Keep projection defaults and explicitly supplied related objects, without
+    # turning omitted fields into deferred database reads during rendering.
+    instance = model(**fields)
+    names = [field.attname for field in model._meta.concrete_fields]
+    restored = model.from_db(using, names, [getattr(instance, name) for name in names])
+    for field in model._meta.concrete_fields:
+        if isinstance(field, ForeignKey) and field.is_cached(instance):
+            field.set_cached_value(restored, field.get_cached_value(instance))
+    return restored
+
+
 def _collection_fields(collection_id: int | None) -> dict[str, Any]:
     """Serialize a nullable collection foreign key.
 
@@ -34,6 +62,7 @@ def _collection_fields(collection_id: int | None) -> dict[str, Any]:
 def serialize_audio(audio: "Audio") -> dict[str, Any]:
     """Serialize an Audio model instance to a plain dict for caching."""
     data = {
+        **_database_fields(audio),
         "id": audio.pk,
         "duration": audio.duration,
         "title": audio.title,
@@ -55,12 +84,13 @@ def deserialize_audio(data: dict[str, Any]) -> "Audio":
     audio_data = data.copy()
     if "duration" in audio_data:
         audio_data["duration"] = Audio._meta.get_field("duration").to_python(audio_data["duration"])
-    return Audio(**audio_data)
+    return _model_from_data(Audio, audio_data)
 
 
 def serialize_transcript(transcript: "Transcript") -> dict[str, Any]:
     """Serialize a Transcript model instance to a plain dict for caching."""
     data = {
+        **_database_fields(transcript),
         "id": transcript.pk,
         "audio_id": transcript.audio_id,
         "podlove": transcript.podlove.name,
@@ -75,12 +105,13 @@ def deserialize_transcript(data: dict[str, Any]) -> "Transcript":
     """Reconstruct a Transcript model instance from a serialized dict."""
     from .. import Transcript
 
-    return Transcript(**data)
+    return _model_from_data(Transcript, data)
 
 
 def serialize_contributor_link(link: "ContributorLink") -> dict[str, Any]:
     """Serialize a contributor link for feed/detail cache data."""
     return {
+        **_database_fields(link),
         "id": link.pk,
         "pk": link.pk,
         "service": link.service,
@@ -97,12 +128,13 @@ def deserialize_contributor_link(data: dict[str, Any], contributor: "Contributor
     # Keep the reconstructed link attached to the reconstructed contributor so
     # EpisodeContributor.clean() sees matching contributor_id values.
     link_data["contributor"] = contributor
-    return ContributorLink(**link_data)
+    return _model_from_data(ContributorLink, link_data)
 
 
 def serialize_contributor(contributor: "Contributor") -> dict[str, Any]:
     """Serialize a contributor snippet for feed/detail cache data."""
     data = {
+        **_database_fields(contributor),
         "id": contributor.pk,
         "pk": contributor.pk,
         "display_name": contributor.display_name,
@@ -126,7 +158,7 @@ def deserialize_contributor(data: dict[str, Any]) -> "Contributor":
     contributor_data = data.copy()
     avatar_data = contributor_data.pop("avatar", None)
     rendition_url = contributor_data.pop("avatar_rendition_url", None)
-    contributor = Contributor(**contributor_data)
+    contributor = _model_from_data(Contributor, contributor_data)
     if avatar_data is not None:
         contributor.avatar = deserialize_image(avatar_data)
     if rendition_url is not None:
@@ -137,8 +169,10 @@ def deserialize_contributor(data: dict[str, Any]) -> "Contributor":
 def serialize_episode_contributor(assignment: "EpisodeContributor") -> dict[str, Any]:
     """Serialize an episode contributor assignment."""
     data = {
+        **_database_fields(assignment),
         "id": assignment.pk,
         "pk": assignment.pk,
+        "episode_id": assignment.episode_id,
         "role": assignment.role,
         "sort_order": assignment.sort_order,
         "contributor": serialize_contributor(assignment.contributor),
@@ -158,12 +192,13 @@ def deserialize_episode_contributor(data: dict[str, Any]) -> "EpisodeContributor
     assignment_data["contributor"] = contributor
     if link_data is not None:
         assignment_data["link"] = deserialize_contributor_link(link_data, contributor)
-    return EpisodeContributor(**assignment_data)
+    return _model_from_data(EpisodeContributor, assignment_data)
 
 
 def serialize_season(season: "Season") -> dict[str, Any]:
     """Serialize a podcast season for feed cache data."""
     return {
+        **_database_fields(season),
         "id": season.pk,
         "podcast_id": season.podcast_id,
         "number": season.number,
@@ -175,12 +210,13 @@ def deserialize_season(data: dict[str, Any]) -> "Season":
     """Reconstruct a podcast season from serialized feed cache data."""
     from .. import Season
 
-    return Season(**data)
+    return _model_from_data(Season, data)
 
 
 def serialize_video(video: "Video") -> dict[str, Any]:
     """Serialize a Video model instance to a plain dict for caching."""
     data = {
+        **_database_fields(video),
         "id": video.pk,
         "title": video.title,
         "original": video.original.name,
@@ -195,7 +231,7 @@ def deserialize_video(data: dict[str, Any]) -> "Video":
     """Reconstruct a Video model instance from a serialized dict."""
     from .. import Video
 
-    return Video(**data)
+    return _model_from_data(Video, data)
 
 
 def serialize_blog(blog: "Blog") -> dict[str, Any]:
@@ -205,6 +241,7 @@ def serialize_blog(blog: "Blog") -> dict[str, Any]:
     is_podcast = isinstance(blog, Podcast)
     data = {
         "type": "podcast" if is_podcast else "blog",
+        **_database_fields(blog),
         "id": blog.pk,
         "pk": blog.pk,
         "title": blog.title,
@@ -228,6 +265,7 @@ def serialize_blog(blog: "Blog") -> dict[str, Any]:
         if blog.itunes_artwork is not None:
             artwork = cast(ItunesArtWork, blog.itunes_artwork)
             data["itunes_artwork"] = {
+                **_database_fields(artwork),
                 "id": artwork.pk,
                 "original": artwork.original.name,
                 "original_height": artwork.original_height,
@@ -246,9 +284,9 @@ def deserialize_blog(data: dict[str, Any]) -> "Blog":
     blog_type = blog_data.pop("type")
     itunes_artwork_data = blog_data.pop("itunes_artwork", None)
     blog_class = Podcast if blog_type == "podcast" else Blog
-    blog = blog_class(**blog_data)
+    blog = _model_from_data(blog_class, blog_data)
     if itunes_artwork_data is not None:
-        blog.itunes_artwork = ItunesArtWork(**itunes_artwork_data)
+        blog.itunes_artwork = _model_from_data(ItunesArtWork, itunes_artwork_data)
     return blog
 
 
@@ -260,6 +298,7 @@ def _serialize_post_common(post: "Post") -> dict[str, Any]:
     used to drop the Atom ``<updated>`` element from podcast feeds).
     """
     return {
+        **_database_fields(post),
         "id": post.pk,
         "pk": post.pk,
         "uuid": post.uuid,
@@ -286,7 +325,7 @@ def deserialize_post(data: dict[str, Any]) -> "Post":
     for name in ("uuid", "visible_date", "last_published_at"):
         if name in post_data:
             post_data[name] = Post._meta.get_field(name).to_python(post_data[name])
-    return Post(**post_data)
+    return _model_from_data(Post, post_data)
 
 
 def serialize_episode(post: "Episode") -> dict[str, Any]:
@@ -325,7 +364,7 @@ def deserialize_episode(data: dict[str, Any]) -> "Episode":
     for name in ("uuid", "visible_date", "last_published_at"):
         if name in episode_data:
             episode_data[name] = Episode._meta.get_field(name).to_python(episode_data[name])
-    episode = Episode(**episode_data)
+    episode = _model_from_data(Episode, episode_data)
     episode._visible_contributor_assignments = [
         deserialize_episode_contributor(assignment_data) for assignment_data in assignments_data
     ]
@@ -335,6 +374,7 @@ def deserialize_episode(data: dict[str, Any]) -> "Episode":
 def serialize_image(image: Image) -> dict[str, Any]:
     """Serialize a Wagtail Image instance to a plain dict for caching."""
     data = {
+        **_database_fields(image),
         "pk": image.pk,
         "title": image.title,
         "file": image.file.name,
@@ -349,13 +389,15 @@ def deserialize_image(data: dict[str, Any]) -> Image:
     """Reconstruct an Image instance from a serialized dict."""
     from wagtail.images.models import Image
 
-    return Image(**data)
+    return _model_from_data(Image, data)
 
 
 def rendition_to_dict(rendition: Rendition) -> dict[str, Any]:
     """Serialize a Wagtail Rendition instance to a plain dict."""
     return {
+        **_database_fields(rendition),
         "pk": rendition.pk,
+        "image_id": rendition.image_id,
         "filter_spec": rendition.filter_spec,
         "file": rendition.file.name,
         "width": rendition.width,
@@ -374,5 +416,6 @@ def serialize_renditions(renditions_for_posts: RenditionsForPosts) -> Serialized
 def deserialize_renditions(renditions: SerializedRenditions) -> RenditionsForPosts:
     """Reconstruct Rendition model instances from serialized dicts."""
     return {
-        post_pk: [Rendition(**rendition) for rendition in renditions] for post_pk, renditions in renditions.items()
+        post_pk: [_model_from_data(Rendition, rendition) for rendition in renditions]
+        for post_pk, renditions in renditions.items()
     }

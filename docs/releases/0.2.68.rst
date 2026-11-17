@@ -635,6 +635,17 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Keep repository subtype, contributor, visibility and feed queries on the source
+  database. Preserve that identity through request-scoped serialized pages, media,
+  sites, renditions and nested contributor/season/artwork projections. A request
+  site resolved on another alias (for example a read replica) is re-resolved by
+  hostname and port on the source database; a site without a match there is refused.
+- Refuse glossary imports whose opened file visibly changes (size, modification or
+  change time, best effort on coarse filesystem clocks) during the read, while keeping
+  symlinks and coherent old generations after atomic pathname replacement usable.
+  Bind ``apply_transcript_glossary --podcast`` selection to the podcast database
+  and refuse incompatible routing before accessing transcript artifacts.
+
 - Ignore noncanonical preview media IDs, including booleans and integers outside
   the selected database field range; models with non-integer primary keys are
   skipped instead of failing the preview. Hydrate preview images and gallery

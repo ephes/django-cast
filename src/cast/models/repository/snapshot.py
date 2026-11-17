@@ -60,6 +60,28 @@ def clear_cached_page_urls() -> None:
     PageLinkHandlerWithCache.clear_cache()
 
 
+def _site_for_database(site: Site | None, using: str | None) -> Site | None:
+    """Return ``site`` bound to the repository source database.
+
+    Site discovery (``Site.find_for_request``/``Page.get_site``) routes without an
+    instance hint, so a router may read the site from another alias than the
+    page (for example a read replica). Re-resolve such a site by hostname and
+    port on the source database; refuse it only when that database has no
+    matching site, because then the site belongs to an independent database.
+    """
+    if site is None or site._state.db is None or using is None or site._state.db == using:
+        return site
+    source_site = (
+        Site.objects.using(using)
+        .filter(hostname=site.hostname, port=site.port)
+        .order_by("-is_default_site", "pk")
+        .first()
+    )
+    if source_site is None:
+        raise ValueError("Repository site must use the source database.")
+    return source_site
+
+
 class PostQuerySnapshot:
     """Container for pre-fetched data derived from a post queryset.
 
@@ -126,6 +148,8 @@ class PostQuerySnapshot:
         """
         from ..pages import Episode, Post
 
+        using = queryset.db
+        site = _site_for_database(site, using)
         queryset = queryset.select_related("owner", "cover_image", "content_type")
         queryset_model = getattr(queryset, "model", None)
         if isinstance(queryset_model, type) and issubclass(queryset_model, Episode):
@@ -158,7 +182,9 @@ class PostQuerySnapshot:
         specific_post_by_id: PostByID = {}
         pks_by_specific_model: dict[type[Post], list[int]] = {}
         for post in posts:
-            specific_model_attr = getattr(post, "specific_class", None)
+            specific_model_attr = (
+                post.content_type.model_class() if isinstance(post, Post) else getattr(post, "specific_class", None)
+            )
             if not isinstance(specific_model_attr, type) or not issubclass(specific_model_attr, Post):
                 specific_post_by_id[post.pk] = post.specific
                 continue
@@ -168,7 +194,7 @@ class PostQuerySnapshot:
             else:
                 pks_by_specific_model.setdefault(specific_model, []).append(post.pk)
         for specific_model, pks in pks_by_specific_model.items():
-            specific_queryset = specific_model._default_manager.filter(pk__in=pks)
+            specific_queryset = specific_model._default_manager.using(using).filter(pk__in=pks)
             if issubclass(specific_model, Episode):
                 specific_queryset = specific_queryset.select_related(
                     "podcast_audio__transcript", "season"
@@ -229,12 +255,13 @@ class PostQuerySnapshot:
             }
             primed_contributors: dict[int, Any] = {}
             for assignment in (
-                EpisodeContributor.objects.filter(episode_id__in=episode_by_id, contributor__visible=True)
+                EpisodeContributor.objects.using(using)
+                .filter(episode_id__in=episode_by_id, contributor__visible=True)
                 .select_related("contributor", "link")
                 .prefetch_related(
                     Prefetch(
                         "contributor__avatar",
-                        queryset=Image.objects.prefetch_renditions(Contributor.AVATAR_RENDITION_FILTER),
+                        queryset=Image.objects.using(using).prefetch_renditions(Contributor.AVATAR_RENDITION_FILTER),
                     )
                 )
                 .order_by("episode_id", "sort_order", "pk")

@@ -27,6 +27,7 @@ from cast.blog_index import (
     other_get_params,
     pagination_context,
     present_blog_index_context,
+    public_posts,
     published_posts_for_index,
     unfiltered_published_posts,
 )
@@ -197,7 +198,12 @@ class Blog(Page):
         cached = getattr(self, "_last_build_date", None)
         if cached is not None:
             return cached
-        newest_post = Post.objects.live().public().descendant_of(self).order_by("-visible_date", "-pk").first()
+        newest_post = (
+            public_posts(Post.objects.using(self._state.db).live())
+            .descendant_of(self)
+            .order_by("-visible_date", "-pk")
+            .first()
+        )
         if newest_post is not None:
             return newest_post.visible_date
         if self.first_published_at is not None:
