@@ -4,17 +4,26 @@ from __future__ import annotations
 
 from typing import Any
 
+from django.db import connections
 from wagtail.images import get_image_model
 
 from cast.media_permissions import audio_permission_policy, get_image_permission_policy, video_permission_policy
 from cast.models import Audio, Video
 
 
+def _media_id_in_range(object_id: Any, queryset: Any) -> bool:
+    """Admit only integers representable by this model on its routed backend."""
+    if not isinstance(object_id, int) or isinstance(object_id, bool):
+        return False
+    lower, upper = connections[queryset.db].ops.integer_field_range(queryset.model._meta.pk.get_internal_type())
+    return lower <= object_id <= upper
+
+
 def get_choosable_object(obj_id: Any, user: Any, *, queryset: Any, policy: Any) -> Any | None:
     """Return an object when ``user`` may choose it, otherwise ``None``."""
     if user is None:
         raise TypeError("user is required to resolve media refs")
-    if not isinstance(obj_id, int) or isinstance(obj_id, bool):
+    if not _media_id_in_range(obj_id, queryset):
         return None
     visible = policy.instances_user_has_permission_for(user, "choose")
     return queryset.filter(pk=obj_id, pk__in=visible.values("pk")).first()
@@ -110,7 +119,9 @@ class MediaResolution:
         # Pin both sides of the permission subquery to the model's routed DB.
         alias = queryset.db
         cached = self._objects.setdefault((kind, alias), {})
-        missing = sorted(object_ids - cached.keys())
+        missing = sorted(
+            object_id for object_id in object_ids - cached.keys() if _media_id_in_range(object_id, queryset)
+        )
         if not missing:
             return cached
         visible = policy.instances_user_has_permission_for(self.user, "choose").using(alias)
