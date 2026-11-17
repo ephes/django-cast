@@ -788,7 +788,9 @@ keep configured origins trusted (see :doc:`../architecture`).
 One remote-media invocation permits at most 24 distinct attempted URLs, including
 failed pages and assets. It stops dispatching after 30 monotonic seconds;
 the per-request timeout still applies separately. Duplicate URLs are not fetched
-again during that invocation. Gallery success limits still apply. These limits
+again during that invocation; an HTML page that was already read (for example an
+image source page reused as the video fallback) reuses its first result. Gallery
+success limits still apply. These limits
 bound attempts, not the lifetime of a slow response within one request.
 
 Podlove control JSON must be an object with unique members, an optional object
@@ -796,12 +798,18 @@ Podlove control JSON must be an object with unique members, an optional object
 Each transcript requires string ``start`` and ``text``; ``end``, ``speaker`` and
 ``voice``, when present, must also be strings. Versions must be integers and
 non-finite JSON numbers are refused. Invalid control data refuses that remote
-podcast acquisition before media writes and uses demo content.
+podcast page's audio and cover before media writes and uses demo content; an
+explicitly configured transcript source is still read. Unavailable control data
+(timeouts, HTTP errors, refused destinations) only skips the Podlove poster and
+transcript.
 
 New remote files use fresh names. Their owning save transaction removes only its
 unreferenced output on persistence or derivation failure. Committed files survive
 postcommit callback errors; cleanup errors remain secondary. Remote acquisition
-must run outside an ambient application transaction.
+must run outside an ambient application transaction: the styleguide view opts out
+of ``ATOMIC_REQUESTS``, and a caller that is already inside a transaction (for
+example ``call_command("ensure_reference_site")`` within ``atomic()``) gets the
+demo fallback without remote fetches.
 
 
 ********

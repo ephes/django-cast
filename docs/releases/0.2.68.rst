@@ -11,6 +11,8 @@
 - Validate Podlove control objects, duplicate members and transcript shapes before
   acquiring media. Compensate only fresh, unreferenced remote files after failed
   persistence/derivation; retain committed files after callback errors.
+  The styleguide view opts out of ``ATOMIC_REQUESTS``; remote acquisition inside
+  an ambient transaction falls back to demo content.
 
 - Serialize reference view/command root and post seeding through one Wagtail
   root writer reservation, with remote preparation outside the page transaction.

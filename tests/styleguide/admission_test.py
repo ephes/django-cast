@@ -120,7 +120,8 @@ def test_video_destination_is_admitted(monkeypatch, settings):
 )
 def test_podlove_invalid_control_refused(monkeypatch, payload):
     monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(payload))
-    assert view._fetch_podlove_data("https://example.com/control") is None
+    with pytest.raises(view._PodloveControlRefused):
+        view._fetch_podlove_data("https://example.com/control")
 
 
 @pytest.mark.parametrize("kind", ["image", "audio"])
@@ -164,9 +165,73 @@ def test_invalid_control_precedes_media_storage(monkeypatch, settings):
             '<meta name="twitter:player:stream" content="https://example.com/a.m4a"><podlove-player data-url="/api"></podlove-player>'
         ),
     )
-    monkeypatch.setattr(view, "_fetch_podlove_data", lambda *a: None)
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(b'{"show":"x"}'))
     monkeypatch.setattr(view, "_get_or_create_remote_audio", lambda *a: pytest.fail("unexpected storage"))
+    monkeypatch.setattr(view, "_get_or_create_remote_image", lambda *a: pytest.fail("unexpected storage"))
     assert view._fetch_styleguide_remote_podcast_media(object(), None) == (None, None, None, None)
+    explicit = "https://example.com/transcript"
+    assert view._fetch_styleguide_remote_podcast_media(object(), explicit) == (None, None, None, explicit)
+
+
+def test_unavailable_control_keeps_podcast_page_media(monkeypatch, settings):
+    settings.CAST_STYLEGUIDE_PODCAST_SOURCE_URL = "https://example.com/podcast"
+    monkeypatch.setattr(
+        view,
+        "_fetch_remote_html",
+        lambda *a: (
+            '<meta name="twitter:player:stream" content="https://example.com/a.m4a"><podlove-player data-url="/api"></podlove-player>'
+        ),
+    )
+
+    def unavailable(*a, **kw):
+        raise OSError("synthetic timeout")
+
+    monkeypatch.setattr(safe_fetch, "open_url", unavailable)
+    audio = object()
+    monkeypatch.setattr(view, "_get_or_create_remote_audio", lambda *a: audio)
+    assert view._fetch_styleguide_remote_podcast_media(object(), None) == (
+        audio,
+        None,
+        None,
+        "https://example.com/podcast/transcript/",
+    )
+
+
+def test_video_fallback_reuses_gallery_page_in_one_scope(monkeypatch, settings, user):
+    settings.CAST_STYLEGUIDE_REMOTE_MEDIA = True
+    settings.CAST_STYLEGUIDE_IMAGE_SOURCE_URLS = ["https://example.com/gallery"]
+    settings.CAST_STYLEGUIDE_VIDEO_SOURCE_URL = None
+    settings.CAST_STYLEGUIDE_PODCAST_SOURCE_URL = None
+    settings.CAST_STYLEGUIDE_TRANSCRIPT_SOURCE_URL = None
+    opened = []
+
+    def open_url(request, **kwargs):
+        opened.append(request.full_url)
+        return Response(b'<video poster="/p.jpg"><source src="/v.mp4"></video>')
+
+    monkeypatch.setattr(safe_fetch, "open_url", open_url)
+    media = view._fetch_styleguide_remote_media(user)
+    assert (media.video_url, media.video_poster_url) == ("https://example.com/v.mp4", "https://example.com/p.jpg")
+    assert opened == ["https://example.com/gallery"]
+
+
+@pytest.mark.django_db(transaction=True)
+def test_ambient_transaction_uses_demo_fallback_without_fetch(monkeypatch, settings, user, caplog):
+    from django.db import transaction
+
+    settings.CAST_STYLEGUIDE_REMOTE_MEDIA = True
+    settings.CAST_STYLEGUIDE_IMAGE_SOURCE_URLS = ["https://example.com/gallery"]
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: pytest.fail("unexpected fetch"))
+    with transaction.atomic():
+        media = view._fetch_styleguide_remote_media(user)
+    assert media == view._empty_styleguide_remote_media()
+    assert "ambient transaction" in caplog.text
+
+
+def test_styleguide_view_opts_out_of_atomic_requests():
+    from cast.views.styleguide import styleguide
+
+    assert getattr(styleguide, "_non_atomic_requests", set()) == {"default"}
 
 
 @pytest.mark.django_db(transaction=True)
@@ -236,7 +301,8 @@ def test_partial_media_creates_no_row_or_file(monkeypatch, kind, status, headers
 @pytest.mark.parametrize("payload", [b'{"version":true}', b'{"transcripts":[{"start":"0","text":"x","end":null}]}'])
 def test_control_field_types(monkeypatch, payload):
     monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(payload))
-    assert view._fetch_podlove_data("https://example.com/control") is None
+    with pytest.raises(view._PodloveControlRefused):
+        view._fetch_podlove_data("https://example.com/control")
 
 
 def test_video_without_poster_and_empty_control(monkeypatch, settings):
@@ -269,4 +335,8 @@ def test_remote_file_refuses_ambient_transaction_before_storage(user, site):
 @pytest.mark.parametrize("payload,accepted", [(b'{"unused":1e999}', False), (b'{"unused":1.5}', True)])
 def test_control_numbers_are_finite(monkeypatch, payload, accepted):
     monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(payload))
-    assert (view._fetch_podlove_data("https://example.com/control") is not None) is accepted
+    if accepted:
+        assert view._fetch_podlove_data("https://example.com/control") is not None
+    else:
+        with pytest.raises(view._PodloveControlRefused):
+            view._fetch_podlove_data("https://example.com/control")

@@ -204,6 +204,7 @@ class StyleguideSeedData:
     video_poster_url: str | None = None
 
 
+@transaction.non_atomic_requests
 def styleguide(request: HtmxHttpRequest) -> HttpResponse:
     if not _styleguide_is_enabled():
         raise Http404("Styleguide disabled")
@@ -1154,6 +1155,7 @@ def _styleguide_transcript_max_segments() -> int:
 class _RemoteAttemptBudget:
     deadline: float = field(default_factory=lambda: monotonic() + 30)
     seen: set[str] = field(default_factory=set)
+    html_pages: dict[str, str | None] = field(default_factory=dict)
 
     def admit(self, url: str) -> None:
         if url in self.seen or len(self.seen) >= 24 or monotonic() >= self.deadline:
@@ -1206,10 +1208,18 @@ def _styleguide_fetch(url: str, kind: str) -> bytes:
 
 
 def _fetch_remote_html(url: str) -> str | None:
+    budget = _remote_budget.get()
+    if budget is not None and url in budget.html_pages:
+        # Gallery and video fallback read the same configured pages; reuse the
+        # first outcome instead of refusing the repeated URL as a new attempt.
+        return budget.html_pages[url]
     try:
-        return _styleguide_fetch(url, "html").decode("utf-8", "ignore")
+        html: str | None = _styleguide_fetch(url, "html").decode("utf-8", "ignore")
     except Exception:
-        return None
+        html = None
+    if budget is not None:
+        budget.html_pages[url] = html
+    return html
 
 
 def _extract_image_urls(html: str, page_url: str) -> list[str]:
@@ -1408,17 +1418,26 @@ def _refuse_json_constant(value: str) -> Any:
     raise ValueError("Non-finite control number.")
 
 
+class _PodloveControlRefused(Exception):
+    """Fetched Podlove control data failed admission."""
+
+
 def _fetch_podlove_data(url: str) -> dict[str, Any] | None:
+    """Return ``None`` when control data is unavailable; raise when it is invalid."""
+    try:
+        content = _styleguide_fetch(url, "control")
+    except Exception:
+        return None
     try:
         data = json.loads(
-            _styleguide_fetch(url, "control").decode("utf-8", "strict"),
+            content.decode("utf-8", "strict"),
             object_pairs_hook=_unique_json_object,
             parse_constant=_refuse_json_constant,
             parse_float=_finite_json_float,
         )
         return _validate_podlove_control(data)
-    except Exception:
-        return None
+    except Exception as exc:
+        raise _PodloveControlRefused from exc
 
 
 @contextmanager
@@ -1598,9 +1617,12 @@ def _fetch_styleguide_remote_podcast_media(
     if html is not None:
         podlove_api_url = _extract_podlove_player_api_url(html, podcast_url)
         if podlove_api_url:
-            podlove_data = _fetch_podlove_data(podlove_api_url)
-            if podlove_data is None:
-                return None, None, None, None
+            try:
+                podlove_data = _fetch_podlove_data(podlove_api_url)
+            except _PodloveControlRefused:
+                # Invalid control data refuses this podcast page's media; an
+                # explicitly configured transcript source is still used.
+                return None, None, None, transcript_url
             if podlove_data:
                 poster_url = podlove_data.get("show", {}).get("poster")
                 if poster_url:
@@ -1645,9 +1667,22 @@ def _fetch_styleguide_remote_transcript_media(
     return transcript_data, cover_image
 
 
+def _remote_acquisition_allowed() -> bool:
+    """Remote files need their own durable save transaction (see ``_remote_file_save``)."""
+    try:
+        with transaction.atomic(durable=True):
+            pass
+    except RuntimeError:
+        return False
+    return True
+
+
 @_remote_fetch_scope()
 def _fetch_styleguide_remote_media(user: User) -> StyleguideRemoteMedia:
     if not _styleguide_remote_media_enabled():
+        return _empty_styleguide_remote_media()
+    if not _remote_acquisition_allowed():
+        logger.warning("Styleguide remote media skipped inside an ambient transaction; using demo content.")
         return _empty_styleguide_remote_media()
 
     gallery_images, gallery_blocks = _fetch_styleguide_remote_gallery_media(user)
