@@ -1,5 +1,5 @@
-0.2.68 (unreleased)
--------------------
+Unreleased
+==========
 
 Upgrade actions
 ~~~~~~~~~~~~~~~
@@ -634,6 +634,17 @@ Security and hardening
 
 Fixes
 ~~~~~
+
+- Scope Audio/Video chooser controls and errors to their own modal. Search,
+  collection, tag and page actions cancel superseded requests and accept only
+  the latest intent, including while search input is debounced.
+- Retire chooser timers, handlers and requests on close, replacement and step
+  changes. Ignore late results and upload callbacks. Upload forms admit one
+  pending POST, disable submit controls and allow retry after failure.
+- Clear Audio/Video chooser submitted values, titles, Edit links and telepath
+  state together, including ``setState(null)``. User choices and Clear notify
+  the editor once through a bubbling ``change`` event when the value changes;
+  initial hydration remains silent. Support current Wagtail Clear controls.
 
 - Keep repository subtype, contributor, visibility and feed queries on the source
   database. Preserve that identity through request-scoped serialized pages, media,

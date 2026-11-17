@@ -24,6 +24,9 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 - [ ] Complete external browser/PostgreSQL acceptance for media chooser recovery and reference-site rebuilds
   - Round 105 implements the chooser and command fixes with local regression coverage.
+  - Round 121 adds modal request ownership and coherent telepath state/editor events. Its new real Wagtail
+    journey must also run outside the sandbox; implementation and commands:
+    [round 121](backlog/2026-11-17-round121-media-choosers.md).
   - Run the existing admin browser journeys and the focused widget/reference-command tests on PostgreSQL outside
     the worker sandbox; Chromium Mach-port registration and PostgreSQL shared memory were blocked locally.
   - Commands and evidence: [round 105](backlog/2026-11-16-round105-media-reference.md).

@@ -12,8 +12,12 @@ function createAudioChooser(id) {
         getValue: () => state && state.id,
         setState: (newState) => {
             if (newState == null) {
-                // return early
-                return
+                input.val('');
+                audioTitle.text('');
+                editLink.removeAttr('href').attr('hidden', '');
+                chooserElement.addClass('blank');
+                state = null;
+                return;
             }
             input.val(newState.id);
             audioTitle.text(newState.title);
@@ -29,7 +33,7 @@ function createAudioChooser(id) {
                 onload: AUDIO_CHOOSER_MODAL_ONLOAD_HANDLERS,
                 responses: {
                     audioChosen: (result) => {
-                        chooser.setState(result);
+                        setUserState(result);
                     },
                 },
             });
@@ -48,13 +52,22 @@ function createAudioChooser(id) {
         }
     };
 
+    function setUserState(newState) {
+        const previousValue = input.val();
+        chooser.setState(newState);
+        if (input.val() !== previousValue) {
+            input[0].dispatchEvent(new Event('change', {bubbles: true}));
+        }
+    }
+
     $('.action-choose, [data-chooser-action-choose]', chooserElement).on('click', function() {
         chooser.openChooserModal();
+        return false;
     });
 
-    $('.action-clear', chooserElement).on('click', function() {
-        input.val('');
-        chooserElement.addClass('blank');
+    $('.action-clear, [data-chooser-action-clear]', chooserElement).on('click', function() {
+        setUserState(null);
+        return false;
     });
 
     return chooser;
