@@ -5,6 +5,7 @@ Extracted from the previously triplicated per-type modules (architecture review 
 
 import hashlib
 import json
+import logging
 from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass, field
@@ -39,6 +40,8 @@ from ..media_ingest import (
 from . import AuthenticatedHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
+logger = logging.getLogger(__name__)
+
 DELETE_CONFIRMATION_FIELD = "confirmation"
 DELETE_CONFIRMATION_SALT = "cast.media-admin-delete"
 # Seconds a reviewed delete confirmation stays usable; afterwards the editor reviews again.
@@ -47,11 +50,46 @@ STALE_DELETE_MESSAGE = _(
     "This item changed since you opened the confirmation, or the confirmation expired. "
     "Review the current item below before deleting it."
 )
+INDEX_FAILURE_MESSAGE = _(
+    "'{0}' was saved, but the search index could not be updated. Do not save or upload it again; "
+    "ask an administrator to run 'python manage.py update_index'."
+)
 
 
-def reindex(obj: Any) -> None:
-    for backend in get_search_backends():
-        backend.add(obj)
+def reindex(obj: Any) -> bool:
+    """Add a committed object to every search backend.
+
+    Index synchronization is optional after the save committed: a failing backend
+    is logged and the remaining backends are still attempted. Returns whether
+    every backend was updated.
+    """
+    label = obj._meta.label
+    try:
+        backends = list(get_search_backends())
+    except Exception:
+        logger.exception("Search backends unavailable; %s pk=%s is not indexed", label, obj.pk)
+        return False
+    indexed = True
+    for backend in backends:
+        try:
+            backend.add(obj)
+        except Exception:
+            logger.exception(
+                "Search index update failed for %s pk=%s on %s; run 'manage.py update_index' to repair",
+                label,
+                obj.pk,
+                type(backend).__name__,
+            )
+            indexed = False
+    return indexed
+
+
+def reindex_saved(request: HttpRequest, obj: Any, describe: Callable[[Any], Any]) -> bool:
+    """Reindex a committed save; warn the editor, without failing the request, if indexing failed."""
+    indexed = reindex(obj)
+    if not indexed:
+        messages.warning(request, INDEX_FAILURE_MESSAGE.format(describe(obj)))
+    return indexed
 
 
 def delete_revision(obj: Any, user: Any) -> str:
@@ -218,7 +256,7 @@ class MediaAdminViews:
         if request.POST:
             obj, form, saved = self._save_upload(request, form_class)
             if saved:
-                reindex(obj)
+                reindex_saved(request, obj, config.message_arg)
 
                 messages.success(
                     request,
@@ -251,7 +289,7 @@ class MediaAdminViews:
         if request.method == "POST":
             obj, form, saved = self._save_upload(request, form_class, obj=obj)
             if saved:
-                reindex(obj)
+                reindex_saved(request, obj, config.message_arg)
 
                 messages.success(
                     request,
@@ -420,7 +458,7 @@ class MediaAdminViews:
             )
 
             if saved:
-                reindex(obj)
+                reindex_saved(request, obj, config.message_arg)
 
                 return render_modal_workflow(
                     request,

@@ -127,7 +127,7 @@ def test_inline_text_correction_updates_all_formats_and_survives_glossary(admin_
     transcript = passage_transcript(episode)
     url = reverse("cast-transcript:preview", args=(transcript.pk,))
     backend = mocker.Mock()
-    mocker.patch("cast.views.transcript.get_search_backends", return_value=[backend])
+    mocker.patch("cast.views.media.get_search_backends", return_value=[backend])
     response = admin_client.post(
         url,
         {

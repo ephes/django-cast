@@ -676,6 +676,14 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Report a committed admin audio/video/transcript save (add, edit, chooser
+  upload, transcript restore and text correction) as saved when a search
+  backend fails afterwards. The remaining backends are still updated, the
+  failure is logged, and editors see a warning not to save or upload again (inline
+  text correction shows it in its save status); repair with
+  ``python manage.py update_index``. Interruptions still propagate, and failures
+  before the commit still roll back and remove new files.
+
 - Refuse author comment edits/deletions on rate-limit cache failures with a
   controlled HTTP 429, fixed diagnostic and ``Retry-After`` guidance. Disabled
   limits, atomic counter initialization and counter expiry retain their behavior.

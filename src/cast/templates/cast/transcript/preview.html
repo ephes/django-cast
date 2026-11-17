@@ -19,6 +19,7 @@
 .passage-text-form .passage-actions { display: flex; gap: .5rem; align-items: center; margin-top: .25rem; }
 .passage-save-status { min-height: 1.2em; margin: 0; padding: 0 .5rem; font-size: .875rem; }
 .passage-save-status[data-state="error"] { color: var(--w-color-text-error, #cd4444); }
+.passage-save-status[data-state="warning"] { color: var(--w-color-text-warning, #a35b00); }
 @media (max-width: 700px) { .transcript-passage { grid-template-columns: 1fr; } .transcript-passage .passage-seek, .passage-body, .passage-speaker { grid-column: 1; } }
 </style>{% endblock %}
 {% block content %}
@@ -60,13 +61,14 @@
   {% endfor %}
   <nav>{% if passage_page.has_previous %}<a href="?episode_id={{ episode_id }}&amp;page={{ passage_page.previous_page_number }}">{% trans "Previous" %}</a>{% endif %} {{ passage_page.number }} / {{ passage_page.paginator.num_pages }} {% if passage_page.has_next %}<a href="?episode_id={{ episode_id }}&amp;page={{ passage_page.next_page_number }}">{% trans "Next" %}</a>{% endif %}</nav>
 </div>
-{% trans "Saving…" as saving_text %}{% trans "Saved" as saved_text %}{% trans "Reload the transcript; it changed while you were editing." as conflict_text %}{% trans "Could not save. Try again." as failed_text %}
+{% trans "Saving…" as saving_text %}{% trans "Saved" as saved_text %}{% trans "Reload the transcript; it changed while you were editing." as conflict_text %}{% trans "Could not save. Try again." as failed_text %}{% trans "Saved, but the search index could not be updated. Do not save again; ask an administrator to run 'python manage.py update_index'." as index_stale_text %}
 <script>
   const passageMessages = {
     saving: "{{ saving_text|escapejs }}",
     saved: "{{ saved_text|escapejs }}",
     conflict: "{{ conflict_text|escapejs }}",
     failed: "{{ failed_text|escapejs }}",
+    indexStale: "{{ index_stale_text|escapejs }}",
   };
   document.querySelectorAll('[data-seek]').forEach(button => button.addEventListener('click', () => {
     const audio = document.getElementById('passage-audio');
@@ -101,7 +103,10 @@
         if (!response.ok) throw new Error(response.status === 409 ? passageMessages.conflict : (await response.text()).slice(0, 300) || passageMessages.failed);
         const result = await response.json(); button.textContent = result.text;
         document.querySelectorAll('[name=artifact_revision]').forEach(field => { field.value = result.artifact_revision; });
-        setStatus(passageMessages.saved, 'saved'); close();
+        // The correction committed even when the search index could not be updated.
+        if (result.search_index_updated === false) setStatus(passageMessages.indexStale, 'warning');
+        else setStatus(passageMessages.saved, 'saved');
+        close();
       } catch (error) { setStatus(error.message || passageMessages.failed, 'error'); }
       finally { saving = false; form.querySelector('[type=submit]').disabled = false; }
     });

@@ -30,8 +30,8 @@ per audio format. The feeds are generated automatically and can be found at
 
 .. _media_admin_management:
 
-Admin deletion
---------------
+Admin deletion and search indexing
+----------------------------------
 
 These rules apply to the Wagtail admin views for audio, video and transcripts.
 
@@ -46,6 +46,23 @@ deleted: the page shows the current item again with a fresh confirmation
 (HTTP 409). A user who lost delete permission gets a 404. A concurrent edit
 either commits before the check, and is then compared, or waits until the
 deletion has finished.
+
+**A committed upload stays a success.** Adding, editing or uploading media
+through the chooser first commits the row and its files, then updates the
+search index. If a search backend fails at that point, the save is still
+reported as successful and is not repeated. The other configured backends are
+still updated, the failure is logged with the backend name, and the editor sees
+a warning not to save or upload the item again. The same applies to restoring a
+previous transcript version. The inline transcript text correction shows the
+warning in its save status instead (its JSON response carries
+``"search_index_updated": false``). Repair the index with:
+
+.. code-block:: console
+
+    python manage.py update_index
+
+Failures before the commit, such as probe errors or a failed save, still roll
+back the row and remove the newly written files.
 
 Playback
 --------

@@ -346,6 +346,14 @@ msgstr "Gespeichert"
 msgid "Could not save. Try again."
 msgstr "Speichern fehlgeschlagen. Versuche es noch einmal."
 
+msgid ""
+"Saved, but the search index could not be updated. Do not save again; ask an "
+"administrator to run 'python manage.py update_index'."
+msgstr ""
+"Gespeichert, aber der Suchindex konnte nicht aktualisiert werden. Nicht "
+"erneut speichern; bitte eine Administratorin oder einen Administrator, "
+"'python manage.py update_index' auszuführen."
+
 msgid "Reload the transcript; it changed while you were editing."
 msgstr "Lade das Transkript neu; es wurde während deiner Bearbeitung geändert."
 

@@ -137,6 +137,24 @@ def test_transcript_admin_journey(client, pg_editor_actors, request, settings, l
             passage.locator("textarea").press("Meta+Enter")
             expect(passage.locator(".passage-save-status")).to_have_text("Saved")
             expect(passage.locator("[data-edit-text]")).to_have_text("Manual browser correction")
+
+            def stale_search_index(route):
+                # Save for real, then report the committed correction with a failed index update.
+                if route.request.method != "POST":
+                    return route.continue_()
+                response = route.fetch()
+                body = response.json()
+                body["search_index_updated"] = False
+                return route.fulfill(response=response, json=body)
+
+            page.route("**/transcript/preview/**", stale_search_index)
+            passage.locator("[data-edit-text]").click()
+            passage.locator("textarea").fill("Committed browser correction")
+            passage.locator("textarea").press("Enter")
+            expect(passage.locator(".passage-save-status")).to_contain_text("search index could not be updated")
+            expect(passage.locator(".passage-save-status")).to_have_attribute("data-state", "warning")
+            expect(passage.locator("[data-edit-text]")).to_have_text("Committed browser correction")
+            page.unroute("**/transcript/preview/**")
             passage.get_by_text("Change speaker", exact=True).click()
             passage.locator("select[name=speaker]").select_option("")
             passage.get_by_role("button", name="Save speaker", exact=True).click()
@@ -154,7 +172,7 @@ def test_transcript_admin_journey(client, pg_editor_actors, request, settings, l
             expect(page.locator("#id_speaker_0")).to_have_value("")
             page.get_by_role("button", name="Restore the version from", exact=False).click()
             page.get_by_role("link", name="Preview", exact=True).click()
-            expect(page.locator("[data-edit-text]").first).to_have_text("Manual browser correction")
+            expect(page.locator("[data-edit-text]").first).to_have_text("Committed browser correction")
             assert [error for error in errors if "503" not in error] == []
         finally:
             browser.close()

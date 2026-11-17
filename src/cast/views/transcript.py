@@ -17,7 +17,6 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.cache import never_cache
 from wagtail.admin import messages
-from wagtail.search.backends import get_search_backends
 
 from ..audio_access import authorize_transcript_access, prevent_private_media_caching, request_may_view_page
 from ..forms import (
@@ -72,7 +71,7 @@ from ..transcripts.webvtt import (
     sanitize_webvtt_content,
 )
 from . import AuthenticatedHttpRequest, HtmxHttpRequest, transcript_glossary
-from .media import MediaAdminConfig, MediaAdminViews
+from .media import MediaAdminConfig, MediaAdminViews, reindex, reindex_saved
 
 TRANSCRIPT_FALLBACK_THEME = "plain"
 
@@ -530,9 +529,8 @@ def _handle_transcript_form_save(
     if saved is not None:
         transcript = saved
 
-        # Reindex the media entry to make sure all tags are indexed
-        for backend in get_search_backends():
-            backend.add(transcript)
+        # Reindex the media entry to make sure all tags are indexed; the save already committed.
+        reindex_saved(request, transcript, _transcript_message_arg)
 
         _missing_format_notice(request, transcript)
         messages.success(
@@ -623,8 +621,7 @@ def _edit(request: HttpRequest, transcript: Transcript) -> HttpResponse:
             return HttpResponse(_error_text(error), status=400, content_type="text/plain; charset=utf-8")
         except services.TranscriptEditConflict:
             return HttpResponse("Reload the transcript; it changed while you were editing.", status=409)
-        for backend in get_search_backends():
-            backend.add(transcript)
+        reindex_saved(request, transcript, _transcript_message_arg)
         messages.success(request, _("Previous transcript version restored."))
         return redirect("cast-transcript:edit", transcript_id=transcript.pk)
     if request.method == "POST" and action == "detach-invalid-sidecar":
@@ -750,9 +747,15 @@ def preview(request: HttpRequest, transcript_id: int) -> HttpResponse:
             start_ms = int(request.POST.get("start_ms", ""))
             if request.POST.get("action") == "correct-text":
                 text = transcript.correct_passage_text(start_ms, request.POST.get("text", ""))
-                for backend in get_search_backends():
-                    backend.add(transcript)
-                return JsonResponse({"text": text, "artifact_revision": services.artifact_revision(transcript)})
+                # The correction committed; report a stale search index in the response itself.
+                indexed = reindex(transcript)
+                return JsonResponse(
+                    {
+                        "text": text,
+                        "artifact_revision": services.artifact_revision(transcript),
+                        "search_index_updated": indexed,
+                    }
+                )
             speaker = request.POST.get("speaker", "")
             if speaker and speaker not in names:
                 raise ValidationError("Choose an episode contributor.")
