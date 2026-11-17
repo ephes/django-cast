@@ -13,8 +13,11 @@ reuses the committed winner. Earlier image commits remain valid.
 Repair cache callbacks bind to the saved rendition's database alias and run at
 the outer commit. Rollback drops callbacks. A callback error explicitly reports
 committed/cache-pending state and recovery identifiers; it never triggers
-compensation of committed output. Retry all cache purges for that image because
-Django stops later callbacks after an exception. See the maintenance contract in
+compensation of committed output. Only `sync_renditions` opts into the raising
+mode (`strict_cache_invalidation=True`); there, retry all cache purges for that
+image because Django stops later callbacks after an exception. Embedded callers
+(publication signal, galleries, style guide) log the same identifiers at ERROR
+and keep later commit callbacks running. See the maintenance contract in
 `docs/reference/management-commands.rst`.
 
 Regression evidence: focused rollback tests fail on the original command;
@@ -40,6 +43,9 @@ selectors remain compatible. No schema or version changes.
   `initdb -D /Users/jochen/workspaces/ws-cx-cx-r126-django-cast/.cache/postgres-r126 -A trust -U postgres`
   was also attempted and blocked by `shmget: Operation not permitted`.
   PostgreSQL qualification, including the new independent-connection cache
-  barrier, remains for the merge clerk; it is not claimed as passed.
+  barrier, was left to the merge clerk.
+- Merge qualification (2026-11-17): `just check-postgres` passed both lanes
+  (`postgres`, `postgres-wagtail81`) against a disposable PostgreSQL 17 cluster,
+  including the cache refill barrier and rollback tests (not skipped).
 - Pre-fix regression receipts and full gate output are retained outside the
   clone under the coordinator's `logs/cx-r126-django-cast/` directory.

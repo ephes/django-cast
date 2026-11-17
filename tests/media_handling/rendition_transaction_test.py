@@ -147,7 +147,29 @@ def test_committed_cache_failure_keeps_repaired_bytes(post, disk_image, mocker, 
         if entry == "command":
             call_command("sync_renditions", post_slug=post.slug)
         else:
+            create_missing_renditions_for_images({disk_image.pk: {"width-1"}}, strict_cache_invalidation=True)
+    row.refresh_from_db()
+    assert row.file.name != old_name
+    assert row.file.storage.exists(row.file.name)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_embedded_cache_failure_is_logged_and_keeps_later_callbacks(disk_image, mocker, caplog):
+    from django.db import transaction
+
+    from cast.models.image_renditions import create_missing_renditions_for_images
+
+    row = disk_image.get_rendition("width-1")
+    old_name = row.file.name
+    row.file.storage.delete(old_name)
+    mocker.patch.object(Rendition, "purge_from_cache", side_effect=OSError("synthetic cache outage"))
+    later = mocker.Mock()
+    with caplog.at_level("ERROR", logger="cast.models.image_renditions"):
+        with transaction.atomic():
             create_missing_renditions_for_images({disk_image.pk: {"width-1"}})
+            transaction.on_commit(later)
+    later.assert_called_once_with()
+    assert f"cache purge pending for image {disk_image.pk} (rendition {row.pk}" in caplog.text
     row.refresh_from_db()
     assert row.file.name != old_name
     assert row.file.storage.exists(row.file.name)

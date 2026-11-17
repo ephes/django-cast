@@ -642,6 +642,8 @@ Fixes
 - Invalidate repaired rendition cache entries only after the writer database
   commits. Report committed/cache-pending callback failures with recovery IDs,
   retain committed replacement files, and document cache-only recovery.
+  ``sync_renditions`` fails on such a callback error; publication and gallery
+  rendition preparation log it without failing the committed request.
 
 - Scope Audio/Video chooser controls and errors to their own modal. Search,
   collection, tag and page actions cancel superseded requests and accept only

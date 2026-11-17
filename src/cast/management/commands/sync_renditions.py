@@ -76,7 +76,9 @@ By default all posts are synced.
             written: list[tuple[Storage, str]] = []
             try:
                 with transaction.atomic(using=using):
-                    present = repair_missing_rendition_files(image, filter_specs, written=written)
+                    present = repair_missing_rendition_files(
+                        image, filter_specs, written=written, strict_cache_invalidation=True
+                    )
                     clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
                     required = {clean_filter(Filter(spec)).spec for spec in filter_specs}
                     for filter_spec in required - present:

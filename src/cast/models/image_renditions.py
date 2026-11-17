@@ -28,15 +28,20 @@ class RenditionCacheInvalidationError(RuntimeError):
     """The writer committed, but this image still needs cache invalidation."""
 
 
-def _purge_committed_rendition(rendition: AbstractRendition) -> None:
+def _purge_committed_rendition(rendition: AbstractRendition, *, strict: bool) -> None:
     try:
         rendition.purge_from_cache()
     except Exception as error:
-        raise RenditionCacheInvalidationError(
+        message = (
             f"Rendition repair committed on {rendition._state.db}; cache purge pending for image "
             f"{rendition.image_id} (rendition {rendition.pk}, file {rendition.file.name}). "
             "Retry purge_from_cache() for all renditions of this image on that database."
-        ) from error
+        )
+        if strict:
+            raise RenditionCacheInvalidationError(message) from error
+        # Embedded callers (publication, galleries) already committed their own
+        # work; do not fail them or stop later commit callbacks on this connection.
+        logger.error(message, exc_info=True)
 
 
 def get_gallery_thumbnail_srgb_counterpart_filterstrings(image: Image) -> Iterator[tuple[int, str]]:
@@ -136,7 +141,11 @@ def get_all_images_from_posts(posts: Iterator["Post"]) -> ImagesWithType:
 
 
 def repair_missing_rendition_files(
-    image: Image, filter_specs: Iterable[str], *, written: list[tuple[Storage, str]] | None = None
+    image: Image,
+    filter_specs: Iterable[str],
+    *,
+    written: list[tuple[Storage, str]] | None = None,
+    strict_cache_invalidation: bool = False,
 ) -> set[str]:
     """Repair broken files without scheduling deletion of a reused storage key.
 
@@ -145,7 +154,9 @@ def repair_missing_rendition_files(
     Return the filter specs that already have a row, so callers do not generate
     them again, and append each proven owned file to ``written``. Cache purges
     run only after commit on the writer alias; rollback discards them. A purge
-    failure raises RenditionCacheInvalidationError with committed recovery IDs.
+    failure is logged with committed recovery IDs; with
+    ``strict_cache_invalidation`` it raises RenditionCacheInvalidationError
+    instead, which also stops later commit callbacks on that connection.
     """
     present: set[str] = set()
     for rendition in image.renditions.select_for_update().filter(filter_spec__in=filter_specs):
@@ -163,7 +174,10 @@ def repair_missing_rendition_files(
             finally:
                 if written is not None:
                     written.extend(attempt)
-            transaction.on_commit(partial(_purge_committed_rendition, rendition), using=rendition._state.db)
+            transaction.on_commit(
+                partial(_purge_committed_rendition, rendition, strict=strict_cache_invalidation),
+                using=rendition._state.db,
+            )
     return present
 
 
@@ -205,7 +219,10 @@ def create_rendition_with_receipt(
 
 
 def create_missing_renditions_for_images(
-    missing_renditions: RenditionStringsByImageId, *, using: str | None = None
+    missing_renditions: RenditionStringsByImageId,
+    *,
+    using: str | None = None,
+    strict_cache_invalidation: bool = False,
 ) -> None:
     """Create required renditions on the source database without shared cache collisions."""
     using = using or router.db_for_write(Image)
@@ -217,7 +234,9 @@ def create_missing_renditions_for_images(
         written: list[tuple[Storage, str]] = []
         try:
             with transaction.atomic(using=using):
-                present = repair_missing_rendition_files(image, filter_specs, written=written)
+                present = repair_missing_rendition_files(
+                    image, filter_specs, written=written, strict_cache_invalidation=strict_cache_invalidation
+                )
                 for filter_string in filter_specs:
                     if filter_string in present:
                         continue

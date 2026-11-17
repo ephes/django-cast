@@ -223,9 +223,13 @@ Django stops later commit callbacks after a failure, so retry invalidation for
 Retry after restoring cache connectivity, then rerun ``sync_renditions`` to
 finish any remaining images and obsolete-counterpart retirement. Inventory
 alone cannot identify a pending cache purge. Library callers of
-``repair_missing_rendition_files`` own the transaction and rollback receipt;
-``RenditionCacheInvalidationError`` distinguishes committed/cache-pending repair
-from a failed writer transaction. For nested transactions the outer owner must
+``repair_missing_rendition_files`` own the transaction and rollback receipt.
+By default (publication, gallery and style-guide rendition preparation) a
+purge failure is logged at ERROR with the same recovery identifiers and does
+not fail the already committed caller or stop its later commit callbacks.
+Passing ``strict_cache_invalidation=True`` (as ``sync_renditions`` does) raises
+``RenditionCacheInvalidationError`` instead, which distinguishes
+committed/cache-pending repair from a failed writer transaction. For nested transactions the outer owner must
 retain the receipt until commit or rollback, since Django has no rollback hook.
 
 Video Management

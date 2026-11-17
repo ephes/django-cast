@@ -15,13 +15,6 @@ This is the canonical planning backlog for django-cast. Keep it small and action
 
 ## Later
 
-- [ ] Qualify round 126 rendition cache boundaries on PostgreSQL
-  - The transaction/storage receipts and after-commit invalidation are implemented.
-  - Run `just check-postgres`, including the independent-connection refill barrier,
-    outside a restricted sandbox if the local database service is unavailable.
-  - Evidence and contract: [round 126](backlog/2026-11-17-round126-renditions.md).
-  - Done when: both configured PostgreSQL lanes pass with the new cache barrier.
-
 - [ ] Complete external browser/PostgreSQL acceptance from rounds 91 and 97
   - Integration is finished; the handoffs still record sandbox-blocked browser and PostgreSQL checks.
   - Run the two-editor comment journey and the publication/comment locking checks outside the sandbox.
