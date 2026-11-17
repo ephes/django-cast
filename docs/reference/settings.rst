@@ -1068,3 +1068,12 @@ Apply migration 0087 and update producers and completion workers together.
 Queued tasks from older package versions without an attempt ID are ignored;
 allow their generation to become stale and retry it through the normal UI.
 Package adoption requires no new settings.
+
+Remote styleguide response admission
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+All remote styleguide reads are bounded before decoding or storage: HTML is
+limited to 2 MiB, Podlove control JSON to 1 MiB, images to 20 MiB and audio to
+100 MiB. The actual received bytes determine admission, independently of
+``Content-Length``. Only complete HTTP 200 responses without ``Content-Range``
+are accepted. Refused downloads use the synthetic demo fallback.

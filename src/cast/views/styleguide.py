@@ -9,7 +9,6 @@ from io import BytesIO
 from types import SimpleNamespace
 from typing import Any, cast
 from urllib.parse import urljoin, urlparse
-from urllib.request import Request, urlopen
 
 from django.conf import settings
 from django.contrib.auth.models import Group, User
@@ -65,6 +64,7 @@ from cast.models.image_renditions import (
 )
 from cast.models.repository import BlogIndexContext
 from cast.post_media import prepare_post_media
+from cast.safe_fetch import FetchPolicy, fetch_bytes
 
 from .htmx_helpers import HtmxHttpRequest
 
@@ -75,6 +75,12 @@ STYLEGUIDE_EPISODE_SLUG = "styleguide-episode-1"
 STYLEGUIDE_USER_NAME = "styleguide"
 STYLEGUIDE_FALLBACK_THEMES = ("bootstrap5", "bootstrap4", "plain")
 STYLEGUIDE_USER_AGENT = "django-cast-styleguide/1.0"
+STYLEGUIDE_REMOTE_BYTE_LIMITS = {
+    "html": 2 * 1024**2,
+    "control": 1024**2,
+    "image": 20 * 1024**2,
+    "audio": 100 * 1024**2,
+}
 
 
 @dataclass(frozen=True)
@@ -1117,14 +1123,23 @@ def _styleguide_transcript_max_segments() -> int:
     return int(appsettings.CAST_STYLEGUIDE_TRANSCRIPT_MAX_SEGMENTS)
 
 
-def _styleguide_request(url: str) -> Request:
-    return Request(url, headers={"User-Agent": STYLEGUIDE_USER_AGENT})
+def _styleguide_fetch(url: str, kind: str) -> bytes:
+    return fetch_bytes(
+        url,
+        policy=FetchPolicy(
+            allowed_origins=None,
+            max_bytes=STYLEGUIDE_REMOTE_BYTE_LIMITS[kind],
+            timeout=_styleguide_remote_timeout(),
+            block_private_addresses=False,
+            require_complete_response=True,
+        ),
+        headers={"User-Agent": STYLEGUIDE_USER_AGENT},
+    )
 
 
 def _fetch_remote_html(url: str) -> str | None:
     try:
-        with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
-            return response.read().decode("utf-8", "ignore")
+        return _styleguide_fetch(url, "html").decode("utf-8", "ignore")
     except Exception:
         return None
 
@@ -1288,8 +1303,7 @@ def _extract_podlove_player_api_url(html: str, page_url: str) -> str | None:
 
 def _fetch_podlove_data(url: str) -> dict[str, Any] | None:
     try:
-        with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
-            return json.loads(response.read().decode("utf-8", "ignore"))
+        return json.loads(_styleguide_fetch(url, "control").decode("utf-8", "strict"))
     except Exception:
         return None
 
@@ -1309,8 +1323,7 @@ def _get_or_create_remote_image(url: str, user: User) -> Image | None:
     if existing is not None:
         return existing
     try:
-        with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
-            content = response.read()
+        content = _styleguide_fetch(url, "image")
     except Exception:
         return None
     try:
@@ -1363,8 +1376,7 @@ def _get_or_create_remote_audio(url: str, user: User) -> Audio | None:
         transitional.save()
         return transitional
     try:
-        with urlopen(_styleguide_request(url), timeout=_styleguide_remote_timeout()) as response:
-            content = response.read()
+        content = _styleguide_fetch(url, "audio")
     except Exception:
         return None
     audio = Audio(user=user, title=clean_title, data={"styleguide_source_url": url})

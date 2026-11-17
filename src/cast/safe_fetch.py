@@ -22,6 +22,9 @@ if TYPE_CHECKING:
         @overload
         def read(self, size: int, /) -> bytes: ...
 
+        status: int
+        headers: HTTPMessage
+
         def __enter__(self) -> Self: ...
 
         def __exit__(
@@ -54,6 +57,7 @@ class FetchPolicy:
     max_bytes: int
     timeout: float
     max_error_bytes: int = 16 * 1024
+    require_complete_response: bool = False
     follow_redirects: bool = False
     block_private_addresses: bool = True
 
@@ -152,6 +156,9 @@ def fetch_bytes(
     request = Request(url, data=data, headers=headers or {}, method=method)
     try:
         with open_url(request, timeout=policy.timeout, follow_redirects=policy.follow_redirects) as response:
+            if policy.require_complete_response:
+                if response.status != 200 or response.headers.get("Content-Range") is not None:
+                    raise FetchError("Fetch requires a complete HTTP 200 response.")
             return read_response_bytes(response, max_bytes=policy.max_bytes)
     except HTTPError as exc:
         detail = read_http_error_detail(exc, max_bytes=policy.max_error_bytes)

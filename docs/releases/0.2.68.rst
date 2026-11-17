@@ -1,6 +1,9 @@
 0.2.68 (unreleased)
 -------------------
 
+- Bound styleguide HTML, control JSON, image and audio response bodies before
+  decode/storage; refuse unsolicited partial responses and use demo fallback.
+
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
