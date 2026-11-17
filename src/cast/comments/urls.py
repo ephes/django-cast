@@ -16,5 +16,8 @@ urlpatterns = [
     # shortcut), which redirects to any object's URL without permission checks.
     # ``Comment.get_absolute_url()`` reverses this name, so keep it.
     re_path(r"^cr/(\d+)/(.+)/$", views.comment_target_redirect, name="comments-url-redirect"),
+    # Override the stock ``comments-flag`` view, which showed and flagged any
+    # comment (including hidden ones) for every logged-in user.
+    path("flag/<int:comment_id>/", views.flag_comment, name="comments-flag"),
     path("", include(django_comments.urls)),
 ]

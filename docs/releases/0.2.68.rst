@@ -389,6 +389,15 @@ Features
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
 
+- Replace django-contrib-comments' stock ``comments-flag`` view. It let any
+  logged-in user read the author and opening text of hidden, removed, draft-page
+  or view-restricted comments and flag them. Such comments now return 404 unless
+  the user has ``django_comments.can_moderate``; visible comments flag as before.
+
+- Require ``.json`` (Podlove, DOTe) and ``.vtt`` (WebVTT) extensions for new
+  transcript uploads, so a transcript editor cannot store an ``.html``/``.svg``
+  document under the media URL. Existing files are unchanged.
+
 - Keep enabled development theme-comparison iframes on local paths: reject
   backslashes, control characters and surrounding whitespace before rendering
   a destination, including query-decoded browser network-path spellings.

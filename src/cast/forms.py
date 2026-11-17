@@ -30,7 +30,12 @@ from .media_derivation import (
     save_video_with_derivations,
 )
 from .media_permissions import audio_permission_policy, transcript_permission_policy
-from .media_validation import validate_audio_upload, validate_transcript_upload, validate_video_upload
+from .media_validation import (
+    validate_audio_upload,
+    validate_transcript_extension,
+    validate_transcript_upload,
+    validate_video_upload,
+)
 from .models import (
     Audio,
     ChapterMark,
@@ -389,6 +394,7 @@ class TranscriptForm(BaseCollectionMemberForm):
             raise ValidationError(_("Podlove transcript must include a top-level 'transcripts' key."))
         if not isinstance(data["transcripts"], list):
             raise ValidationError(_("Podlove transcript 'transcripts' must be a list."))
+        validate_transcript_extension(podlove, field_name="podlove", label="Podlove transcript")
         return podlove
 
     def clean_dote(self) -> Any:
@@ -421,6 +427,7 @@ class TranscriptForm(BaseCollectionMemberForm):
                         _("DOTe transcript %(key)s values must use the HH:MM:SS,mmm format, got %(value)s."),
                         params={"key": key, "value": repr(line[key])[:50]},
                     )
+        validate_transcript_extension(dote, field_name="dote", label="DOTe transcript")
         return dote
 
     def clean_vtt(self) -> Any:
@@ -441,6 +448,7 @@ class TranscriptForm(BaseCollectionMemberForm):
             )
         if not header.startswith("WEBVTT"):
             raise ValidationError(_("WebVTT transcripts must start with the WEBVTT header."))
+        validate_transcript_extension(vtt, field_name="vtt", label="WebVTT transcript")
         return vtt
 
     def save(self, commit: bool = True) -> Transcript:

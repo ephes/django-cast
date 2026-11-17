@@ -113,6 +113,29 @@ def validate_transcript_upload(uploaded_file: UploadedFile | IO[bytes], *, max_b
         )
 
 
+TRANSCRIPT_UPLOAD_EXTENSIONS: dict[str, frozenset[str]] = {
+    "podlove": frozenset({"json"}),
+    "dote": frozenset({"json"}),
+    "vtt": frozenset({"vtt"}),
+}
+
+
+def validate_transcript_extension(uploaded_file: Any, *, field_name: str, label: str) -> None:
+    """Keep the stored transcript name on a data extension.
+
+    Upload names are kept in storage, so an ``.html``/``.svg`` name would let a
+    transcript editor publish an active document wherever media shares the site origin.
+    """
+    allowed = TRANSCRIPT_UPLOAD_EXTENSIONS[field_name]
+    extension = Path(getattr(uploaded_file, "name", "") or "").suffix.lower().lstrip(".")
+    if extension not in allowed:
+        raise ValidationError(
+            _("%(label)s files must use one of these extensions: %(extensions)s."),
+            code="invalid_extension",
+            params={"label": label, "extensions": ", ".join(sorted(allowed))},
+        )
+
+
 def validate_media_upload(
     uploaded_file: Any,
     *,

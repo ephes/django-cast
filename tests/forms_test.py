@@ -357,6 +357,40 @@ class TestTranscriptForm:
         assert form.is_valid() is False
         assert "vtt" in form.errors
 
+    @pytest.mark.parametrize("name", ["podlove.html", "podlove.svg", "podlove.json.html", "podlove", "podlove.vtt"])
+    def test_podlove_rejects_non_json_extension(self, audio, name):
+        podlove = self._json_upload(name, {"transcripts": [{"text": "<script>alert(1)</script>"}]})
+        form = TranscriptForm({"audio": audio.id}, {"podlove": podlove})
+        assert form.is_valid() is False
+        assert form.errors.as_data()["podlove"][0].code == "invalid_extension"
+
+    @pytest.mark.parametrize("name", ["dote.html", "dote.xhtml", "dote.json.htm"])
+    def test_dote_rejects_non_json_extension(self, audio, name):
+        line = {"startTime": "00:00:00,000", "endTime": "00:00:01,000", "speakerDesignation": "", "text": "Hi"}
+        dote = self._json_upload(name, {"lines": [line]})
+        form = TranscriptForm({"audio": audio.id}, {"dote": dote})
+        assert form.is_valid() is False
+        assert form.errors.as_data()["dote"][0].code == "invalid_extension"
+
+    @pytest.mark.parametrize("name", ["test.html", "test.svg", "test.vtt.html", "test.json", "test"])
+    def test_vtt_rejects_non_vtt_extension(self, audio, name):
+        vtt = SimpleUploadedFile(name, b"WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<script>x</script>")
+        form = TranscriptForm({"audio": audio.id}, {"vtt": vtt})
+        assert form.is_valid() is False
+        assert form.errors.as_data()["vtt"][0].code == "invalid_extension"
+
+    def test_transcript_extensions_are_case_insensitive(self, audio):
+        line = {"startTime": "00:00:00,000", "endTime": "00:00:01,000", "speakerDesignation": "", "text": "Hi"}
+        form = TranscriptForm(
+            {"audio": audio.id},
+            {
+                "podlove": self._json_upload("PODLOVE.JSON", {"transcripts": []}),
+                "dote": self._json_upload("Dote.Json", {"lines": [line]}),
+                "vtt": SimpleUploadedFile("TEST.VTT", b"WEBVTT\n"),
+            },
+        )
+        assert form.is_valid(), form.errors
+
     def test_vtt_validation_unchanged_with_collection_permissions(self, audio, user):
         permitted_one, _permitted_two, _forbidden = _create_test_collections()
         _add_collection_permissions(user, Transcript, [permitted_one])

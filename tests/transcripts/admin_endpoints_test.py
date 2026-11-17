@@ -208,7 +208,9 @@ class TestTranscriptEditIngestion:
         old_names = {field_name: getattr(transcript, field_name).name for field_name in self.files}
         storage = transcript.podlove.storage
         uploads = {
-            field_name: SimpleUploadedFile(f"new.{field_name}", content, content_type=content_type)
+            field_name: SimpleUploadedFile(
+                f"new-{field_name}.{'vtt' if field_name == 'vtt' else 'json'}", content, content_type=content_type
+            )
             for field_name, (content_type, content) in self.files.items()
         }
 

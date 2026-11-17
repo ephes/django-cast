@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 import django_comments
 from django.apps import apps
+from django.contrib.auth.decorators import login_required
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
@@ -20,12 +21,14 @@ from django.http import (
     JsonResponse,
     QueryDict,
 )
+from django.shortcuts import get_object_or_404
 from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_POST
 from django_comments import signals
 from django_comments.forms import COMMENT_MAX_LENGTH
 from django_comments.views.comments import CommentPostBadRequest
+from django_comments.views.moderation import flag as stock_flag
 from django_comments.views.utils import next_redirect
 from wagtail.models import Page
 
@@ -538,3 +541,33 @@ def comment_target_redirect(request: HttpRequest, content_type_id: str, object_i
     if not url:
         raise Http404("Page has no URL.")
     return HttpResponseRedirect(url)
+
+
+def _comment_is_visible_to(comment: BaseComment, request: HttpRequest) -> bool:
+    """True when the comment is shown publicly and its target is viewable for this request."""
+    if not getattr(comment, "is_public", True) or getattr(comment, "is_removed", False):
+        return False
+    return comment_target_is_accessible(comment.content_object, request)
+
+
+@login_required
+def flag_comment(request: HttpRequest, comment_id: int, next: str | None = None) -> HttpResponse:
+    """Flag a comment the requester could already see.
+
+    Replaces django-contrib-comments' stock ``comments-flag`` route. The stock
+    view admits any logged-in user and loads any comment by id, so its
+    confirmation page revealed the author name and the start of non-public,
+    removed, draft-page or view-restricted comments, and its POST let anyone
+    flag them. Here, a comment that is not public, is removed or targets a page
+    the requester may not view is a 404 unless the user may moderate comments.
+    The stock view (CSRF, confirmation page, flag creation) handles the rest.
+    """
+    comment = get_object_or_404(
+        django_comments.get_model(),
+        pk=comment_id,
+        site__pk=cast(Any, get_current_site(request)).pk,
+    )
+    user = cast(Any, request.user)
+    if not user.has_perm("django_comments.can_moderate") and not _comment_is_visible_to(comment, request):
+        raise Http404("Comment not found.")
+    return stock_flag(request, comment_id, next=next)

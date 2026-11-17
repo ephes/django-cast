@@ -213,6 +213,13 @@ feed:
   ``endTime`` must be ``HH:MM:SS,mmm`` (``.`` also works before the fraction,
   which has one to three digits); uploads with other timestamps are rejected.
 
+New uploads must keep a data extension: ``.json`` for the Podlove and DOTe
+fields and ``.vtt`` for WebVTT (case-insensitive). Other names, such as
+``.html`` or ``.svg``, are rejected even when the content is valid, because the
+upload name is kept in storage and a page-like name could be rendered as a
+document where media is served from the site's own origin. Files that are
+already stored, and files written by Voxhelm, are unaffected.
+
 Transcript admin permissions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
