@@ -28,9 +28,8 @@ No push, merge, PR, release, deployment, external reviewer or work-app write.
 
 The two shipped controllers remain aligned without a new chooser framework.
 `docs/media/overview.rst` documents the frontend contract; pending release notes
-are in `docs/releases/unreleased.rst`. The previous `0.2.68.rst` pending notes
-were moved there intact so there is still exactly one unreleased notes page,
-with no false release declaration. No versions, consumer pins, schema,
+are in `docs/releases/0.2.68.rst`, the untagged current version's notes page
+required by `AGENTS.md`. No versions, consumer pins, schema,
 public-theme structure or backend data/locking behavior changed.
 
 ## Regression evidence
