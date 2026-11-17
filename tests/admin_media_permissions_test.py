@@ -347,6 +347,8 @@ def test_existing_cross_collection_transcript_can_be_managed_with_audio_access(
     assert response.status_code == 302
     transcript.refresh_from_db()
     assert transcript.audio_id == forbidden_audio.pk
-    response = client.post(reverse("cast-transcript:delete", args=(transcript.pk,)), {"delete": "yes"})
+    delete_url = reverse("cast-transcript:delete", args=(transcript.pk,))
+    token = client.get(delete_url).context["delete_confirmation"]
+    response = client.post(delete_url, {"confirmation": token})
     assert response.status_code == 302
     assert not Transcript.objects.filter(pk=transcript.pk).exists()

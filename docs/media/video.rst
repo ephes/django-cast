@@ -29,6 +29,8 @@ The model also inherits Wagtail ``CollectionMember`` (so videos belong to
 collections) and ``TimeStampedModel`` (providing ``created`` and ``modified``
 timestamps).
 
+Admin deletion confirms the reviewed video; see :ref:`media_admin_management`.
+
 .. _video_poster_generation:
 
 Poster Generation

@@ -9,6 +9,7 @@
     <p>{% trans "Are you sure you want to delete this video?" %}</p>
     <form action="{% url 'castvideo:delete' video.id %}" method="POST" novalidate>
       {% csrf_token %}
+      <input type="hidden" name="confirmation" value="{{ delete_confirmation }}" />
       <input type="submit" value='{% trans "Yes, delete" %}' class="button serious" />
     </form>
   </div>

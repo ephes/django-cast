@@ -64,8 +64,9 @@ class TestTranscriptDelete:
         assert "Are you sure you want to delete this transcript?" in content
 
     def test_post_delete_transcript(self, admin_client, transcript_urls):
-        # post data is necessary because of if request.POST
-        r = admin_client.post(transcript_urls.delete, {"delete": "yes"})
+        # deletion requires the signed confirmation of the reviewed generation
+        token = admin_client.get(transcript_urls.delete).context["delete_confirmation"]
+        r = admin_client.post(transcript_urls.delete, {"confirmation": token})
 
         # make sure we get redirected to index
         assert r.status_code == 302

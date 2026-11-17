@@ -23,11 +23,19 @@ class FileReplacementConflict(ValueError):
     """The stored media generation changed since this editor loaded it."""
 
 
+def claim_row_write(model: Any, pk: Any, *, using: str) -> None:
+    """Claim the row for writing before the surrounding transaction reads it.
+
+    A no-op write also obtains SQLite's database write lock before reading a
+    snapshot. PostgreSQL holds this row lock until the surrounding transaction exits.
+    """
+    pk_name = model._meta.pk.name
+    model._default_manager.using(using).filter(pk=pk).update(**{pk_name: models.F(pk_name)})
+
+
 def _lock_current_row(instance: Any, *, using: str) -> Any:
     manager = type(instance)._default_manager.using(using)
-    # A no-op write also obtains SQLite's write lock before reading a snapshot.
-    # PostgreSQL holds this row lock until the surrounding save transaction exits.
-    manager.filter(pk=instance.pk).update(**{instance._meta.pk.name: models.F(instance._meta.pk.name)})
+    claim_row_write(type(instance), instance.pk, using=using)
     stored = manager.get(pk=instance.pk)
     if getattr(stored, "modified", None) != getattr(instance, "modified", None):
         raise FileReplacementConflict("Media changed while editing; reload before replacing files.")

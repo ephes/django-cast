@@ -28,6 +28,25 @@ Since podcast feeds only support one audio file per episode, there is one feed
 per audio format. The feeds are generated automatically and can be found at
 `feed/podcast/<audio_format>/rss.xml`.
 
+.. _media_admin_management:
+
+Admin deletion
+--------------
+
+These rules apply to the Wagtail admin views for audio, video and transcripts.
+
+**Deletion confirms the reviewed item.** The delete confirmation page carries a
+signed fingerprint of the item exactly as it was shown: every stored column,
+including title and file names. Submitting the confirmation claims the row for
+writing (PostgreSQL row lock; on SQLite the database write lock) and then
+compares the current item, and the current user's delete permission, with that
+fingerprint. If another editor replaced the media, changed the title or its
+files, or if the confirmation is missing or older than 24 hours, nothing is
+deleted: the page shows the current item again with a fresh confirmation
+(HTTP 409). A user who lost delete permission gets a 404. A concurrent edit
+either commits before the check, and is then compared, or waits until the
+deletion has finished.
+
 Playback
 --------
 

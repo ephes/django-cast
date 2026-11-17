@@ -3,15 +3,18 @@
 Extracted from the previously triplicated per-type modules (architecture review H4).
 """
 
+import hashlib
+import json
 from collections.abc import Callable
 from contextlib import nullcontext
 from dataclasses import dataclass, field
 from typing import Any, cast
 
+from django.core import signing
 from django.core.exceptions import PermissionDenied
-from django.db import models
+from django.db import models, router, transaction
 from django.forms import ModelForm
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
@@ -23,7 +26,7 @@ from wagtail.admin.models import popular_tags_for_model
 from wagtail.search.backends import get_search_backends
 
 from ..appsettings import CHOOSER_PAGINATION, MENU_ITEM_PAGINATION
-from ..file_replacement import FileReplacementConflict
+from ..file_replacement import FileReplacementConflict, claim_row_write
 from ..forms import NonEmptySearchForm
 from ..media_ingest import (
     IngestPolicy,
@@ -36,10 +39,45 @@ from ..media_ingest import (
 from . import AuthenticatedHttpRequest
 from .wagtail_pagination import paginate, pagination_template
 
+DELETE_CONFIRMATION_FIELD = "confirmation"
+DELETE_CONFIRMATION_SALT = "cast.media-admin-delete"
+# Seconds a reviewed delete confirmation stays usable; afterwards the editor reviews again.
+DELETE_CONFIRMATION_MAX_AGE = 24 * 60 * 60
+STALE_DELETE_MESSAGE = _(
+    "This item changed since you opened the confirmation, or the confirmation expired. "
+    "Review the current item below before deleting it."
+)
+
 
 def reindex(obj: Any) -> None:
     for backend in get_search_backends():
         backend.add(obj)
+
+
+def delete_revision(obj: Any, user: Any) -> str:
+    """Digest of the reviewed media generation: every stored column, including file names.
+
+    The database alias is deliberately left out: the confirmation page may be read from
+    a replica while the deletion compares the row loaded from the write database.
+    """
+    evidence = {
+        "model": obj._meta.label,
+        "user": user.pk,
+        "fields": {field.attname: field.value_to_string(obj) for field in obj._meta.concrete_fields},
+    }
+    return hashlib.sha256(json.dumps(evidence, sort_keys=True).encode()).hexdigest()
+
+
+def sign_delete_confirmation(obj: Any, user: Any) -> str:
+    return signing.dumps(delete_revision(obj, user), salt=DELETE_CONFIRMATION_SALT)
+
+
+def delete_confirmation_matches(obj: Any, user: Any, token: str) -> bool:
+    try:
+        revision = signing.loads(token, salt=DELETE_CONFIRMATION_SALT, max_age=DELETE_CONFIRMATION_MAX_AGE)
+    except signing.BadSignature:  # includes SignatureExpired
+        return False
+    return revision == delete_revision(obj, user)
 
 
 @dataclass(frozen=True)
@@ -259,12 +297,39 @@ class MediaAdminViews:
             id=obj_id,
         )
 
-        if request.POST:
-            obj.delete()
-            messages.success(request, config.deleted_message.format(config.message_arg(obj)))
-            return redirect(f"{config.url_namespace}:index")
+        if request.method == "POST":
+            token = request.POST.get(DELETE_CONFIRMATION_FIELD, "")
+            using = router.db_for_write(config.model, instance=obj)
+            with transaction.atomic(using=using):
+                # Claim the row before reading the current generation, so a concurrent
+                # replacement either commits first (and is compared) or waits for us.
+                claim_row_write(config.model, obj.pk, using=using)
+                current = (
+                    config.permission_policy.instances_user_has_permission_for(request.user, "delete")
+                    .using(using)
+                    .filter(pk=obj.pk)
+                    .first()
+                )
+                if current is None:
+                    raise Http404
+                confirmed = delete_confirmation_matches(current, request.user, token)
+                if confirmed:
+                    current.delete()
+            if confirmed:
+                messages.success(request, config.deleted_message.format(config.message_arg(current)))
+                return redirect(f"{config.url_namespace}:index")
+            messages.error(request, STALE_DELETE_MESSAGE)
+            return self._render_delete_confirmation(request, current, status=409)
 
-        return render(request, f"{config.template_dir}/confirm_delete.html", {config.singular_context_name: obj})
+        return self._render_delete_confirmation(request, obj)
+
+    def _render_delete_confirmation(self, request: HttpRequest, obj: Any, *, status: int = 200) -> HttpResponse:
+        config = self.config
+        context = {
+            config.singular_context_name: obj,
+            "delete_confirmation": sign_delete_confirmation(obj, request.user),
+        }
+        return render(request, f"{config.template_dir}/confirm_delete.html", context, status=status)
 
     def chooser(self, request: HttpRequest) -> HttpResponse:
         config = self.config

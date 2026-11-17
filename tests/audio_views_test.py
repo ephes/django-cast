@@ -503,8 +503,9 @@ class TestAudioDelete:
 
     def test_post_delete_audio(self, admin_client, audio_urls):
         audio = audio_urls.audio
-        # post data is necessary because of if request.POST
-        r = admin_client.post(audio_urls.delete, {"delete": "yes"})
+        # deletion requires the signed confirmation of the reviewed generation
+        token = admin_client.get(audio_urls.delete).context["delete_confirmation"]
+        r = admin_client.post(audio_urls.delete, {"confirmation": token})
 
         # make sure we get redirected to index
         assert r.status_code == 302

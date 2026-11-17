@@ -22,6 +22,10 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Projects overriding ``cast/audio``, ``cast/video`` or ``cast/transcript``
+  ``confirm_delete.html`` must post a hidden ``confirmation`` field with the
+  ``delete_confirmation`` context value; without it, admin deletion is refused.
+
 - Automatic theme discovery now checks only ``<template-root>/cast/<theme>/``.
   Move themes from nested layouts to that supported location or register them
   explicitly with ``CAST_CUSTOM_THEMES``. Restart workers after theme changes.
@@ -662,6 +666,12 @@ Security and hardening
 
 - Publish retrained model/metrics without overwriting concurrently edited filter
   names or other metadata.
+
+- Bind admin audio, video and transcript delete confirmations to a signed,
+  24-hour fingerprint of the reviewed item (all stored columns, including file
+  names). Deletion claims the row for writing, rechecks the current delete
+  permission and refuses with 409 and a fresh confirmation when the item changed
+  or the confirmation is missing, foreign or expired.
 
 Fixes
 ~~~~~
