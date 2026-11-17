@@ -641,14 +641,19 @@ def test_sync_renditions_with_post_slug_deletes_obsolete_and_builds_missing(mock
     )
     mocker.patch("cast.management.commands.sync_renditions.track", side_effect=lambda items, description=None: items)
     image_get = mocker.patch("cast.management.commands.sync_renditions.Image.objects.get", return_value=image)
-    get_renditions = mocker.patch.object(image, "get_renditions")
+    from cast.models.image_renditions import create_rendition_with_receipt
+
+    create = mocker.patch(
+        "cast.management.commands.sync_renditions.create_rendition_with_receipt", wraps=create_rendition_with_receipt
+    )
 
     call_command("sync_renditions", post_slug=post.slug)
 
     get_missing.assert_called_once()
     filter_qs.assert_called_once_with(id__in=[123])
     image_get.assert_called_once_with(id=image.id)
-    get_renditions.assert_called_once_with("fill-1x1")
+    assert create.call_args.args[0] is image
+    assert create.call_args.args[1].spec == "fill-1x1"
 
 
 @pytest.mark.django_db
@@ -661,12 +666,16 @@ def test_sync_renditions_with_unique_blog_slug_syncs_descendants(mocker, blog, p
     )
     mocker.patch("cast.management.commands.sync_renditions.track", side_effect=lambda items, description=None: items)
     mocker.patch("cast.management.commands.sync_renditions.Image.objects.get", return_value=image)
-    get_renditions = mocker.patch.object(image, "get_renditions")
+    from cast.models.image_renditions import create_rendition_with_receipt
+
+    create = mocker.patch(
+        "cast.management.commands.sync_renditions.create_rendition_with_receipt", wraps=create_rendition_with_receipt
+    )
 
     call_command("sync_renditions", blog_slug=blog.slug)
 
     filter_qs.assert_called_once_with(id__in=[321])
-    get_renditions.assert_called_once_with("fill-2x2")
+    assert create.call_args.args[1].spec == "fill-2x2"
 
 
 @pytest.mark.django_db

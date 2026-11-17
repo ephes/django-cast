@@ -1,13 +1,20 @@
 from argparse import ArgumentParser, RawTextHelpFormatter
 from typing import Any
 
+from django.core.files.storage import Storage
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import transaction
 from rich.progress import track
-from wagtail.images.models import Image, Rendition
+from wagtail.images.models import Filter, Image, Rendition
 
 from ...models import Blog, Post
-from ...models.image_renditions import get_obsolete_and_missing_rendition_strings, repair_missing_rendition_files
+from ...models.image_renditions import (
+    RenditionCacheInvalidationError,
+    create_rendition_with_receipt,
+    discard_unreferenced_rendition_files,
+    get_obsolete_and_missing_rendition_strings,
+    repair_missing_rendition_files,
+)
 
 
 class Command(BaseCommand):
@@ -65,17 +72,33 @@ By default all posts are synced.
         print("len missing renditions: ", len(missing_rendition_items))
         for image_id, filter_specs in track(missing_rendition_items, description="create missing renditions"):
             image = Image.objects.get(id=image_id)
-            with transaction.atomic(using=image._state.db):
-                repair_missing_rendition_files(image, filter_specs)
-                renditions = image.get_renditions(*filter_specs)
-                for filter_spec in filter_specs:
-                    rendition = renditions.get(filter_spec)
-                    if (
-                        rendition is None
-                        or rendition.pk is None
-                        or not rendition.file.name
-                        or not rendition.file.storage.exists(rendition.file.name)
-                    ):
-                        raise CommandError(f"Required replacement {filter_spec} for image {image_id} was not saved.")
+            using = image._state.db or "default"
+            written: list[tuple[Storage, str]] = []
+            try:
+                with transaction.atomic(using=using):
+                    present = repair_missing_rendition_files(
+                        image, filter_specs, written=written, strict_cache_invalidation=True
+                    )
+                    clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
+                    required = {clean_filter(Filter(spec)).spec for spec in filter_specs}
+                    for filter_spec in required - present:
+                        create_rendition_with_receipt(image, Filter(filter_spec), written)
+                    # Read the writer's rows directly, never an old shared cache entry.
+                    rows = {r.filter_spec: r for r in image.renditions.filter(filter_spec__in=required)}
+                    for filter_spec in required:
+                        rendition = rows.get(filter_spec)
+                        if (
+                            rendition is None
+                            or not rendition.file.name
+                            or not rendition.file.storage.exists(rendition.file.name)
+                        ):
+                            raise CommandError(
+                                f"Required replacement {filter_spec} for image {image_id} was not saved."
+                            )
+            except RenditionCacheInvalidationError as error:
+                raise CommandError(str(error)) from error
+            except BaseException:
+                discard_unreferenced_rendition_files(written, using=using)
+                raise
         # Keep all old counterparts until every planned replacement is usable.
         Rendition.objects.filter(id__in=obsolete_renditions).delete()

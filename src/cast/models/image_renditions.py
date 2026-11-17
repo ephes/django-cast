@@ -1,7 +1,10 @@
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from functools import partial
+from pathlib import Path
 from typing import TYPE_CHECKING, TypeAlias
+from uuid import uuid4
 
 from django.core.files.storage import Storage
 from django.db import router, transaction
@@ -19,6 +22,26 @@ ImagesWithType: TypeAlias = Iterable[tuple[ImageType, Image]]
 
 if TYPE_CHECKING:
     from cast.models import Post
+
+
+class RenditionCacheInvalidationError(RuntimeError):
+    """The writer committed, but this image still needs cache invalidation."""
+
+
+def _purge_committed_rendition(rendition: AbstractRendition, *, strict: bool) -> None:
+    try:
+        rendition.purge_from_cache()
+    except Exception as error:
+        message = (
+            f"Rendition repair committed on {rendition._state.db}; cache purge pending for image "
+            f"{rendition.image_id} (rendition {rendition.pk}, file {rendition.file.name}). "
+            "Retry purge_from_cache() for all renditions of this image on that database."
+        )
+        if strict:
+            raise RenditionCacheInvalidationError(message) from error
+        # Embedded callers (publication, galleries) already committed their own
+        # work; do not fail them or stop later commit callbacks on this connection.
+        logger.error(message, exc_info=True)
 
 
 def get_gallery_thumbnail_srgb_counterpart_filterstrings(image: Image) -> Iterator[tuple[int, str]]:
@@ -118,37 +141,88 @@ def get_all_images_from_posts(posts: Iterator["Post"]) -> ImagesWithType:
 
 
 def repair_missing_rendition_files(
-    image: Image, filter_specs: Iterable[str], *, written: list[tuple[Storage, str]] | None = None
+    image: Image,
+    filter_specs: Iterable[str],
+    *,
+    written: list[tuple[Storage, str]] | None = None,
+    strict_cache_invalidation: bool = False,
 ) -> set[str]:
     """Repair broken files without scheduling deletion of a reused storage key.
 
     The caller owns the transaction. Preserve existing rows and usable policy
     counterparts; Wagtail's public generation and cache APIs handle the file.
     Return the filter specs that already have a row, so callers do not generate
-    them again, and append each newly saved file to ``written``.
+    them again, and append each proven owned file to ``written``. Cache purges
+    run only after commit on the writer alias; rollback discards them. A purge
+    failure is logged with committed recovery IDs; with
+    ``strict_cache_invalidation`` it raises RenditionCacheInvalidationError
+    instead, which also stops later commit callbacks on that connection.
     """
     present: set[str] = set()
     for rendition in image.renditions.select_for_update().filter(filter_spec__in=filter_specs):
         present.add(rendition.filter_spec)
         if not rendition.file.name or not rendition.file.storage.exists(rendition.file.name):
-            with image.generate_rendition_file(Filter(rendition.filter_spec)) as generated:
-                rendition.file.save(generated.name, generated, save=False)
-            name = rendition.file.name
-            if written is not None:
-                written.append((rendition.file.storage, name))
+            attempt: list[tuple[Storage, str]] = []
             try:
-                if not rendition.file.storage.exists(name):
-                    raise OSError("Required rendition file was not saved.")
-                rendition.save(using=image._state.db, update_fields=["file"])
-            except Exception:
-                rendition.file.storage.delete(name)
+                with transaction.atomic(using=image._state.db):
+                    _save_rendition_file(image, rendition, Filter(rendition.filter_spec), attempt)
+                    rendition.save(using=image._state.db, update_fields=["file"])
+            except BaseException:
+                if written is None:
+                    discard_unreferenced_rendition_files(attempt, using=image._state.db or router.db_for_write(Image))
                 raise
-            rendition.purge_from_cache()
+            finally:
+                if written is not None:
+                    written.extend(attempt)
+            transaction.on_commit(
+                partial(_purge_committed_rendition, rendition, strict=strict_cache_invalidation),
+                using=rendition._state.db,
+            )
     return present
 
 
+def _save_rendition_file(
+    image: Image, rendition: AbstractRendition, filter: Filter, written: list[tuple[Storage, str]]
+) -> None:
+    """Save under a fresh key; only an exact acknowledged name proves ownership."""
+    with image.generate_rendition_file(filter) as generated:
+        filename = f"{Path(generated.name).stem[:30]}-{uuid4().hex}{Path(generated.name).suffix}"
+        expected = rendition.file.field.generate_filename(rendition, filename)
+        if rendition.file.storage.exists(expected):
+            raise FileExistsError(f"Rendition destination already exists: {expected}")
+        rendition.file.save(filename, generated, save=False)
+        name = rendition.file.name
+        if name == expected:
+            written.append((rendition.file.storage, name))
+        else:
+            logger.warning("Retained rendition file %s: storage changed the name; ownership is uncertain", name)
+    if not rendition.file.storage.exists(name):
+        raise OSError("Required rendition file was not saved.")
+
+
+def create_rendition_with_receipt(
+    image: Image, filter: Filter, written: list[tuple[Storage, str]]
+) -> AbstractRendition:
+    """Use Wagtail's generator with a receipt before saving the rendition row.
+
+    A concurrent unique-key conflict fails this attempt safely; retry reuses the
+    winner. Avoid bulk creation and shared caches inside the writer transaction.
+    """
+    focal_point_key = filter.get_cache_key(image)
+    existing = image.renditions.filter(filter_spec=filter.spec, focal_point_key=focal_point_key).first()
+    if existing is not None:
+        return existing
+    rendition = image.get_rendition_model()(image=image, filter_spec=filter.spec, focal_point_key=focal_point_key)
+    _save_rendition_file(image, rendition, filter, written)
+    rendition.save(using=image._state.db, force_insert=True)
+    return rendition
+
+
 def create_missing_renditions_for_images(
-    missing_renditions: RenditionStringsByImageId, *, using: str | None = None
+    missing_renditions: RenditionStringsByImageId,
+    *,
+    using: str | None = None,
+    strict_cache_invalidation: bool = False,
 ) -> None:
     """Create required renditions on the source database without shared cache collisions."""
     using = using or router.db_for_write(Image)
@@ -160,17 +234,18 @@ def create_missing_renditions_for_images(
         written: list[tuple[Storage, str]] = []
         try:
             with transaction.atomic(using=using):
-                present = repair_missing_rendition_files(image, filter_specs, written=written)
+                present = repair_missing_rendition_files(
+                    image, filter_specs, written=written, strict_cache_invalidation=strict_cache_invalidation
+                )
                 for filter_string in filter_specs:
                     if filter_string in present:
                         continue
                     clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
-                    # Public single-rendition API uses the explicitly bound related
-                    # manager; bulk creation and the shared cache can lose the alias.
-                    rendition = image.create_rendition(clean_filter(Filter(filter_string)))
-                    written.append((rendition.file.storage, rendition.file.name))
-                    if not rendition.file.storage.exists(rendition.file.name):
-                        raise OSError("Required rendition file was not saved.")
+                    # Save explicitly on the source alias; bulk creation and the
+                    # shared cache can lose the source database identity.
+                    create_rendition_with_receipt(image, clean_filter(Filter(filter_string)), written)
+        except RenditionCacheInvalidationError:
+            raise
         except BaseException:
             discard_unreferenced_rendition_files(written, using=using)
             raise

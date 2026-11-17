@@ -101,14 +101,14 @@ def test_rendition_failure_retains_old_bytes_and_successful_retry_retires_only_c
         "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
         return_value=({old_pk}, {image.pk: {"fill-2x2"}}),
     )
-    original_generate = Image.get_renditions
-    failing = mocker.patch.object(Image, "get_renditions", side_effect=OSError("synthetic image failure"))
+    original_generate = Image.generate_rendition_file
+    failing = mocker.patch.object(Image, "generate_rendition_file", side_effect=OSError("synthetic image failure"))
     with django_capture_on_commit_callbacks(execute=True), pytest.raises(OSError, match="synthetic image failure"):
         call_command("sync_renditions", post_slug=post.slug)
     failing.assert_called_once()
     assert Rendition.objects.filter(pk=old_pk).exists()
     assert Path(old_path).read_bytes() == original_bytes
-    mocker.patch.object(Image, "get_renditions", original_generate)
+    mocker.patch.object(Image, "generate_rendition_file", original_generate)
     with django_capture_on_commit_callbacks(execute=True):
         call_command("sync_renditions", post_slug=post.slug)
     assert not Rendition.objects.filter(pk=old_pk).exists()
@@ -132,8 +132,8 @@ def test_rendition_verification_failure_keeps_obsolete_file(mocker, post, disk_i
         if fault == "empty-name":
             replacement.file.name = ""
         replacement.save()
-    result = {} if fault == "omitted" else {"fill-2x2": replacement}
-    mocker.patch.object(Image, "get_renditions", return_value=result)
+    mocker.patch("cast.management.commands.sync_renditions.repair_missing_rendition_files", return_value=set())
+    mocker.patch("cast.management.commands.sync_renditions.create_rendition_with_receipt", return_value=replacement)
     with pytest.raises(CommandError, match="replacement"):
         call_command("sync_renditions", post_slug=post.slug)
     assert Rendition.objects.filter(pk=old_pk).exists()

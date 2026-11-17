@@ -172,11 +172,11 @@ def test_direct_creation_verifies_storage_and_does_not_rewrite_usable_rows(disk_
     save = mocker.spy(Rendition, "save")
     repair_missing_rendition_files(image, ["width-1"])
     save.assert_not_called()
-    mocker.patch.object(Image, "create_rendition", return_value=row)
-    mocker.patch.object(row.file.storage, "exists", side_effect=[False])
+    storage = row.file.storage
+    exists = storage.exists
+    mocker.patch.object(storage, "exists", side_effect=lambda name: exists(name) if name == row.file.name else False)
     with pytest.raises(OSError, match="not saved"):
         create_missing_renditions_for_images({image.pk: {"height-1"}})
-    # The returned file belongs to a committed row, so the rollback keeps it.
     mocker.stopall()
     assert row.file.storage.exists(row.file.name)
 
@@ -203,17 +203,17 @@ def test_rolled_back_direct_creation_removes_its_unreferenced_files(disk_image, 
 
     image = disk_image
     storage = Rendition._meta.get_field("file").storage
-    original_create = Image.create_rendition
+    original_save = Rendition.save
     created: list[str] = []
 
-    def create_then_fail(self, filter):
+    def save_then_fail(self, *args, **kwargs):
         if created:
             raise RuntimeError("synthetic second rendition failure")
-        rendition = original_create(self, filter)
-        created.append(rendition.file.name)
-        return rendition
+        result = original_save(self, *args, **kwargs)
+        created.append(self.file.name)
+        return result
 
-    mocker.patch.object(Image, "create_rendition", create_then_fail)
+    mocker.patch.object(Rendition, "save", save_then_fail)
     if delete_fails == "delete":
         mocker.patch.object(type(storage), "delete", side_effect=OSError("synthetic delete refusal"))
     elif delete_fails == "lookup":
