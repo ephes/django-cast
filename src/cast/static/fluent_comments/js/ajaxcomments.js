@@ -1,5 +1,5 @@
 (function() {
-	//#region \0@oxc-project+runtime@0.153.0/helpers/esm/asyncToGenerator.js
+	// \0@oxc-project+runtime@0.156.0/helpers/esm/asyncToGenerator.js
 	function asyncGeneratorStep(n, t, e, r, o, a, c) {
 		try {
 			var i = n[a](c), u = i.value;
@@ -24,8 +24,7 @@
 			});
 		};
 	}
-	//#endregion
-	//#region src/comments/ajaxcomments.ts
+	// src/comments/ajaxcomments.ts
 	(() => {
 		const COMMENT_SCROLL_TOP_OFFSET = 40;
 		const PREVIEW_SCROLL_TOP_OFFSET = 20;
@@ -534,5 +533,4 @@
 		if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
 		else init();
 	})();
-	//#endregion
 })();

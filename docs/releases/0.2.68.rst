@@ -1,4 +1,4 @@
-0.2.68 (unreleased)
+0.2.68 (2026-11-17)
 -------------------
 
 - Bound styleguide HTML, control JSON, image and audio response bodies before
@@ -1122,3 +1122,6 @@ Internal
 
 - Exercise real PostgreSQL serialization between stock/Ajax replies and author
   edit/delete actions, checking committed comment and moderation state.
+
+- Refresh compatible frontend dependencies (Vite 8.3.8) and rebuild the shipped
+  bundles.
