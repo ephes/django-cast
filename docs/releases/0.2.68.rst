@@ -12,6 +12,11 @@
   acquiring media. Compensate only fresh, unreferenced remote files after failed
   persistence/derivation; retain committed files after callback errors.
 
+- Serialize reference view/command root and post seeding through one Wagtail
+  root writer reservation, with remote preparation outside the page transaction.
+- Bound the audio-only Voxhelm episode uniqueness query to two rows while
+  preserving explicit episode precedence and prefetched results.
+
 Upgrade actions
 ~~~~~~~~~~~~~~~
 

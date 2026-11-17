@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from html.parser import HTMLParser
 from io import BytesIO
+from math import isfinite
 from time import monotonic
 from types import SimpleNamespace
 from typing import Any, cast
@@ -23,6 +24,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied
 from django.core.files.base import ContentFile
 from django.db import IntegrityError, transaction
+from django.db.models import F
 from django.http import Http404, HttpResponse
 from django.shortcuts import render
 from django.template import TemplateDoesNotExist
@@ -307,12 +309,24 @@ class StyleguideAssets:
     media: StyleguideMedia
 
 
+@contextmanager
+def _reference_seed_writer() -> Iterator[None]:
+    """Reserve the stable Wagtail root before reading Site or seed pages.
+
+    A no-op UPDATE locks the root row on PostgreSQL and obtains SQLite's
+    writer reservation before a read snapshot can be established.
+    """
+    with transaction.atomic():
+        Page.objects.filter(depth=1).update(numchild=F("numchild"))
+        yield
+
+
 def _prepare_styleguide_assets() -> StyleguideAssets:
     """Create media before a command replaces any existing reference pages.
 
     Storage writes are not transactional; the caller owns the database transaction.
     """
-    with transaction.atomic():
+    with _reference_seed_writer():
         user = create_user(name=STYLEGUIDE_USER_NAME, password=STYLEGUIDE_USER_NAME)
         user = _harden_styleguide_user(user)
 
@@ -328,8 +342,13 @@ def _prepare_styleguide_assets() -> StyleguideAssets:
 
 
 def _ensure_styleguide_seed_data(*, assets: StyleguideAssets | None = None) -> StyleguideSeedData:
-    site = _ensure_site()
     assets = assets or _prepare_styleguide_assets()
+    with _reference_seed_writer():
+        return _seed_styleguide_pages(assets)
+
+
+def _seed_styleguide_pages(assets: StyleguideAssets) -> StyleguideSeedData:
+    site = _ensure_site()
     user, remote_media, galleries, media = assets.user, assets.remote_media, assets.galleries, assets.media
     blog = _ensure_blog(site, user)
     include_video_in_body = False
@@ -1378,6 +1397,13 @@ def _validate_podlove_control(data: Any) -> dict[str, Any]:
     return data
 
 
+def _finite_json_float(value: str) -> float:
+    number = float(value)
+    if not isfinite(number):
+        raise ValueError("Non-finite control number.")
+    return number
+
+
 def _refuse_json_constant(value: str) -> Any:
     raise ValueError("Non-finite control number.")
 
@@ -1388,6 +1414,7 @@ def _fetch_podlove_data(url: str) -> dict[str, Any] | None:
             _styleguide_fetch(url, "control").decode("utf-8", "strict"),
             object_pairs_hook=_unique_json_object,
             parse_constant=_refuse_json_constant,
+            parse_float=_finite_json_float,
         )
         return _validate_podlove_control(data)
     except Exception:

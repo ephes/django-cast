@@ -563,6 +563,17 @@ defaults.
 On success, the command prints the resolved blog and podcast URLs plus a post
 count summary scoped to the created reference blog.
 
+Reference seed concurrency
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The styleguide view and ``ensure_reference_site`` reserve the stable Wagtail
+root row before looking up or creating reference pages. This also obtains the
+SQLite writer reservation before any seed read snapshot; PostgreSQL writers
+serialize on the same root. Reset rechecks ownership after admission. User
+setup uses a separate short reservation; remote downloads and media preparation
+run before the page transaction and hold no seed writer lock.
+
+
 styleguide_prefetch
 -------------------
 

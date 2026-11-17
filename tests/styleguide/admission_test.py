@@ -1,6 +1,7 @@
 """Remote reference inputs are admitted before decoding or persistence."""
 
 import io
+from datetime import timedelta
 
 import pytest
 
@@ -14,10 +15,16 @@ class Response(io.BytesIO):
 
 
 @pytest.mark.parametrize("kind", ["html", "control", "image", "audio"])
-def test_remote_body_cap(monkeypatch, kind, db):
-    response = Response(
-        b"x" * ({"html": 2 * 1024**2, "control": 1024**2, "image": 20 * 1024**2, "audio": 100 * 1024**2}[kind] + 1)
-    )
+@pytest.mark.parametrize("declared", [None, "1"])
+def test_remote_body_cap(monkeypatch, kind, site, declared):
+    from cast.models import Audio
+    from tests.styleguide.media_fetch_test import _tiny_png_bytes
+
+    limit = {"html": 2 * 1024**2, "control": 1024**2, "image": 20 * 1024**2, "audio": 100 * 1024**2}[kind]
+    prefix = _tiny_png_bytes() if kind == "image" else b"{}" if kind == "control" else b"synthetic"
+    response = Response(prefix + b" " * (limit + 1 - len(prefix)))
+    response.headers = {} if declared is None else {"Content-Length": declared}
+    monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda *a: timedelta(seconds=1)))
     monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: response)
     monkeypatch.setattr(view, "urlopen", lambda *a, **kw: response, raising=False)
     if kind == "html":
@@ -163,7 +170,7 @@ def test_invalid_control_precedes_media_storage(monkeypatch, settings):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_remote_file_preserves_committed_callback_failure(monkeypatch, user, tmp_path):
+def test_remote_file_preserves_committed_callback_failure(monkeypatch, user, tmp_path, site):
     from django.core.files.storage import FileSystemStorage
     from django.db import transaction
     from wagtail.images.models import Image
@@ -198,3 +205,68 @@ def test_remote_file_cleanup_failure_is_secondary(monkeypatch, user, tmp_path, c
         with view._remote_file_save(image, "file", "p.png", b"synthetic"):
             raise RuntimeError("primary")
     assert "Could not compensate" in caplog.text
+
+
+@pytest.mark.parametrize("kind", ["image", "audio"])
+@pytest.mark.parametrize("status,headers", [(206, {}), (200, {"Content-Range": "bytes 0-2/100"})])
+def test_partial_media_creates_no_row_or_file(monkeypatch, kind, status, headers, user, site, tmp_path):
+    from django.core.files.storage import FileSystemStorage
+    from wagtail.images.models import Image
+
+    from cast.models import Audio
+    from tests.styleguide.media_fetch_test import _tiny_png_bytes
+
+    model, field, fetch = (
+        (Image, "file", view._get_or_create_remote_image)
+        if kind == "image"
+        else (Audio, "m4a", view._get_or_create_remote_audio)
+    )
+    response = Response(_tiny_png_bytes())
+    response.status, response.headers = status, headers
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: response)
+    monkeypatch.setattr(view, "urlopen", lambda *a, **kw: response, raising=False)
+    monkeypatch.setattr(model._meta.get_field(field), "storage", FileSystemStorage(location=tmp_path))
+    monkeypatch.setattr(Audio, "_get_audio_duration", staticmethod(lambda *a: timedelta(seconds=1)))
+    before = model.objects.count()
+    assert fetch("https://example.com/synthetic.png", user) is None
+    assert model.objects.count() == before
+    assert not [p for p in tmp_path.rglob("*") if p.is_file()]
+
+
+@pytest.mark.parametrize("payload", [b'{"version":true}', b'{"transcripts":[{"start":"0","text":"x","end":null}]}'])
+def test_control_field_types(monkeypatch, payload):
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(payload))
+    assert view._fetch_podlove_data("https://example.com/control") is None
+
+
+def test_video_without_poster_and_empty_control(monkeypatch, settings):
+    settings.CAST_STYLEGUIDE_VIDEO_SOURCE_URL = "https://example.com/video"
+    settings.CAST_STYLEGUIDE_PODCAST_SOURCE_URL = "https://example.com/podcast"
+    monkeypatch.setattr(
+        view, "_fetch_remote_html", lambda *a: '<source src="/a.mp4"><podlove-player data-url="/api"></podlove-player>'
+    )
+    monkeypatch.setattr(view, "_fetch_podlove_data", lambda *a: {})
+    assert view._fetch_styleguide_remote_video_media() == ("https://example.com/a.mp4", None)
+    assert view._fetch_styleguide_remote_podcast_media(object(), None) == (
+        None,
+        None,
+        None,
+        "https://example.com/podcast/transcript/",
+    )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_remote_file_refuses_ambient_transaction_before_storage(user, site):
+    from django.db import transaction
+    from wagtail.images.models import Image
+
+    image = Image(title="synthetic", width=1, height=1)
+    with transaction.atomic(), pytest.raises(RuntimeError, match="durable atomic block"):
+        with view._remote_file_save(image, "file", "synthetic.png", b"synthetic"):
+            pytest.fail("ambient transaction admitted")
+
+
+@pytest.mark.parametrize("payload,accepted", [(b'{"unused":1e999}', False), (b'{"unused":1.5}', True)])
+def test_control_numbers_are_finite(monkeypatch, payload, accepted):
+    monkeypatch.setattr(safe_fetch, "open_url", lambda *a, **kw: Response(payload))
+    assert (view._fetch_podlove_data("https://example.com/control") is not None) is accepted
