@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import Group
 from django.db import close_old_connections, connection, transaction
 from django.urls import reverse
 from rest_framework.test import APIClient
@@ -146,7 +147,8 @@ def test_postgres_create_rechecks_media_after_real_parent_wait(create_media_case
                 assert time.monotonic() < deadline, "Create never waited on the parent writer"
                 time.sleep(0.01)
             # Commit the withdrawal before releasing the parent's writer lock.
-            GroupCollectionPermission.objects.filter(group__user=actor).delete()
+            # Drop the grant groups too, so the recovery below can re-grant them.
+            Group.objects.filter(user=actor, collection_permissions__isnull=False).delete()
         response = future.result(timeout=15)
     assert_refused(response, before, kind)
 
