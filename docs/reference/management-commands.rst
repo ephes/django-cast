@@ -192,9 +192,41 @@ Options:
 
 All planned missing replacements are generated and their saved rows/files
 verified before any obsolete counterpart is retired. A generation or storage
-failure fails the command and keeps old counterparts for a safe retry; newly
-generated replacements may remain and are reused on retry. Unrelated rendition
-specifications are preserved.
+failure rolls back that image's rows and keeps old counterparts for a safe retry.
+Each repair and new rendition uses a fresh storage key. After rollback, only
+acknowledged operation-owned files without a surviving row are removed. Cleanup
+errors are logged without replacing the original failure. If storage changes a
+requested name, ownership is uncertain: the returned key is logged and retained
+for inspection. An uncertain failed save that returns no name cannot be cleaned
+automatically. Successfully committed earlier images remain and are reused on
+retry. Unrelated rendition specifications are preserved.
+
+Repair cache invalidation runs after the outermost transaction commits on the
+writer database, so a reader refilling the old row before commit cannot leave
+that entry cached afterward. A rollback queues no purge. Verification inside
+the command reads writer rows directly rather than shared cache entries.
+
+A cache callback failure reports ``committed ... cache purge pending`` with the
+database alias, image ID, rendition ID and stored name. These replacement rows
+and bytes are already committed; do not delete them or regenerate the image.
+Django stops later commit callbacks after a failure, so retry invalidation for
+**all** renditions of the reported image on that alias, for example in
+``manage.py shell`` (substitute the reported alias and synthetic example ID):
+
+.. code-block:: python
+
+    from wagtail.images.models import Rendition
+
+    for rendition in Rendition.objects.using("default").filter(image_id=123):
+        rendition.purge_from_cache()
+
+Retry after restoring cache connectivity, then rerun ``sync_renditions`` to
+finish any remaining images and obsolete-counterpart retirement. Inventory
+alone cannot identify a pending cache purge. Library callers of
+``repair_missing_rendition_files`` own the transaction and rollback receipt;
+``RenditionCacheInvalidationError`` distinguishes committed/cache-pending repair
+from a failed writer transaction. For nested transactions the outer owner must
+retain the receipt until commit or rollback, since Django has no rollback hook.
 
 Video Management
 ================
