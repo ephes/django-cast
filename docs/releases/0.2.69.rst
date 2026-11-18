@@ -1,11 +1,5 @@
-0.2.69 (unreleased)
+0.2.69 (2026-11-18)
 -------------------
-
-Upgrade actions
-~~~~~~~~~~~~~~~
-
-Features
-~~~~~~~~
 
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -21,8 +15,8 @@ Security and hardening
   can no longer make it open local files. Paths and hosts within the allowed
   protocols are not restricted. See :doc:`/operations/deployment`.
 
-Fixes
-~~~~~
-
 Internal
 ~~~~~~~~
+
+- Refreshed compatible frontend development dependencies (jQuery 3.8.0 for the
+  JavaScript tests); the shipped bundles are unchanged.
