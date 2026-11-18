@@ -147,6 +147,13 @@ metadata, including the cover-dependent ``summary_large_image``/``summary``
 choice. If it has audio but no cover, Open Graph still receives ``og:audio``
 while Twitter receives the valid non-player ``summary`` card.
 
+The Twitter Player view (``cast/twitter/card_player.html``) passes the
+Podlove player configuration (blog title and URL, duration and the M4A URL) as a
+``json_script`` data block. Page data never appears inside JavaScript string
+literals, so titles with quotes, backslashes or ``</script>`` cannot break the
+player script. Themes that override this template should keep that pattern and
+read the config with ``JSON.parse`` from the ``twitter-player-config`` element.
+
 .. image:: ../images/twitter_card.png
   :width: 400
   :alt: Image of a Twitter Card

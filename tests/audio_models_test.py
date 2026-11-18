@@ -132,7 +132,8 @@ class TestAudioModel:
         run = mocker.patch("cast.models.audio.subprocess.run", return_value=RunReturn())
         mocker.patch("cast.models.audio.Audio.clean_ffprobe_chaptermarks")
         _ = audio.get_chaptermark_data_from_file("mp3")
-        assert field.url == run.call_args[0][0][2]
+        command = run.call_args[0][0]
+        assert field.url == command[command.index("-i") + 1]
 
     def test_get_episode_url_from_audio(self, episode):
         audio = episode.podcast_audio

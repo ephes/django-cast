@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
   </head>
   <body>
-    <div id="pwp5-{{ episode.uuid }}" style="width:200px">
+    <div id="pwp5-{{ episode.uuid }}" data-twitter-player style="width:200px">
       <root style="max-width:250px;min-width:250px;" class="p-4 flex justify-left ">
         <play-button></play-button>
       </root>
@@ -16,22 +16,11 @@
   </body>
 
   <script type="text/javascript" src="{% static 'cast/js/web-player/embed.5.js' %}"></script>
+  {{ player_config|json_script:"twitter-player-config" }}
   <script>
-
-    podlovePlayer('#pwp5-{{ episode.uuid }}', {
-      "version": 5,
-      "show": {
-        "title": '{{ episode.blog.title }}',
-        "url": '{{ episode.blog.full_url }}',
-      },
-
-      "duration": '{{ episode.podcast_audio.duration_str }}',
-      "audio": [{
-        "url": "{{ episode.podcast_audio.m4a.url }}",
-        "mimeType": "audio/mp4",
-      }]
-    },
-      {
+    (function () {
+      var config = JSON.parse(document.getElementById("twitter-player-config").textContent);
+      podlovePlayer("[data-twitter-player]", config, {
         "version": 5,
         "theme": {
           "tokens": {
@@ -42,5 +31,6 @@
           }
         },
       });
+    })();
   </script>
 </html>

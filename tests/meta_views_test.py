@@ -1,3 +1,5 @@
+import re
+
 import pytest
 from django.test import override_settings
 from django.urls import reverse
@@ -75,3 +77,67 @@ def test_twitter_player_uses_current_site_for_duplicate_blog_slug(client, user, 
     assert response.status_code == 200
     content = response.content.decode("utf-8")
     assert str(episode1.uuid) in content
+
+
+def _twitter_player_config(content: str) -> dict:
+    import json
+    import re
+
+    match = re.search(r'<script id="twitter-player-config" type="application/json">(.*?)</script>', content, re.S)
+    assert match is not None, "player config must be rendered with json_script"
+    return json.loads(match.group(1))
+
+
+@pytest.mark.django_db
+def test_twitter_player_config_is_json_not_interpolated_javascript(client, episode):
+    hostile_title = "Back\\slash 'quote' \"dq\" </script><script>alert(1)</script> & co\\"
+    blog = episode.blog
+    blog.title = hostile_title
+    blog.save()
+    url = reverse("cast:twitter-player", kwargs={"episode_slug": episode.slug, "blog_slug": blog.slug})
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    content = response.content.decode("utf-8")
+    config = _twitter_player_config(content)
+    assert config["show"]["title"] == hostile_title
+    assert config["show"]["url"] == blog.full_url
+    assert config["duration"] == episode.podcast_audio.duration_str
+    assert config["audio"] == [{"url": episode.podcast_audio.m4a.url, "mimeType": "audio/mp4"}]
+    assert config["version"] == 5
+    # No page data reaches executable script text, and the title cannot close a script element.
+    assert "<script>alert(1)</script>" not in content
+    assert content.count("</script>") == content.count("<script")
+    inline_scripts = re.findall(r"<script>(.*?)</script>", content, re.S)
+    assert inline_scripts
+    for script in inline_scripts:
+        assert "Back" not in script
+        assert "{{" not in script
+
+
+@pytest.mark.django_db
+def test_twitter_player_config_without_m4a_has_empty_audio_url(client, episode):
+    audio = episode.podcast_audio
+    audio.m4a = None
+    audio.save()
+    url = reverse("cast:twitter-player", kwargs={"episode_slug": episode.slug, "blog_slug": episode.blog.slug})
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    config = _twitter_player_config(response.content.decode("utf-8"))
+    assert config["audio"] == [{"url": "", "mimeType": "audio/mp4"}]
+
+
+@pytest.mark.django_db
+def test_twitter_player_config_without_audio_is_empty(episode):
+    from cast.views.meta import twitter_player_config
+
+    episode.podcast_audio = None
+
+    config = twitter_player_config(episode)
+
+    assert config["duration"] == ""
+    assert config["audio"] == [{"url": "", "mimeType": "audio/mp4"}]
+    assert config["show"]["title"] == episode.blog.title

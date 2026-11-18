@@ -19,7 +19,7 @@ from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
-from ..media_probe import run_media_probe
+from ..media_probe import input_protocol_args, run_media_probe
 
 logger = logging.getLogger(__name__)
 
@@ -128,6 +128,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             "stream=codec_type,width,height,sample_aspect_ratio:stream_tags=rotate:stream_side_data=rotation",
             "-of",
             "json",
+            *input_protocol_args(video_url),
             "-i",
             str(video_url),
         ]
@@ -158,6 +159,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
                 "ffmpeg",
                 "-ss",
                 str(self.poster_seconds),
+                *input_protocol_args(video_url),
                 "-i",
                 str(video_url),
                 "-vframes",

@@ -19,7 +19,7 @@ from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
-from ..media_probe import run_media_probe
+from ..media_probe import input_protocol_args, run_media_probe
 
 if TYPE_CHECKING:
     from .pages import Episode
@@ -171,6 +171,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             "format=duration",
             "-of",
             "default=noprint_wrappers=1:nokey=1",
+            *input_protocol_args(audio_url),
             str(audio_url),
         ]
         result = (
@@ -287,6 +288,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             url = file_field.path
         command = [
             "ffprobe",
+            *input_protocol_args(url),
             "-i",
             str(url),
             "-print_format",

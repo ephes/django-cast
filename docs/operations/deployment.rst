@@ -126,6 +126,18 @@ required FFmpeg tools are installed on your application hosts:
 - ``ffprobe`` for audio duration extraction, chapter-mark import, and video dimension detection
 - ``ffmpeg`` for video poster generation
 
+django-cast passes ``-protocol_whitelist`` to every ``ffprobe``/``ffmpeg``
+call. A local media file may only open local files (``file``), and a media URL
+from remote storage such as S3/CloudFront may only open network resources
+(``http,https,tcp,tls,httpproxy``; ``httpproxy`` keeps HTTPS working through an
+``http_proxy``). The allowlist also applies to anything the input itself
+references, such as playlist or concat entries. It restricts protocols only:
+a disguised local upload cannot make the probe contact the network, and a
+disguised remote file cannot make it read local files, but within the allowed
+protocol a local input could still reference other local paths and a remote
+input other hosts. Do not rely on the file extension as a safeguard, and keep
+FFmpeg current on application hosts.
+
 Editor, legacy API, and Wagtail admin audio/video uploads share a per-user
 upload lock stored in Django's default cache. Multi-worker deployments need a
 shared cache backend, such as Redis or Memcached, for that lock to coordinate

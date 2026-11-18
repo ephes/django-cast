@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 from collections.abc import Iterator, Sequence
@@ -42,3 +43,19 @@ def media_probe_budget_active() -> bool:
 def run_media_probe(command: Sequence[str], *, timeout: float = 30, **kwargs: Any) -> subprocess.CompletedProcess:
     """Run an ffprobe/ffmpeg command using the active cumulative budget."""
     return subprocess.run(command, timeout=remaining_probe_timeout(timeout), **kwargs)
+
+
+# ffmpeg protocols an input may use, including everything the input itself
+# references (playlists, concat lists, ...). Local files may only open local
+# files, and storage URLs may only open network resources (``httpproxy`` lets
+# HTTPS tunnel through a configured ``http_proxy``). Paths and hosts within
+# those protocols are not restricted.
+LOCAL_INPUT_PROTOCOLS = "file"
+REMOTE_INPUT_PROTOCOLS = "http,https,tcp,tls,httpproxy"
+
+
+def input_protocol_args(source: str | os.PathLike[str]) -> list[str]:
+    """Return the ``-protocol_whitelist`` option for an ffmpeg/ffprobe input."""
+    if str(source).lower().startswith(("http://", "https://")):
+        return ["-protocol_whitelist", REMOTE_INPUT_PROTOCOLS]
+    return ["-protocol_whitelist", LOCAL_INPUT_PROTOCOLS]

@@ -10,6 +10,17 @@ Features
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
 
+- The Twitter Player card view now passes its Podlove config as a
+  ``json_script`` data block instead of interpolating the blog title, URLs and
+  duration into JavaScript strings. A title ending in a backslash no longer
+  breaks the player, and an episode whose audio has no M4A file renders the
+  player instead of raising an error.
+- ``ffprobe`` and ``ffmpeg`` now run with ``-protocol_whitelist``: ``file`` for
+  local media and ``http,https,tcp,tls,httpproxy`` for remote storage URLs. A
+  local input can no longer make the probe open network URLs, and a remote input
+  can no longer make it open local files. Paths and hosts within the allowed
+  protocols are not restricted. See :doc:`/operations/deployment`.
+
 Fixes
 ~~~~~
 
