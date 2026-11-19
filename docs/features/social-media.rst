@@ -154,8 +154,11 @@ literals, so titles with quotes, backslashes or ``</script>`` cannot break the
 player script. Themes that override this template should keep that pattern and
 load the static ``cast/js/web-player/twitter-player-bootstrap.js`` after the
 Podlove embed script, the ``[data-twitter-player]`` container and the
-``twitter-player-config`` element. Serve the scripts from the page's own origin
-to use a ``script-src 'self'`` policy.
+``twitter-player-config`` element. The card page then needs no inline script.
+The bundled Podlove embed still loads its player resources from
+``cdn.podlove.org``, so a Content Security Policy for this page must also allow
+that origin. The embed contains runtime template compilation
+(``new Function``), so the policy may also need ``'unsafe-eval'``.
 
 .. image:: ../images/twitter_card.png
   :width: 400

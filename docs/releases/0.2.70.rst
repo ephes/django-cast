@@ -11,8 +11,8 @@ Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
 
 - Mark restricted Twitter Player responses private and uncacheable.
-- Load the Twitter Player bootstrap as a static script so the card can initialize
-  under a same-origin script policy.
+- Load the Twitter Player bootstrap as a static script so the card page needs no
+  inline script. The Podlove embed still loads resources from ``cdn.podlove.org``.
 
 Fixes
 ~~~~~

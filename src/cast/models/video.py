@@ -152,6 +152,11 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
                 return
             poster_cmd = [
                 "ffmpeg",
+                # Keep diagnostics well below the captured stderr limit.
+                "-hide_banner",
+                "-nostats",
+                "-loglevel",
+                "error",
                 "-ss",
                 str(self.poster_seconds),
                 *input_protocol_args(video_url),
