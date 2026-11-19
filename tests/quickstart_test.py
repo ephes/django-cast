@@ -1,4 +1,5 @@
 import ast
+import io
 import os
 import stat
 import subprocess
@@ -151,14 +152,63 @@ assert f'WAGTAIL_SITE_NAME = "{project_name}"' in (package / "settings.py").read
     result = subprocess.run(
         [sys.executable, "-X", "utf8=0", "-c", script],
         cwd=tmp_path,
-        env={**os.environ, "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"},
+        # The console is strict ASCII too: messages naming the project must not crash.
+        env={**os.environ, "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "ascii:strict"},
         capture_output=True,
-        encoding="utf-8",
+        encoding="ascii",
         timeout=60,
         check=False,
     )
 
     assert result.returncode == 0, result.stderr + result.stdout
+    assert "Creating Django-Cast project 'caf\\xe9'..." in result.stdout
+    assert "Success! Created Django-Cast project at" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "configured,expected",
+    [(None, ":backslashreplace"), ("latin-1", "latin-1:backslashreplace"), ("ascii:strict", "ascii:backslashreplace")],
+)
+def test_manage_py_environment_escapes_console_output(monkeypatch, configured, expected):
+    monkeypatch.setenv("SYNTHETIC_QUICKSTART_MARKER", "kept")
+    if configured is None:
+        monkeypatch.delenv("PYTHONIOENCODING", raising=False)
+    else:
+        monkeypatch.setenv("PYTHONIOENCODING", configured)
+
+    environment = quickstart.manage_py_environment()
+
+    assert environment["PYTHONIOENCODING"] == expected
+    assert environment["SYNTHETIC_QUICKSTART_MARKER"] == "kept"
+    assert os.environ.get("PYTHONIOENCODING") == configured
+
+
+def test_manage_py_environment_lets_children_print_unicode_on_ascii_console(tmp_path, monkeypatch):
+    monkeypatch.setenv("PYTHONIOENCODING", "ascii:strict")
+    child = [sys.executable, "-X", "utf8=0", "-c", "print('static files copied to caf\\u00e9')"]
+    strict = subprocess.run(child, capture_output=True, encoding="ascii", errors="replace", timeout=60, check=False)
+    escaped = subprocess.run(
+        child, env=quickstart.manage_py_environment(), capture_output=True, encoding="ascii", timeout=60, check=False
+    )
+
+    assert strict.returncode != 0 and "UnicodeEncodeError" in strict.stderr
+    assert escaped.returncode == 0, escaped.stderr
+    assert escaped.stdout == "static files copied to caf\\xe9\n"
+
+
+def test_escape_unencodable_console_output_only_reconfigures_text_wrappers(monkeypatch):
+    plain = io.StringIO()
+    wrapped = io.TextIOWrapper(io.BytesIO(), encoding="ascii", errors="strict")
+    monkeypatch.setattr(sys, "stdout", plain)
+    monkeypatch.setattr(sys, "stderr", wrapped)
+
+    quickstart.escape_unencodable_console_output()
+    print("caf\u00e9", file=sys.stderr)
+    wrapped.flush()
+
+    assert wrapped.errors == "backslashreplace"
+    assert wrapped.buffer.getvalue() == b"caf\\xe9\n"
+    assert plain.getvalue() == ""
 
 
 @pytest.mark.parametrize(
@@ -186,7 +236,12 @@ def test_management_helpers_use_checked_current_interpreter(tmp_path, monkeypatc
         assert error.value.returncode == 7
     else:
         helper(project)
-    assert calls == [([sys.executable, str(project / "manage.py"), *arguments], {"check": True})]
+    assert calls == [
+        (
+            [sys.executable, str(project / "manage.py"), *arguments],
+            {"check": True, "env": quickstart.manage_py_environment()},
+        )
+    ]
 
 
 @pytest.mark.parametrize("automatic", [False, True])
@@ -210,14 +265,15 @@ def test_superuser_modes_dispatch_and_propagate_failure(tmp_path, monkeypatch, c
         quickstart.create_superuser(project, auto_create=automatic)
     assert len(calls) == 1
     argv, kwargs = calls[0]
-    assert kwargs == {"check": True}
     assert argv[:2] == [sys.executable, str(project / "manage.py")]
     guidance = capsys.readouterr().out
     if not automatic:
+        assert kwargs == {"check": True}
         assert argv[2:] == ["createsuperuser"]
         assert "access the Wagtail admin at /cms/" in guidance
         assert "Username: user" not in guidance
         return
+    assert kwargs == {"check": True, "env": quickstart.manage_py_environment()}
     assert argv[2:4] == ["shell", "-c"]
     assert len(argv) == 5
     assert "Username: user" in guidance
@@ -274,8 +330,9 @@ def quickstart_main_environment(tmp_path, monkeypatch):
         assert Path.cwd() == project
         events.append(("browser", url, delay))
 
-    def server(argv, *, check):
+    def server(argv, *, check, env):
         assert check is True
+        assert env == quickstart.manage_py_environment()
         assert Path.cwd() == project
         events.append(("server", argv))
         return subprocess.CompletedProcess(argv, 0)
@@ -441,7 +498,7 @@ def test_main_preserves_completed_project_on_launch_failure(quickstart_main_envi
     def initialized(path):
         (path / "db.sqlite3").write_bytes(b"synthetic database")
 
-    def server(argv, *, check=False):
+    def server(argv, *, check=False, env=None):
         if failure == "interrupt":
             raise KeyboardInterrupt
         if failure == "spawn":

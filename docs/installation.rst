@@ -149,6 +149,9 @@ The project name must be an NFKC-normalized Python identifier, such as ``mysite`
 or ``café``. Python keywords, reserved package names and names that shadow
 existing modules are refused. Quickstart reads its templates and writes the
 generated Python and HTML files as UTF-8 regardless of the locale's text encoding.
+Console messages from quickstart and its non-interactive ``manage.py`` steps
+(``migrate``, ``collectstatic``, default superuser creation and ``runserver``)
+escape characters the terminal encoding cannot show instead of failing.
 
 The interactive and no-superuser options cannot be combined. An existing project
 directory is refused before setup begins. If setup fails after quickstart creates

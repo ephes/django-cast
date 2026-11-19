@@ -7,6 +7,7 @@ Creates a new Django project with django-cast pre-configured.
 
 import argparse
 import importlib.util
+import io
 import keyword
 import os
 import secrets
@@ -107,7 +108,7 @@ def run_migrations(project_dir: Path) -> None:
     manage_py = project_dir / "manage.py"
 
     # Run makemigrations for sites app first (if needed)
-    subprocess.run([sys.executable, str(manage_py), "migrate"], check=True)
+    subprocess.run([sys.executable, str(manage_py), "migrate"], check=True, env=manage_py_environment())
 
 
 def collect_static_files(project_dir: Path) -> None:
@@ -116,7 +117,9 @@ def collect_static_files(project_dir: Path) -> None:
     manage_py = project_dir / "manage.py"
 
     # Run collectstatic with --noinput to avoid prompts
-    subprocess.run([sys.executable, str(manage_py), "collectstatic", "--noinput"], check=True)
+    subprocess.run(
+        [sys.executable, str(manage_py), "collectstatic", "--noinput"], check=True, env=manage_py_environment()
+    )
 
 
 def open_browser_delayed(url: str, delay: float = 5.0) -> None:
@@ -153,15 +156,43 @@ if not User.objects.filter(username='user').exists():
 else:
     print('Superuser already exists.')
 """
-        subprocess.run([sys.executable, str(manage_py), "shell", "-c", create_user_cmd], check=True)
+        subprocess.run(
+            [sys.executable, str(manage_py), "shell", "-c", create_user_cmd], check=True, env=manage_py_environment()
+        )
     else:
         print("\nCreating superuser account...")
         print("You'll need this to access the Wagtail admin at /cms/")
+        # Interactive input keeps the strict console handler: escaping would
+        # silently change typed credentials instead of reporting them.
         subprocess.run([sys.executable, str(manage_py), "createsuperuser"], check=True)
+
+
+def escape_unencodable_console_output() -> None:
+    """Escape console characters the terminal encoding cannot represent.
+
+    Unicode project names and status symbols must not crash quickstart (and
+    leave a partial project behind) when stdout/stderr use e.g. ASCII.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if isinstance(stream, io.TextIOWrapper):
+            stream.reconfigure(errors="backslashreplace")
+
+
+def manage_py_environment() -> dict[str, str]:
+    """Return the environment for manage.py children, escaping unencodable console output.
+
+    Children print paths that contain the project name (e.g. collectstatic), so
+    they keep the console encoding but use the backslashreplace error handler.
+    """
+    environment = os.environ.copy()
+    encoding = environment.get("PYTHONIOENCODING", "").partition(":")[0]
+    environment["PYTHONIOENCODING"] = f"{encoding}:backslashreplace"
+    return environment
 
 
 def main() -> None:
     """Main entry point for the quickstart command."""
+    escape_unencodable_console_output()
     parser = argparse.ArgumentParser(
         description="Create a new Django project with django-cast pre-configured.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -274,7 +305,9 @@ def main() -> None:
         print("\nStarting development server...\nPress Ctrl+C to stop the server")
         print("\nThe browser will open automatically in a few seconds...")
         open_browser_delayed("http://localhost:8000/cms/", delay=5.0)
-        subprocess.run([sys.executable, str(project_path / "manage.py"), "runserver"], check=True)
+        subprocess.run(
+            [sys.executable, str(project_path / "manage.py"), "runserver"], check=True, env=manage_py_environment()
+        )
     except KeyboardInterrupt:
         print("\nDevelopment server stopped.")
     except Exception as e:

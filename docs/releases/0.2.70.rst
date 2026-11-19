@@ -21,6 +21,9 @@ Fixes
   identifier normalization before creating files.
 - Read quickstart templates and write generated Python and HTML files as UTF-8,
   including for Unicode project names under an ASCII text locale.
+- Escape console output the terminal encoding cannot represent in quickstart
+  and its non-interactive ``manage.py`` steps, so a Unicode project name no
+  longer crashes setup on an ASCII console.
 - Reject empty or invalid FFmpeg poster frames before writing to media storage.
 - Terminate FFmpeg and FFprobe when captured output exceeds the stdout or stderr
   limit, keeping diagnostics separate from metadata.
