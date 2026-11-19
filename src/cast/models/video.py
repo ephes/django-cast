@@ -14,6 +14,7 @@ from django.db import models, router
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
+from PIL import Image
 from taggit.managers import TaggableManager
 from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
@@ -132,13 +133,7 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
             "-i",
             str(video_url),
         ]
-        result = run_media_probe(
-            ffprobe_cmd,
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            timeout=30,
-        ).stdout
+        result = run_media_probe(ffprobe_cmd, timeout=30).stdout
         lines = result.decode("utf8").split("\n")
         return get_video_dimensions(lines)
 
@@ -172,7 +167,10 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
                 tmp_path,
             ]
             logger.info("video=%s poster phase=extract", self.pk)
-            run_media_probe(poster_cmd, check=True, timeout=30, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            run_media_probe(poster_cmd, timeout=30)
+            # ffmpeg can exit successfully without writing a frame to the staged file.
+            with Image.open(tmp_path, formats=("JPEG",)) as frame:
+                frame.load()
             name = os.path.basename(tmp_path)
             with open(tmp_path, "rb") as tmp_file:
                 self.poster.save(name, DjangoFile(tmp_file), save=False)

@@ -4,6 +4,7 @@ import json
 import logging
 import subprocess
 from io import StringIO
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -81,8 +82,6 @@ def test_signed_urls_and_probe_errors_do_not_escape_diagnostics(mocker, caplog, 
     assert sentinel not in caplog.text + capsys.readouterr().err
     assert "123" in caplog.text and "poster" in caplog.text
     assert all(url in cmd for cmd, _ in commands)
-    if len(commands) == 2:
-        assert commands[-1][1]["stderr"] == subprocess.PIPE
 
 
 @pytest.mark.django_db
@@ -196,3 +195,36 @@ def test_exact_poster_output_budget_preserves_geometry(rotation, expected):
         "tags": {"rotate": rotation},
     }
     assert get_video_dimensions([json.dumps({"streams": [stream]})]) == expected
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("invalid_frame", [b"", b"not an image"])
+def test_video_poster_skips_invalid_frame_and_can_retry(video, mocker, invalid_frame):
+    stored_original = video.original.name
+    video.poster = ""
+    video.save(poster=False)
+    mocker.patch.object(Video, "_get_video_dimensions", return_value=(2, 2))
+    attempt_paths = []
+
+    def extract(command, **kwargs):
+        frame = Path(command[-1])
+        attempt_paths.append(frame)
+        if len(attempt_paths) == 1:
+            frame.write_bytes(invalid_frame)
+        else:
+            Image.new("RGB", (2, 2)).save(frame, "JPEG")
+        return subprocess.CompletedProcess(command, 0)
+
+    mocker.patch("cast.models.video.run_media_probe", side_effect=extract)
+    video.create_poster()
+    assert not video.poster
+    assert not attempt_paths[0].exists()
+    video.refresh_from_db()
+    assert video.original.name == stored_original
+    assert not video.poster
+
+    video.publish_missing_poster()
+
+    video.refresh_from_db()
+    assert video.poster.storage.exists(video.poster.name)
+    assert not attempt_paths[1].exists()

@@ -261,6 +261,10 @@ Nested media probe budgets keep the earliest active deadline. A longer inner
 budget cannot extend the caller's remaining time, and a shorter budget applies
 only for its scope. Normal and exceptional exits restore the parent deadline;
 independent asynchronous contexts keep independent budgets.
+Each FFmpeg or FFprobe process may emit up to 1 MiB to stdout and 64 KiB to
+stderr. These separate limits apply to captured binary output, including
+chapter JSON and diagnostics. Exceeding either limit terminates the process
+and takes the probe's normal failure path.
 
 Replacement transaction ownership
 ---------------------------------

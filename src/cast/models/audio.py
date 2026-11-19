@@ -174,17 +174,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             *input_protocol_args(audio_url),
             str(audio_url),
         ]
-        result = (
-            run_media_probe(
-                cmd,
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                timeout=30,
-            )
-            .stdout.decode()
-            .strip()
-        )
+        result = run_media_probe(cmd, timeout=30).stdout.decode().strip()
         if re.fullmatch(r"[0-9]+\.[0-9]+", result) is None:
             raise ValueError(f"Could not parse duration: {result}")
         seconds = Decimal(result)
@@ -297,7 +287,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             "-loglevel",
             "error",
         ]
-        ffprobe_data = json.loads(run_media_probe(command, check=True, stdout=subprocess.PIPE).stdout)
+        ffprobe_data = json.loads(run_media_probe(command).stdout)
         return self.clean_ffprobe_chaptermarks(ffprobe_data)
 
     def set_episode_id(self, episode_id: int) -> None:

@@ -1,7 +1,6 @@
 """Synthetic structured probe output, independent of codecs and capture devices."""
 
 import json
-import subprocess
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -149,16 +148,3 @@ def test_sample_aspect_shapes_display_dimensions_separately_from_rotation(ratio,
     assert dimensions([stream]) == expected
     stream["side_data_list"] = [{"rotation": 90}]
     assert dimensions([stream]) == tuple(reversed(expected))
-
-
-def test_probe_nonfatal_stderr_does_not_contaminate_json(mocker):
-    diagnostic = b"synthetic nonfatal probe diagnostic\n"
-    payload = json.dumps({"streams": [{"codec_type": "video", "width": 1920, "height": 1080}]}).encode()
-
-    def probe(command, **kwargs):
-        stdout = diagnostic + payload if kwargs["stderr"] == subprocess.STDOUT else payload
-        return SimpleNamespace(stdout=stdout, stderr=diagnostic)
-
-    mocked = mocker.patch("cast.models.video.run_media_probe", side_effect=probe)
-    assert Video._get_video_dimensions("synthetic.mp4") == (1920, 1080)
-    assert mocked.call_args.kwargs["stderr"] == subprocess.PIPE

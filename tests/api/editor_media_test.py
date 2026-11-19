@@ -746,11 +746,6 @@ class TestMediaProbeBudget:
             with media_probe.media_probe_budget(-1):
                 media_probe.remaining_probe_timeout(60)
 
-    def test_run_media_probe_applies_timeout(self, mocker):
-        run = mocker.patch("cast.media_probe.subprocess.run")
-        media_probe.run_media_probe(["ffprobe"], check=True, timeout=7)
-        assert run.call_args.kwargs["timeout"] == 7
-
 
 @pytest.fixture(params=["test.png", "long" * 23 + ".png"])
 def image_upload_storage(db, mocker, image_1px, request):

@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from django.http import QueryDict
 from django.urls import reverse
 from django.utils import timezone
+from PIL import Image
 
 from cast.devdata import create_transcript
 from cast.media_derivation import save_video_with_derivations
@@ -393,7 +394,7 @@ def test_video_create_poster_video_url_without_http(mocker, tmp_path):
 
     mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
     mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
-    run = mocker.patch("cast.models.video.subprocess.run", side_effect=ValueError())
+    run = mocker.patch("cast.models.video.run_media_probe", side_effect=ValueError())
 
     class Original:
         url = "https://example.com/video.mp4"
@@ -406,7 +407,6 @@ def test_video_create_poster_video_url_without_http(mocker, tmp_path):
     command = call_kwargs.args[0]
     assert command[0] == "ffmpeg"
     assert "https://example.com/video.mp4" in command
-    assert call_kwargs.kwargs.get("check") is True
     assert call_kwargs.kwargs.get("timeout") == 30
 
 
@@ -424,12 +424,12 @@ def test_video_create_poster_closes_mkstemp_fd_and_removes_temp_file(mocker, tmp
 
     def fake_run(command, **kwargs):
         if command[0] == "ffmpeg":
-            tmp_poster.write_bytes(b"poster-bytes")
+            Image.new("RGB", (1, 1)).save(tmp_poster, "JPEG")
         return None
 
     mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
     mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
-    mocker.patch("cast.models.video.subprocess.run", side_effect=fake_run)
+    mocker.patch("cast.models.video.run_media_probe", side_effect=fake_run)
     poster_save = mocker.patch("cast.models.video.Video.poster.field.attr_class.save")
 
     class Original:
@@ -460,12 +460,12 @@ def test_video_create_poster_removes_temp_file_when_poster_save_fails(mocker, tm
 
     def fake_run(command, **kwargs):
         if command[0] == "ffmpeg":
-            tmp_poster.write_bytes(b"poster-bytes")
+            Image.new("RGB", (1, 1)).save(tmp_poster, "JPEG")
         return None
 
     mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
     mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
-    mocker.patch("cast.models.video.subprocess.run", side_effect=fake_run)
+    mocker.patch("cast.models.video.run_media_probe", side_effect=fake_run)
     mocker.patch("cast.models.video.Video.poster.field.attr_class.save", side_effect=RuntimeError("save failed"))
 
     class Original:
@@ -496,7 +496,7 @@ def test_video_create_poster_handles_missing_temp_file_on_success(mocker, tmp_pa
 
     def fake_run(command, **kwargs):
         if command[0] == "ffmpeg" and tmp_poster.exists():
-            tmp_poster.write_bytes(b"poster-bytes")
+            Image.new("RGB", (1, 1)).save(tmp_poster, "JPEG")
         return None
 
     def fake_save(_name, content, save=False):
@@ -505,7 +505,7 @@ def test_video_create_poster_handles_missing_temp_file_on_success(mocker, tmp_pa
 
     mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
     mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(1, 1))
-    mocker.patch("cast.models.video.subprocess.run", side_effect=fake_run)
+    mocker.patch("cast.models.video.run_media_probe", side_effect=fake_run)
     mocker.patch("cast.models.video.Video.poster.field.attr_class.save", side_effect=fake_save)
 
     class Original:
@@ -536,7 +536,7 @@ def test_video_create_poster_skips_ffmpeg_when_dimensions_missing(mocker, tmp_pa
 
     mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
     mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=dimensions)
-    run = mocker.patch("cast.models.video.subprocess.run")
+    run = mocker.patch("cast.models.video.run_media_probe")
     poster_save = mocker.patch("cast.models.video.Video.poster.field.attr_class.save")
 
     class Original:
@@ -566,7 +566,7 @@ def test_video_create_poster_handles_missing_dimensions_gracefully(mocker, tmp_p
 
     mocker.patch("cast.models.video.tempfile.mkstemp", side_effect=fake_mkstemp)
     mocker.patch("cast.models.video.Video._get_video_dimensions", return_value=(None, None))
-    run = mocker.patch("cast.models.video.subprocess.run")
+    run = mocker.patch("cast.models.video.run_media_probe")
     poster_save = mocker.patch("cast.models.video.Video.poster.field.attr_class.save")
 
     class Original:

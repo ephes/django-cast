@@ -17,5 +17,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Reject empty or invalid FFmpeg poster frames before writing to media storage.
+- Terminate FFmpeg and FFprobe when captured output exceeds the stdout or stderr
+  limit, keeping diagnostics separate from metadata.
+
 Internal
 ~~~~~~~~

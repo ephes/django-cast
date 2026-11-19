@@ -153,6 +153,8 @@ Poster probing requests ffprobe JSON for the first video stream excluding attach
 using its structured positive integer width and height. Detection is independent
 of codec names and human-readable diagnostic columns. Missing/malformed
 dimensions leave the poster unavailable under the existing failure policy.
+FFmpeg must produce a decodable JPEG before storage. An empty or malformed
+frame leaves an upload without a poster and eligible for a later retry.
 
 Only the selected stream's numeric rotation affects orientation: quarter turns
 (including negative angles and 270 degrees) swap the axes; zero and half turns
