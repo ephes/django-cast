@@ -20,6 +20,8 @@ Fixes
 - Reject empty or invalid FFmpeg poster frames before writing to media storage.
 - Terminate FFmpeg and FFprobe when captured output exceeds the stdout or stderr
   limit, keeping diagnostics separate from metadata.
+- Retire unreferenced poster files when publication is interrupted, preserving
+  the original interruption if cleanup fails.
 
 Internal
 ~~~~~~~~

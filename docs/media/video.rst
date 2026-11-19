@@ -172,8 +172,10 @@ Poster publication and work limits
 using a conditional update against the original storage name, prior poster and
 ``poster_seconds``. Concurrent title edits survive. A changed source, poster or
 extraction timestamp rejects the attempt; its newly stored file is removed if
-unreferenced, while editor-owned files remain intact. Generation/publication
-failures are counted, processing continues, and the command exits nonzero.
+unreferenced, while editor-owned files remain intact. The same cleanup runs
+when publication is interrupted. The interruption propagates with a note if
+cleanup fails. Generation and publication failures are counted, processing
+continues, and the command exits nonzero.
 Source generations are identified by storage names: replace originals using
 storage's unique-name policy, rather than overwrite existing bytes in place.
 

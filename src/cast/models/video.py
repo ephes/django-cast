@@ -220,12 +220,15 @@ class Video(CollectionMember, index.Indexed, TimeStampedModel):
                 .update(poster=self.poster.name, modified=timezone.now())
             ):
                 raise RuntimeError("video poster generation changed; retry")
-        except Exception:
+        except BaseException as error:
             name = self.poster.name
             if name and name != expected["poster"]:
-                # Never retire an editor's object or a published object.
-                if not type(self).objects.using(using).filter(poster=name).exists():
-                    self.poster.storage.delete(name)
+                try:
+                    # Never retire an editor's object or a published object.
+                    if not type(self).objects.using(using).filter(poster=name).exists():
+                        self.poster.storage.delete(name)
+                except BaseException:
+                    error.add_note("Could not retire the staged video poster")
             raise
 
     def get_all_paths(self) -> set[str]:

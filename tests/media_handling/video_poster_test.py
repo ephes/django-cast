@@ -228,3 +228,35 @@ def test_video_poster_skips_invalid_frame_and_can_retry(video, mocker, invalid_f
     video.refresh_from_db()
     assert video.poster.storage.exists(video.poster.name)
     assert not attempt_paths[1].exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("cleanup", ["unreferenced", "referenced", "delete-fails"])
+def test_interrupted_poster_publication_retires_only_unreferenced_attempt(video, tmp_path, mocker, cleanup):
+    storage = FileSystemStorage(location=tmp_path)
+    mocker.patch.object(Video._meta.get_field("poster"), "storage", storage)
+    editor_file = storage.save("editor.jpg", ContentFile(b"editor"))
+    video.poster = ""
+    video.save(poster=False)
+    cancellation = KeyboardInterrupt("cancel before publication")
+
+    def create(instance):
+        instance.poster.save("attempt.jpg", ContentFile(b"attempt"), save=False)
+        editor_choice = instance.poster.name if cleanup == "referenced" else editor_file
+        Video.objects.filter(pk=instance.pk).update(poster=editor_choice)
+        mocker.patch("django.db.models.query.QuerySet.update", side_effect=cancellation)
+        if cleanup == "delete-fails":
+            mocker.patch.object(storage, "delete", side_effect=OSError("synthetic storage failure"))
+
+    mocker.patch.object(Video, "_create_poster", create)
+    with pytest.raises(KeyboardInterrupt) as interrupted:
+        video.publish_missing_poster()
+
+    assert interrupted.value is cancellation
+    attempt = video.poster.name
+    video.refresh_from_db()
+    assert storage.exists(editor_file)
+    assert video.poster.name == (attempt if cleanup == "referenced" else editor_file)
+    assert storage.exists(attempt) == (cleanup != "unreferenced")
+    if cleanup == "delete-fails":
+        assert interrupted.value.__notes__ == ["Could not retire the staged video poster"]
