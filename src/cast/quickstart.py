@@ -20,6 +20,7 @@ from importlib.resources import files
 from pathlib import Path
 from string import Template
 from textwrap import dedent
+from unicodedata import normalize
 
 QUICKSTART_TEMPLATE_PACKAGE = "cast"
 QUICKSTART_TEMPLATE_DIR = "quickstart_templates"
@@ -30,7 +31,7 @@ RESERVED_PROJECT_NAMES = {"django", "cast", "wagtail", "rest_framework"}
 def render_quickstart_template(template_name: str, **context: str) -> str:
     """Render one packaged quickstart template."""
     template_path = files(QUICKSTART_TEMPLATE_PACKAGE).joinpath(QUICKSTART_TEMPLATE_DIR).joinpath(template_name)
-    template = Template(template_path.read_text())
+    template = Template(template_path.read_text(encoding="utf-8"))
     return template.substitute(context).strip()
 
 
@@ -67,28 +68,28 @@ def create_settings_file(project_name: str, target_dir: Path) -> None:
         project_name=project_name,
         secret_key=secrets.token_urlsafe(50),
     )
-    settings_file.write_text(settings_content)
+    settings_file.write_text(settings_content, encoding="utf-8")
 
 
 def create_urls_file(project_name: str, target_dir: Path) -> None:
     """Create urls.py with django-cast URL configuration."""
     urls_file = target_dir / project_name / project_name / "urls.py"
     urls_content = render_quickstart_template("urls.py.template", project_name=project_name)
-    urls_file.write_text(urls_content)
+    urls_file.write_text(urls_content, encoding="utf-8")
 
 
 def create_wsgi_file(project_name: str, target_dir: Path) -> None:
     """Create wsgi.py file."""
     wsgi_file = target_dir / project_name / project_name / "wsgi.py"
     wsgi_content = render_quickstart_template("wsgi.py.template", project_name=project_name)
-    wsgi_file.write_text(wsgi_content)
+    wsgi_file.write_text(wsgi_content, encoding="utf-8")
 
 
 def create_manage_py(project_name: str, target_dir: Path) -> None:
     """Create manage.py file."""
     manage_file = target_dir / project_name / "manage.py"
     manage_content = render_quickstart_template("manage.py.template", project_name=project_name)
-    manage_file.write_text(manage_content)
+    manage_file.write_text(manage_content, encoding="utf-8")
     # Make it executable
     manage_file.chmod(0o755)
 
@@ -97,7 +98,7 @@ def create_base_template(project_name: str, target_dir: Path) -> None:
     """Create a basic base.html template."""
     template_file = target_dir / project_name / project_name / "templates" / "base.html"
     template_content = render_quickstart_template("base.html.template")
-    template_file.write_text(template_content)
+    template_file.write_text(template_content, encoding="utf-8")
 
 
 def run_migrations(project_dir: Path) -> None:
@@ -190,9 +191,16 @@ def main() -> None:
     project_name = args.project_name
 
     # Validate project name
-    if not project_name.isidentifier() or keyword.iskeyword(project_name) or project_name in RESERVED_PROJECT_NAMES:
+    if (
+        not project_name.isidentifier()
+        or normalize("NFKC", project_name) != project_name
+        or keyword.iskeyword(project_name)
+        or project_name in RESERVED_PROJECT_NAMES
+    ):
         print(f"Error: '{project_name}' is not an available Python project name.")
-        print("Use a Python identifier that is neither a keyword nor a reserved framework/package name.")
+        print(
+            "Use an NFKC-normalized Python identifier that is neither a keyword nor a reserved framework/package name."
+        )
         sys.exit(1)
 
     # Get target directory

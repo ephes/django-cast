@@ -98,9 +98,10 @@ def test_quickstart_generates_project_files_from_packaged_templates(tmp_path, mo
     assert "{{ settings.WAGTAIL_SITE_NAME }}" in base_template
 
 
-def test_generated_quickstart_project_passes_django_check(tmp_path, monkeypatch):
+@pytest.mark.parametrize("project_name", ["mysite", "café"])
+def test_generated_quickstart_project_passes_django_check(tmp_path, monkeypatch, project_name):
     monkeypatch.setattr(quickstart.secrets, "token_urlsafe", lambda length: f"secret-{length}")
-    project_dir = generate_quickstart_project(tmp_path)
+    project_dir = generate_quickstart_project(tmp_path, project_name)
     repo_src = Path(__file__).resolve().parents[1] / "src"
     existing_pythonpath = os.environ.get("PYTHONPATH")
     pythonpath_parts = [str(repo_src)]
@@ -115,6 +116,44 @@ def test_generated_quickstart_project_passes_django_check(tmp_path, monkeypatch)
         env=subprocess_env,
         capture_output=True,
         text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr + result.stdout
+
+
+def test_quickstart_writes_utf8_in_ascii_locale(tmp_path):
+    script = r"""
+import codecs
+import locale
+import sys
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+from cast import quickstart
+
+# Keep Unicode filesystem paths usable while testing ASCII text I/O defaults.
+locale.setlocale(locale.LC_CTYPE, "C")
+assert codecs.lookup(locale.getpreferredencoding(False)).name == "ascii"
+project_name = "caf\u00e9"
+sys.argv = ["django-cast-quickstart", project_name, "--no-superuser"]
+with patch.multiple(quickstart, run_migrations=Mock(), collect_static_files=Mock(), open_browser_delayed=Mock()):
+    with patch.object(quickstart.subprocess, "run"):
+        quickstart.main()
+
+root = Path(project_name)
+package = root / project_name
+for path in (root / "manage.py", *(package / name for name in ("__init__.py", "settings.py", "urls.py", "wsgi.py"))):
+    compile(path.read_bytes(), str(path), "exec")
+assert f'WAGTAIL_SITE_NAME = "{project_name}"' in (package / "settings.py").read_text(encoding="utf-8")
+"""
+    result = subprocess.run(
+        [sys.executable, "-X", "utf8=0", "-c", script],
+        cwd=tmp_path,
+        env={**os.environ, "LC_ALL": "C.UTF-8", "PYTHONIOENCODING": "utf-8"},
+        capture_output=True,
+        encoding="utf-8",
         timeout=60,
         check=False,
     )
@@ -318,7 +357,19 @@ def test_main_refuses_before_setup(quickstart_main_environment, monkeypatch, ref
 
 @pytest.mark.parametrize(
     "name",
-    ["class", "None", "django", "cast", "wagtail", "rest_framework", "email", "logging", "json", "site"],
+    [
+        "class",
+        "None",
+        "django",
+        "cast",
+        "wagtail",
+        "rest_framework",
+        "email",
+        "logging",
+        "json",
+        "site",
+        "ｓynthetic_site",
+    ],
 )
 def test_main_rejects_unimportable_names_without_writes(quickstart_main_environment, monkeypatch, name):
     target, _, events = quickstart_main_environment
