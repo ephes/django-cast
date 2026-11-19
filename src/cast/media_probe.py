@@ -121,8 +121,13 @@ LOCAL_INPUT_PROTOCOLS = "file"
 REMOTE_INPUT_PROTOCOLS = "http,https,tcp,tls,httpproxy"
 
 
+def is_http_media_url(source: str) -> bool:
+    """Return whether the media source has an HTTP or HTTPS URL prefix."""
+    return source.lower().startswith(("http://", "https://"))
+
+
 def input_protocol_args(source: str | os.PathLike[str]) -> list[str]:
     """Return the ``-protocol_whitelist`` option for an ffmpeg/ffprobe input."""
-    if str(source).lower().startswith(("http://", "https://")):
+    if is_http_media_url(str(source)):
         return ["-protocol_whitelist", REMOTE_INPUT_PROTOCOLS]
     return ["-protocol_whitelist", LOCAL_INPUT_PROTOCOLS]

@@ -74,6 +74,9 @@ Comprehensive audio file management with podcast support.
   to the nearest microsecond, with ties to even. Malformed, negative or nonfinite
   probe values, and values beyond signed 64-bit microsecond storage, fail through
   ``AudioDurationProbeError``. Stored durations are not automatically repaired.
+  Duration and chapter probes use absolute HTTP(S) URLs directly, including
+  for storage backends without a local path. For other URLs, they use the local
+  filesystem path.
 - Multiple format upload support
 - Chapter marks with timestamps
 - Transcript association

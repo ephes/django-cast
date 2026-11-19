@@ -1,4 +1,5 @@
 from datetime import time, timedelta
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -81,11 +82,8 @@ class TestAudioModel:
         audio.create_duration()
         get_audio_duration.assert_called_once_with(field.url)
 
-    def test_audio_create_duration_no_file_field(self, audio, mocker):
-        class Field:  # not a FileField
-            foo = "bar"
-
-        field = Field()
+    @pytest.mark.parametrize("field", [object(), SimpleNamespace(url="/media/synthetic.m4a")])
+    def test_audio_create_duration_no_file_field(self, audio, mocker, field):
         get_audio_duration = mocker.patch("cast.models.audio.Audio._get_audio_duration", return_value="duration")
         mocker.patch("cast.models.audio.Audio.uploaded_audio_files", [("mp3", field)])
         audio.create_duration()
@@ -565,3 +563,72 @@ def test_decimal_duration_saved_through_derivation(audio, mocker, output):
     assert audio.duration == (
         timedelta(seconds=1, microseconds=500000) if output == b"1.5" else timedelta(microseconds=2**63 - 1)
     )
+
+
+@pytest.fixture
+def url_only_audio_storage(mocker):
+    from django.core.files.storage import Storage
+
+    class URLOnlyStorage(Storage):
+        def __init__(self):
+            self.files = {}
+
+        def _save(self, name, content):
+            self.files[name] = content.read()
+            return name
+
+        def exists(self, name):
+            return name in self.files
+
+        def size(self, name):
+            return len(self.files[name])
+
+        def url(self, name):
+            return f"https://media.example/{name}"
+
+    storage = URLOnlyStorage()
+    mocker.patch.object(Audio._meta.get_field("m4a"), "storage", storage)
+    return storage
+
+
+@pytest.mark.django_db
+def test_duration_persists_for_upload_to_url_only_storage(user, m4a_audio, url_only_audio_storage, mocker):
+    audio = Audio(user=user, title="Synthetic remote audio", m4a=m4a_audio)
+    probe = mocker.patch("cast.models.audio.run_media_probe", return_value=mocker.Mock(stdout=b"1.250000"))
+    url = mocker.spy(url_only_audio_storage, "url")
+    path = mocker.spy(url_only_audio_storage, "path")
+
+    save_audio_with_derivations(audio)
+
+    audio.refresh_from_db()
+    assert audio.duration == timedelta(seconds=1, milliseconds=250)
+    assert probe.call_args.args[0][-1] == f"https://media.example/{audio.m4a.name}"
+    url.assert_called_once_with(audio.m4a.name)
+    path.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_chapter_probe_recognizes_uppercase_https_without_local_path(url_only_audio_storage, mocker):
+    audio = Audio(m4a="synthetic.m4a")
+    mocker.patch.object(url_only_audio_storage, "url", return_value="HTTPS://media.example/synthetic.m4a")
+    probe = mocker.patch("cast.models.audio.run_media_probe", return_value=mocker.Mock(stdout=b'{"chapters": []}'))
+
+    assert audio.get_chaptermark_data_from_file("m4a") == []
+    command = probe.call_args.args[0]
+    assert command[command.index("-i") + 1] == "HTTPS://media.example/synthetic.m4a"
+
+
+@pytest.mark.django_db
+def test_duration_skips_storage_without_http_url_or_local_path(audio, mocker, url_only_audio_storage):
+    local_file = audio.m4a
+    audio.duration = None
+    mocker.patch.object(url_only_audio_storage, "url", return_value="http-assets/synthetic.m4a")
+    missing_path = Audio(m4a="synthetic.m4a").m4a
+    assert missing_path.storage is url_only_audio_storage
+    mocker.patch("cast.models.audio.Audio.uploaded_audio_files", [("mp3", missing_path), ("m4a", local_file)])
+    probe = mocker.patch.object(Audio, "_get_audio_duration", return_value=timedelta(seconds=1))
+
+    audio.create_duration()
+
+    assert audio.duration == timedelta(seconds=1)
+    probe.assert_called_once_with(local_file.path)

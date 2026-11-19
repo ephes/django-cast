@@ -6,7 +6,7 @@ from collections.abc import Iterable
 from datetime import timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Protocol, cast
+from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import Storage
@@ -19,7 +19,7 @@ from wagtail.models import CollectionMember, PageManager
 from wagtail.search import index
 from wagtail.search.queryset import SearchableQuerySetMixin
 
-from ..media_probe import input_protocol_args, run_media_probe
+from ..media_probe import input_protocol_args, is_http_media_url, run_media_probe
 
 if TYPE_CHECKING:
     from .pages import Episode
@@ -186,17 +186,17 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             return timedelta(microseconds=int(rounded * 1_000_000))
 
     def create_duration(self) -> None:
-        for name, field in self.uploaded_audio_files:
+        for _name, field in self.uploaded_audio_files:
             try:
-                if hasattr(field, "url") and hasattr(field, "path"):
-                    file_field = cast(FileField, field)
-                    audio_url = file_field.url
-                    if not audio_url.startswith("http"):
-                        audio_url = file_field.path
-                    self.duration = self._get_audio_duration(audio_url)
+                url = getattr(field, "url", None)
+                if url is None:
+                    continue
+                audio_source = url if is_http_media_url(url) else getattr(field, "path", None)
+                if audio_source is not None:
+                    self.duration = self._get_audio_duration(audio_source)
                     break
-            except NotImplementedError:  # pragma: no cover
-                pass
+            except NotImplementedError:
+                continue
             except subprocess.TimeoutExpired as exc:
                 raise AudioDurationProbeTimeout("Audio duration probing timed out.") from exc
             except (subprocess.CalledProcessError, OSError, ValueError) as exc:
@@ -273,7 +273,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             url = file_field.url
         except ValueError:
             return []
-        if not url.startswith("http"):
+        if not is_http_media_url(url):
             # use path from local filesystem
             url = file_field.path
         command = [

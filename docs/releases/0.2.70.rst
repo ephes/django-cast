@@ -22,6 +22,9 @@ Fixes
   limit, keeping diagnostics separate from metadata.
 - Retire unreferenced poster files when publication is interrupted, preserving
   the original interruption if cleanup fails.
+- Stream the video poster backfill in batches in primary-key order.
+- Probe audio duration and chapters from HTTP(S) storage URLs without requiring
+  the storage backend to provide a local path.
 
 Internal
 ~~~~~~~~

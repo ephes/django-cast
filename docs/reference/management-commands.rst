@@ -245,7 +245,9 @@ recalc_video_posters
 
 Regenerate poster images for all videos from the video files. Requires
 ``ffmpeg`` to be installed. The command keeps going if one video fails and
-prints a final ``processed=<n> errors=<n>`` summary.
+prints a final ``processed=<n> errors=<n>`` summary. It scans videos in
+primary-key order, fetching rows in batches and counting the queryset once for
+the progress display.
 
 A video counts as failed when creating its poster raises an error (for
 example ``ffmpeg`` fails or is missing), when no poster results although one

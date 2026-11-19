@@ -990,7 +990,9 @@ def test_media_replace_warns_when_staged_replacement_cleanup_fails(mocker):
 
 def _stub_videos(mocker, videos):
     manager = mocker.Mock()
-    manager.all.return_value.order_by.return_value = videos
+    queryset = manager.all.return_value.order_by.return_value
+    queryset.count.return_value = len(videos)
+    queryset.iterator.return_value = iter(videos)
     mocker.patch("cast.management.commands.recalc_video_posters.Video.objects", manager)
     mocker.patch("cast.management.commands.recalc_video_posters.track", side_effect=lambda iterable, **_: iterable)
 
@@ -1651,3 +1653,39 @@ def test_refresh_retains_verified_recovery_after_partial_final_write(mocker):
     result = sync_media_files(target, restored)
     assert key not in restored._files  # quarantined, never auto-promoted by restore
     assert result.copied == 1
+
+
+@pytest.mark.django_db
+def test_recalc_video_posters_streams_ordered_batches(video, mocker):
+    from cast.management.commands import recalc_video_posters
+
+    extra_videos = Video.objects.bulk_create(
+        [Video(user=video.user, collection=video.collection, original=f"synthetic-{i}.mp4") for i in range(4)]
+    )
+    expected = [video.pk, *(item.pk for item in extra_videos)]
+    failures = {expected[1], expected[3]}
+    queryset = Video.objects.order_by("pk")
+    all_videos = mocker.patch.object(Video.objects, "all")
+    all_videos.return_value.order_by.return_value = queryset
+    mocker.patch.object(recalc_video_posters, "VIDEO_BATCH_SIZE", 2)
+    progress = mocker.spy(recalc_video_posters, "track")
+    seen = []
+    uncached = []
+
+    def publish(item):
+        seen.append(item.pk)
+        uncached.append(queryset._result_cache is None)
+        if item.pk in failures:
+            raise RuntimeError("synthetic failure")
+
+    mocker.patch.object(Video, "publish_missing_poster", autospec=True, side_effect=publish)
+    output, errors = StringIO(), StringIO()
+    with pytest.raises(CommandError, match="2 of 5 video posters"):
+        call_command("recalc_video_posters", stdout=output, stderr=errors)
+
+    assert seen == expected
+    assert all(uncached)
+    assert progress.call_args.kwargs["total"] == len(expected)
+    assert "processed=5 errors=2" in output.getvalue()
+    for pk in failures:
+        assert f"error recalculating poster for video {pk}:" in errors.getvalue()

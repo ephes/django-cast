@@ -5,6 +5,8 @@ from rich.progress import track
 
 from ...models import Video
 
+VIDEO_BATCH_SIZE = 200
+
 
 class Command(BaseCommand):
     help = "recalc the poster images for videos from the videos"
@@ -13,7 +15,11 @@ class Command(BaseCommand):
         total = 0
         errors = 0
         videos = Video.objects.all().order_by("pk")
-        for video in track(videos, description="Recalculating video posters"):
+        for video in track(
+            videos.iterator(chunk_size=VIDEO_BATCH_SIZE),
+            total=videos.count(),
+            description="Recalculating video posters",
+        ):
             total += 1
             try:
                 video.publish_missing_poster()
