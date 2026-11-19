@@ -15,6 +15,7 @@ from django.template.loader import get_template
 from cast import appsettings
 from cast.apps import CAST_MIDDLEWARE
 from cast.appsettings import CAST_SETTING_REGISTRY
+from cast.podlove import invalid_podlove_theme_override_paths
 from cast.post_body_blocks import validate_post_body_block_setting
 
 # Source extensions to consider
@@ -76,6 +77,16 @@ def check_cast_setting_types(
             )
 
     return errors
+
+
+@register("cast")
+def check_podlove_theme_settings(
+    app_configs: Sequence[AppConfig] | None = None,
+    databases: Sequence[str] | None = None,
+    **kwargs: Any,
+) -> list[Error]:
+    """Validate the nested mapping types used by the Podlove renderer."""
+    return [Error(f"{path} must be a mapping.", id="cast.E013") for path in invalid_podlove_theme_override_paths()]
 
 
 @register("cast")

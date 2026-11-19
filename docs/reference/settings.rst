@@ -16,6 +16,7 @@ rules such as the episode audio requirement are not safely enforced until the
 deployment uses a supported Wagtail version and the startup warning is resolved.
 ``cast.E012`` means ``CAST_VOXHELM_API_BASE`` is not an absolute ``http(s)`` URL
 or contains user info, a query string or a fragment.
+``cast.E013`` identifies an invalid nested Podlove theme mapping by setting path.
 
 ********
 Comments
@@ -631,7 +632,16 @@ Optional overrides for the Podlove Web Player theme config returned by
 ``/api/audios/player_config/``. Defaults to an empty mapping ``{}``. The
 setting is a mapping keyed by template base directory name (or ``default``).
 Each entry can define a shared ``tokens``/``fonts`` override or per-scheme
-overrides under ``light`` and ``dark``.
+overrides under ``light`` and ``dark``. The template-specific entry takes
+precedence over ``default``. A missing or empty scheme override falls back
+to the light override if one is available. Each generated player config owns
+its nested font values, so callers can customize them independently.
+
+Theme and scheme entries, as well as any ``tokens`` and ``fonts`` sections,
+must be mappings. Run ``python manage.py check --tag cast`` to locate invalid
+entries. The player treats a malformed scheme like a missing one, uses
+built-in defaults for a malformed theme, and ignores an invalid section
+while still applying any valid section in that override.
 
 .. code-block:: python
 

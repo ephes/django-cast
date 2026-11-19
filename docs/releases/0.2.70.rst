@@ -17,6 +17,10 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Copy nested Podlove font overrides for each player configuration.
+- Report malformed nested Podlove theme settings in Django system checks
+  and keep the player configuration endpoint usable with safe fallbacks.
+
 - Verify staged and published bytes before reporting a successful
   ``media_replace``, and retain the verified staging key if final verification fails.
 - Use reserved sync staging keys for ``media_replace`` and skip leftover keys

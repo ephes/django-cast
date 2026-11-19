@@ -14,7 +14,7 @@ Theme resolution order:
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from copy import deepcopy
 from typing import Any
 
@@ -165,6 +165,35 @@ BASE_PLAYER_CONFIG: dict[str, Any] = {
 }
 
 
+_COLOR_SCHEMES = ("light", "dark")
+_THEME_SECTIONS = ("tokens", "fonts")
+
+
+def invalid_podlove_theme_override_paths() -> Iterator[str]:
+    """Yield malformed nested mappings for Django's configuration check."""
+    overrides = appsettings.CAST_PODLOVE_PLAYER_THEMES
+    if not isinstance(overrides, Mapping):
+        return  # The generic setting check handles the outer type.
+
+    for name, theme in overrides.items():
+        theme_path = f"CAST_PODLOVE_PLAYER_THEMES[{name!r}]"
+        if not isinstance(theme, Mapping):
+            yield theme_path
+            continue
+        entries: Iterator[tuple[str, Any]]
+        if any(scheme in theme for scheme in _COLOR_SCHEMES):
+            entries = ((f"{theme_path}[{scheme!r}]", theme[scheme]) for scheme in _COLOR_SCHEMES if scheme in theme)
+        else:
+            entries = iter(((theme_path, theme),))
+        for path, entry in entries:
+            if not isinstance(entry, Mapping):
+                yield path
+                continue
+            for section in _THEME_SECTIONS:
+                if section in entry and not isinstance(entry[section], Mapping):
+                    yield f"{path}[{section!r}]"
+
+
 def build_podlove_player_config(*, template_base_dir: str | None, color_scheme: str | None) -> dict[str, Any]:
     """Return a Podlove Web Player configuration dict for the given theme and color scheme.
 
@@ -183,12 +212,12 @@ def _normalize_color_scheme(color_scheme: str | None) -> str:
     if not color_scheme:
         return "light"
     scheme = color_scheme.strip().lower()
-    return scheme if scheme in {"light", "dark"} else "light"
+    return scheme if scheme in _COLOR_SCHEMES else "light"
 
 
 def _resolve_theme_config(*, template_base_dir: str | None, color_scheme: str) -> dict[str, Any]:
     base_theme = deepcopy(DEFAULT_PODLOVE_THEME)
-    theme_overrides = _get_theme_overrides()
+    theme_overrides = appsettings.CAST_PODLOVE_PLAYER_THEMES
 
     if template_base_dir == "bootstrap5":
         tokens = BOOTSTRAP5_DARK_TOKENS if color_scheme == "dark" else BOOTSTRAP5_LIGHT_TOKENS
@@ -196,34 +225,32 @@ def _resolve_theme_config(*, template_base_dir: str | None, color_scheme: str) -
         base_theme["fonts"].update(deepcopy(BOOTSTRAP5_FONTS))
 
     override = _select_override(theme_overrides, template_base_dir, color_scheme)
-    if not override:
-        return base_theme
-
-    if "tokens" in override:
-        base_theme["tokens"].update(override["tokens"])
-    if "fonts" in override:
-        base_theme["fonts"].update(override["fonts"])
+    for section in _THEME_SECTIONS:
+        values = override.get(section)
+        if isinstance(values, Mapping):
+            base_theme[section].update(deepcopy(dict(values)))
 
     return base_theme
-
-
-def _get_theme_overrides() -> Mapping[str, Any]:
-    return appsettings.CAST_PODLOVE_PLAYER_THEMES
 
 
 def _select_override(
     overrides: Mapping[str, Any], template_base_dir: str | None, color_scheme: str
 ) -> Mapping[str, Any]:
-    theme_override: Mapping[str, Any] | None = None
-    if template_base_dir and template_base_dir in overrides:
-        theme_override = overrides[template_base_dir]
-    elif "default" in overrides:
-        theme_override = overrides["default"]
-
-    if not theme_override:
+    if not isinstance(overrides, Mapping):
+        return {}
+    theme_override = (
+        overrides.get(template_base_dir)
+        if template_base_dir and template_base_dir in overrides
+        else overrides.get("default")
+    )
+    if not isinstance(theme_override, Mapping):
         return {}
 
-    if "light" in theme_override or "dark" in theme_override:
-        return theme_override.get(color_scheme) or theme_override.get("light") or {}
+    if any(scheme in theme_override for scheme in _COLOR_SCHEMES):
+        selected = theme_override.get(color_scheme)
+        if isinstance(selected, Mapping) and selected:
+            return selected
+        light = theme_override.get("light")
+        return light if isinstance(light, Mapping) else {}
 
     return theme_override

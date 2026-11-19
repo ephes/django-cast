@@ -4,6 +4,7 @@ from io import BytesIO
 
 import pytest
 from django.contrib.auth.models import Permission
+from django.core.checks import run_checks
 from django.urls import reverse
 
 from cast.api.serializers import AudioPodloveSerializer
@@ -13,6 +14,7 @@ from cast.api.views import (
 )
 from cast.devdata import create_transcript
 from cast.models import Audio, Contributor, EpisodeContributor, TranscriptSpeakerMapping, Video
+from cast.podlove import build_podlove_player_config
 from tests.factories import UserFactory
 
 SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"
@@ -513,6 +515,21 @@ class TestPodcastAudio:
         fonts = config["theme"]["fonts"]
         assert fonts["regular"]["family"][0] == "CustomSans"
 
+    @pytest.mark.parametrize("per_scheme", [False, True])
+    def test_podlove_player_config_copies_nested_font_overrides(self, settings, per_scheme):
+        font = {"family": ["CustomSans"], "src": ["custom.woff2"]}
+        override = {"fonts": {"regular": font}}
+        settings.CAST_PODLOVE_PLAYER_THEMES = {"bootstrap5": {"light": override} if per_scheme else override}
+
+        first = build_podlove_player_config(template_base_dir="bootstrap5", color_scheme="dark")
+        first["theme"]["fonts"]["regular"]["family"].append("Other")
+        first["theme"]["fonts"]["regular"]["src"].clear()
+        second = build_podlove_player_config(template_base_dir="bootstrap5", color_scheme="dark")
+
+        expected = {"family": ["CustomSans"], "src": ["custom.woff2"]}
+        assert font == expected
+        assert second["theme"]["fonts"]["regular"] == expected
+
     def test_podlove_player_config_default_override(self, api_client, mocker, settings):
         url = reverse("cast:api:player_config")
         mocker.patch("cast.api.views.get_template_base_dir", return_value="plain")
@@ -544,6 +561,56 @@ class TestPodcastAudio:
         config = response.json()
         tokens = config["theme"]["tokens"]
         assert tokens["brand"] == "#abcdef"
+
+    @pytest.mark.parametrize(
+        "dark_override, invalid_path, expected_dark_brand",
+        [
+            ("broken", "['bootstrap5']['dark']", "#123456"),
+            ({"fonts": 4, "tokens": {"brand": "#abcdef"}}, "['bootstrap5']['dark']['fonts']", "#abcdef"),
+            ({"tokens": ["bad"]}, "['bootstrap5']['dark']['tokens']", "#fbbf24"),
+        ],
+    )
+    def test_podlove_player_config_malformed_dark_override(
+        self, api_client, settings, mocker, dark_override, invalid_path, expected_dark_brand
+    ):
+        mocker.patch("cast.api.views.get_template_base_dir", return_value="bootstrap5")
+        settings.CAST_PODLOVE_PLAYER_THEMES = {
+            "bootstrap5": {"light": {"tokens": {"brand": "#123456"}}, "dark": dark_override},
+            "default": {"tokens": {"brand": "#111111"}},
+        }
+        url = reverse("cast:api:player_config")
+
+        light = api_client.get(f"{url}?color_scheme=light")
+        dark = api_client.get(f"{url}?color_scheme=dark")
+        assert light.status_code == dark.status_code == 200
+        assert light.json()["theme"]["tokens"]["brand"] == "#123456"
+        assert dark.json()["theme"]["tokens"]["brand"] == expected_dark_brand
+        assert dark.json()["theme"]["fonts"]["regular"]["family"][0] == "Inter"
+
+        errors = [error for error in run_checks(tags=["cast"]) if error.id == "cast.E013"]
+        assert [error.msg for error in errors] == [f"CAST_PODLOVE_PLAYER_THEMES{invalid_path} must be a mapping."]
+
+    @pytest.mark.parametrize(
+        "themes, invalid_path",
+        [
+            ({"bootstrap5": 4}, "['bootstrap5']"),
+            ({"bootstrap5": {"tokens": 4}}, "['bootstrap5']['tokens']"),
+            ({"bootstrap5": {"light": 4}}, "['bootstrap5']['light']"),
+            (["bootstrap5"], None),
+        ],
+    )
+    def test_podlove_player_config_uses_defaults_for_invalid_settings(self, settings, themes, invalid_path):
+        settings.CAST_PODLOVE_PLAYER_THEMES = themes
+        config = build_podlove_player_config(template_base_dir="bootstrap5", color_scheme="dark")
+        assert config["theme"]["tokens"]["brand"] == "#fbbf24"
+
+        errors = run_checks(tags=["cast"])
+        if invalid_path is None:
+            assert any(error.id == "cast.E001" and "CAST_PODLOVE_PLAYER_THEMES" in error.msg for error in errors)
+        else:
+            assert [error.msg for error in errors if error.id == "cast.E013"] == [
+                f"CAST_PODLOVE_PLAYER_THEMES{invalid_path} must be a mapping."
+            ]
 
     def test_audio_podlove_serializer_get_transcripts(self, mocker):
         """Test whether the audio podlove serializer returns the correct transcripts."""
