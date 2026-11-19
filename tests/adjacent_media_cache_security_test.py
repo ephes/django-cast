@@ -177,3 +177,28 @@ def test_episode_html_redirect_follow_rechecks_restricted_access(
     assert client.get(url, follow=True).status_code == 404
     assert revoked.status_code == 404
     assert MARKER not in revoked.content.decode()
+
+
+@pytest.mark.django_db
+def test_twitter_embed_does_not_cache_restricted_audio(client, full_site_cache, episode, django_user_model):
+    group = Group.objects.create(name="Synthetic embed listeners")
+    member = django_user_model.objects.create_user("embed-listener")
+    member.groups.add(group)
+    restriction = PageViewRestriction.objects.create(page=episode.blog, restriction_type=PageViewRestriction.GROUPS)
+    restriction.groups.add(group)
+    client.force_login(member)
+    url = reverse("cast:twitter-player", kwargs={"blog_slug": episode.blog.slug, "episode_slug": episode.slug})
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    assert episode.podcast_audio.m4a.url.encode() in response.content
+    assert Client().get(url).status_code == 404
+    assert_private(response)
+    member.groups.remove(group)
+    assert client.get(url).status_code == 404
+
+    restriction.delete()
+    public = Client().get(url)
+    assert public.status_code == 200
+    assert "private" not in public["Cache-Control"]

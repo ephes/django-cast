@@ -110,10 +110,8 @@ def test_twitter_player_config_is_json_not_interpolated_javascript(client, episo
     assert "<script>alert(1)</script>" not in content
     assert content.count("</script>") == content.count("<script")
     inline_scripts = re.findall(r"<script>(.*?)</script>", content, re.S)
-    assert inline_scripts
-    for script in inline_scripts:
-        assert "Back" not in script
-        assert "{{" not in script
+    assert inline_scripts == []
+    assert content.index("embed.5.js") < content.index("twitter-player-bootstrap.js")
 
 
 @pytest.mark.django_db

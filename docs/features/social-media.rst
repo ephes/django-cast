@@ -152,7 +152,10 @@ Podlove player configuration (blog title and URL, duration and the M4A URL) as a
 ``json_script`` data block. Page data never appears inside JavaScript string
 literals, so titles with quotes, backslashes or ``</script>`` cannot break the
 player script. Themes that override this template should keep that pattern and
-read the config with ``JSON.parse`` from the ``twitter-player-config`` element.
+load the static ``cast/js/web-player/twitter-player-bootstrap.js`` after the
+Podlove embed script, the ``[data-twitter-player]`` container and the
+``twitter-player-config`` element. Serve the scripts from the page's own origin
+to use a ``script-src 'self'`` policy.
 
 .. image:: ../images/twitter_card.png
   :width: 400
@@ -175,7 +178,9 @@ URL name: ``cast:twitter-player``
 This view renders a minimal HTML page
 (``cast/twitter/card_player.html``) containing only a Podlove Web Player
 play button. The page is designed to be embedded in a 480x240 iframe by
-Twitter/X.
+Twitter/X. If the episode or an ancestor has a Wagtail view restriction,
+the embed checks the visitor's access and sends ``Cache-Control: private, no-store``
+with ``Vary: Cookie, Authorization`` for permitted responses.
 
 The player is initialized with:
 
