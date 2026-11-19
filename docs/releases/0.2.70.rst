@@ -17,6 +17,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Verify staged and published bytes before reporting a successful
+  ``media_replace``, and retain the verified staging key if final verification fails.
+- Use reserved sync staging keys for ``media_replace`` and skip leftover keys
+  in both the current and legacy formats in media backup and restore.
+
 - Reject quickstart project names whose spelling changes under Python's NFKC
   identifier normalization before creating files.
 - Read quickstart templates and write generated Python and HTML files as UTF-8,

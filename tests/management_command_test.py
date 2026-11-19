@@ -790,7 +790,7 @@ def test_media_replace_continues_after_failure_and_exits_nonzero(mocker):
     assert production._files == {"bad.jpg": b"old bad", "good.jpg": b"new good"}
     # both staged objects were cleaned up
     assert len(production.deleted) == 2
-    assert all(".django-cast-replace-" in path for path in production.deleted)
+    assert all(".django-cast-refresh-" in path for path in production.deleted)
     assert "error replacing bad.jpg: boom" in error_output.getvalue()
     assert "replaced: good.jpg" in output.getvalue()
     assert "planned=2 replaced=1 skipped=0 errors=1" in output.getvalue()
@@ -812,6 +812,53 @@ def test_media_replace_errors_when_staged_replacement_is_missing(mocker):
         call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
     assert "error replacing foo.jpg: staged replacement missing-stage.tmp was not saved" in error_output.getvalue()
+    assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
+
+
+@pytest.mark.parametrize("failure", ["final truncation", "final unreadable", "stage truncation", "non-reserved stage"])
+def test_media_replace_verifies_staged_and_published_bytes(mocker, failure):
+    production = StubProductionStorage()
+    production.add("foo.jpg", b"old")
+    local = StubLocalStorage({"foo.jpg": b"replacement"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage",
+        return_value=(production, object()),
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    original_save = production.save
+    original_open = production.open
+
+    def save(path, content):
+        if path != "foo.jpg" and failure == "non-reserved stage":
+            return original_save("unexpected.tmp", content)
+        if (path == "foo.jpg" and failure == "final truncation") or (
+            path != "foo.jpg" and failure == "stage truncation"
+        ):
+            return original_save(path, BytesIO(content.read(3)))
+        return original_save(path, content)
+
+    def open_file(path, mode):
+        if path == "foo.jpg" and failure == "final unreadable":
+            raise OSError("read failed")
+        return original_open(path, mode)
+
+    mocker.patch.object(production, "save", side_effect=save)
+    mocker.patch.object(production, "open", side_effect=open_file)
+    output, errors = StringIO(), StringIO()
+    with pytest.raises(CommandError, match=r"1 of 1 replacement"):
+        call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=errors)
+
+    stage = production.saved[0]
+    if failure == "non-reserved stage":
+        assert "storage returned non-reserved staging key unexpected.tmp" in errors.getvalue()
+        assert production._files == {"foo.jpg": b"old"}
+    elif failure == "stage truncation":
+        assert "failed content verification" in errors.getvalue()
+        assert production._files == {"foo.jpg": b"old"}
+    else:
+        assert "failed content verification" in errors.getvalue() or "read failed" in errors.getvalue()
+        assert f"complete recovery copy retained at {stage}" in errors.getvalue()
+        assert production._files[stage] == b"replacement"
     assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
 
 
@@ -962,6 +1009,40 @@ def test_media_replace_warns_when_missing_target_is_saved_under_different_name(m
     assert "planned=1 replaced=1 skipped=0 errors=0" in output.getvalue()
 
 
+@pytest.mark.parametrize("command", ["media_backup", "media_restore"])
+def test_media_sync_skips_explicit_replacement_stages(mocker, command):
+    path = "video.mp4"
+    source = StubOverwriteStorage({path: b"old"})
+    local = StubLocalStorage({path: b"new"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage",
+        return_value=(source, object()),
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    mocker.patch.object(source, "delete", side_effect=OSError("stage cleanup interrupted"))
+    call_command("media_replace", path, yes=True, stdout=StringIO(), stderr=StringIO())
+    stage = source.saved[0]
+
+    legacy_stage = f"{path}.django-cast-replace-{'a' * 32}_abc123.tmp"
+    neighbor = f"{path}.django-cast-replace-example.tmp"
+    source._files.update({legacy_stage: b"legacy stage", neighbor: b"ordinary file"})
+    target = StubOverwriteStorage({path: b"new", neighbor: b"ordinary file"})
+    storages_pair = (source, target) if command == "media_backup" else (target, source)
+    mocker.patch(
+        f"cast.management.commands.{command}.get_production_and_backup_storage",
+        return_value=storages_pair,
+    )
+
+    output, errors = StringIO(), StringIO()
+    call_command(command, stdout=output, stderr=errors)
+
+    assert target.saved == []
+    assert "copied=0 refreshed=0 unchanged=2 errors=0" in output.getvalue()
+    for staging_key in (stage, legacy_stage):
+        assert f"skipped reserved media staging key {staging_key}" in errors.getvalue()
+    assert stage.startswith(f"{path}.django-cast-refresh-")
+
+
 def test_media_replace_warns_when_staged_replacement_cleanup_fails(mocker):
     output = StringIO()
     error_output = StringIO()
@@ -975,7 +1056,7 @@ def test_media_replace_warns_when_staged_replacement_cleanup_fails(mocker):
     original_delete = production.delete
 
     def fail_staged_delete(path):
-        if ".django-cast-replace-" in path:
+        if ".django-cast-refresh-" in path:
             raise RuntimeError("cleanup failed")
         original_delete(path)
 
@@ -1586,8 +1667,8 @@ def test_media_replace_removes_partial_requested_stage(mocker):
         "cast.management.commands.media_replace.get_production_and_backup_storage", return_value=(production, object())
     )
     mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
-    stage = "foo.jpg.django-cast-replace-" + "a" * 32 + ".tmp"
-    mocker.patch("cast.management.commands.media_replace.temporary_replacement_path", return_value=stage)
+    stage = "foo.jpg.django-cast-refresh-" + "a" * 32 + ".tmp"
+    mocker.patch("cast.management.commands.media_replace.temporary_refresh_path", return_value=stage)
 
     def fail_save(name, content):
         production.add(name, content.read(3))

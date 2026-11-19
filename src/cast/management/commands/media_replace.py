@@ -1,15 +1,15 @@
 from argparse import ArgumentParser
 from typing import Any
-from uuid import uuid4
 
 from django.core.files.storage import FileSystemStorage
 from django.core.management.base import BaseCommand, CommandError
 
-from .storage_backend import get_production_and_backup_storage
-
-
-def temporary_replacement_path(path: str) -> str:
-    return f"{path}.django-cast-replace-{uuid4().hex}.tmp"
+from .storage_backend import (
+    content_digest,
+    get_production_and_backup_storage,
+    is_media_staging_key,
+    temporary_refresh_path,
+)
 
 
 class Command(BaseCommand):
@@ -56,15 +56,21 @@ class Command(BaseCommand):
                     self.stdout.write(f"planned replace: {path}")
                     continue
                 staged_names: set[str] = set()
-                saved_name = ""
+                recovery_name = None
                 try:
+                    source_digest = content_digest(fs_storage, path)
                     with fs_storage.open(path, "rb") as in_f:
-                        requested_stage = temporary_replacement_path(path)
+                        requested_stage = temporary_refresh_path(path)
                         staged_names.add(requested_stage)
                         staged_name = production.save(requested_stage, in_f)
                         staged_names.add(staged_name)
                     if not production.exists(staged_name):
                         raise RuntimeError(f"staged replacement {staged_name} was not saved")
+                    if not is_media_staging_key(staged_name):
+                        raise RuntimeError(f"storage returned non-reserved staging key {staged_name}")
+                    staged_digest = content_digest(production, staged_name)
+                    if staged_digest != source_digest:
+                        raise RuntimeError(f"staged replacement {staged_name} failed content verification")
                     target_exists = production.exists(path)
                     with production.open(staged_name, "rb") as staged_f:
                         saved_name = production.save(path, staged_f)
@@ -79,6 +85,10 @@ class Command(BaseCommand):
                         raise RuntimeError(
                             f"storage saved replacement as {saved_name}; original {path} was not replaced"
                         )
+                    recovery_name = staged_name
+                    if content_digest(production, saved_name) != staged_digest:
+                        raise RuntimeError(f"published replacement {saved_name} failed content verification")
+                    recovery_name = None
                     if saved_name != path:
                         self.stderr.write(f"warning: {path} saved as {saved_name}")
                     replaced += 1
@@ -86,6 +96,9 @@ class Command(BaseCommand):
                 except Exception as exc:
                     errors += 1
                     self.stderr.write(f"error replacing {path}: {exc}")
+                    if recovery_name is not None:
+                        staged_names.discard(recovery_name)
+                        self.stderr.write(f"complete recovery copy retained at {recovery_name}; inspect before retry")
                 finally:
                     for staged_name in sorted(staged_names):
                         try:

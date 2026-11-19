@@ -74,8 +74,8 @@ def temporary_refresh_path(path: str) -> str:
     return f"{path}.django-cast-refresh-{uuid4().hex}.tmp"
 
 
-def is_refresh_key(path: str) -> bool:
-    return re.search(r"\.django-cast-refresh-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
+def is_media_staging_key(path: str) -> bool:
+    return re.search(r"\.django-cast-(?:refresh|replace)-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
 
 
 def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
@@ -228,7 +228,7 @@ def publish_staged_file(
         staged_names.add(staged_name)
         if not target_storage.exists(staged_name):
             raise RuntimeError(f"staged copy {staged_name} was not saved")
-        if not is_refresh_key(staged_name):
+        if not is_media_staging_key(staged_name):
             raise RuntimeError(f"storage returned non-reserved staging key {staged_name}")
         if content_digest(target_storage, staged_name) != source_before:
             raise RuntimeError(f"staged copy {staged_name} failed content verification")
@@ -310,8 +310,8 @@ def sync_media_files(
     result = SyncResult()
     try:
         for num, path in enumerate(storage_walk_paths(source_storage)):
-            if is_refresh_key(path):
-                message = f"skipped reserved refresh staging key {path}; inspect and remove manually"
+            if is_media_staging_key(path):
+                message = f"skipped reserved media staging key {path}; inspect and remove manually"
                 if report_error is not None:
                     report_error(message)
                 else:

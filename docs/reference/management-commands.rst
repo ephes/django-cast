@@ -352,8 +352,9 @@ Options:
     Retried commands do not automatically consume or delete older recovery keys.
     Missing-copy writes are also staged and their partial final keys are
     cleaned on exceptions under the same-host publisher lock. A run that is
-    killed can leave a staged ``.tmp`` key in the backup storage. Backup and restore skip the exact reserved refresh-key pattern
-    described below; inspect and remove abandoned objects manually.
+    killed can leave a staged ``.tmp`` key on storage. Backup and restore skip and
+    report reserved media staging keys. Inspect and remove abandoned objects
+    manually.
 
     With this option the command prints
     ``copied=<n> refreshed=<n> unchanged=<n> errors=<n>``. A path that cannot be
@@ -363,11 +364,12 @@ Options:
 
 Backup and restore reserve keys ending in
 ``.django-cast-refresh-<32 lowercase hexadecimal characters>.tmp`` for temporary
-refresh data, including Django-generated ``_<alphanumeric>`` suffixes before
-``.tmp``. Backends returning any other staging name are refused before
-publication and that incomplete/unverified stage is cleaned up. Such source objects are skipped in every synchronization mode,
-with a diagnostic naming each skipped key, without deleting source objects or
-counting a successful copy. Similar names outside this precise pattern remain
+sync and replacement data. Backup and restore also recognize legacy
+``.django-cast-replace-<32 lowercase hexadecimal characters>.tmp`` keys. Both
+patterns allow Django-generated ``_<alphanumeric>`` suffixes before ``.tmp``.
+If a backend returns an unreserved staging name, publication fails and cleanup
+attempts to remove the stage. Reserved source keys are skipped in every sync
+mode and reported by name. They remain on the source storage. Similar names outside this precise pattern remain
 ordinary media. Inspect leftovers before removing them manually; arbitrary
 backend-renamed temporary keys from older versions require manual inspection too.
 
@@ -417,16 +419,24 @@ Options:
 The command prints summary counters in the form
 ``planned=<n> replaced=<n> skipped=<n> errors=<n>``. Missing local files are
 reported as skipped. Replacement files are staged to a temporary production
-key before the target path is written. For existing production files, the
-command only reports success when the storage backend saves back to the exact
+key before the target path is written. Replacement and sync share the reserved
+``.django-cast-refresh-<uuid>.tmp`` suffix. Backup and restore inventory also
+skips legacy ``.django-cast-replace-<uuid>.tmp`` keys and reports the excluded
+keys on stderr. The command verifies the staged bytes against the local file
+and reopens the published object to verify its bytes before reporting success.
+Each SHA-256 read uses the same 16 GiB ceiling and size-scaled deadline as
+media backup. For existing production files, the command only reports success
+when the storage backend saves back to the exact
 requested path; if the backend auto-generates a different name, the generated
 file is removed, the original path is left untouched, and the path is reported
 as an error.
 
 A failed replacement does not stop the run: the remaining paths are still
-attempted and every requested/returned temporary staging key is cleaned up,
-including a partial write whose save failed before returning a name. Cleanup
-failures are reported separately without hiding the replacement failure. After printing the summary, the
+attempted. If the published object cannot be read back or its bytes differ,
+the command reports the verified staging key it retained for recovery.
+Inspect that key before retrying or deleting it manually. Other staging keys
+are cleaned up, including partial writes whose save failed before returning a
+name. Cleanup failures are reported separately. After printing the summary, the
 command exits with ``CommandError`` (a non-zero exit status) when at least one
 replacement failed, even if others succeeded, so automation can detect a
 partial run. Skipped paths and ``--dry-run`` do not affect the exit status.
