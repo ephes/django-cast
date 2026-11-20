@@ -17,6 +17,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Reject revisions belonging to another object before assigning an episode number.
+- Keep episode and revision objects retryable when saving episode numbering fails.
 - Keep modal facet snapshots and taxonomy counts on the resolved blog's database.
 - Reuse prefetched image and gallery renditions in warm post previews.
 - Resolve database search membership once per modal facet request.

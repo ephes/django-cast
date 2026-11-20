@@ -93,7 +93,10 @@ settings panel and in the Django admin. The behavior is disabled by default.
 When enabled, django-cast assigns ``next_episode_number`` to blank full episodes
 on first real publish, skips manually used numbers under the same podcast, and
 then advances the counter. Draft saves and future scheduling approvals do not
-consume numbers.
+consume numbers. The numbering helper requires supplied publish and previous
+revisions to belong to the episode on the same database. If the numbering
+helper's own writes fail, callers can retry with the same episode and revision
+objects.
 
 Podcast pages also expose an optional ``itunes_type`` setting for Apple Podcasts
 channel ordering. Leave it blank to omit ``itunes:type`` from feeds, or set it

@@ -69,7 +69,7 @@ def _next_available_episode_number(podcast: Podcast, episode: Episode) -> int:
 def _update_revision_episode_number(revision: Revision | None, episode_number: int) -> None:
     if revision is None:
         return
-    revision.content["episode_number"] = episode_number
+    revision.content = {**revision.content, "episode_number": episode_number}
     revision.save(update_fields=["content"])
 
 
@@ -110,39 +110,49 @@ def assign_episode_number_for_publish(
     previous_revision: Revision | None = None,
 ) -> int | None:
     using = episode._state.db or router.db_for_write(type(episode), instance=episode)
-    if any(item is not None and item._state.db != using for item in (revision, previous_revision)):
-        raise ValidationError("The revision belongs to a different database.")
+    for item in (revision, previous_revision):
+        if item is None:
+            continue
+        if item._state.db != using:
+            raise ValidationError("The revision belongs to a different database.")
+        if (item.content_type_id, str(item.object_id)) != (episode.content_type_id, str(episode.pk)):
+            raise ValidationError("The revision belongs to a different object.")
     podcast = _get_episode_podcast(episode)
     if podcast is None:
         return None
 
-    with transaction.atomic(using=using):
-        from cast.models import Podcast
+    original_content = revision.content if revision is not None else None
+    try:
+        with transaction.atomic(using=using):
+            from cast.models import Podcast
 
-        locked_podcast = Podcast.objects.using(using).select_for_update().get(pk=podcast.pk)
+            locked_podcast = Podcast.objects.using(using).select_for_update().get(pk=podcast.pk)
 
-        already_published, current_episode_number, live_revision_id = _current_publish_state(episode)
-        if _should_preserve_current_episode_number(
-            episode,
-            revision,
-            previous_revision,
-            already_published,
-            current_episode_number,
-            live_revision_id,
-        ):
-            assert current_episode_number is not None
-            episode.episode_number = current_episode_number
-            _update_revision_episode_number(revision, current_episode_number)
-            return current_episode_number
-        if already_published:
-            return None
+            already_published, current_episode_number, live_revision_id = _current_publish_state(episode)
+            preserve_current_number = _should_preserve_current_episode_number(
+                episode,
+                revision,
+                previous_revision,
+                already_published,
+                current_episode_number,
+                live_revision_id,
+            )
+            if preserve_current_number:
+                assert current_episode_number is not None
+                episode_number = current_episode_number
+            else:
+                if already_published or not _is_first_publish_candidate(episode, locked_podcast):
+                    return None
+                episode_number = _next_available_episode_number(locked_podcast, episode)
 
-        if not _is_first_publish_candidate(episode, locked_podcast):
-            return None
+            _update_revision_episode_number(revision, episode_number)
+            if not preserve_current_number:
+                locked_podcast.next_episode_number = episode_number + 1
+                locked_podcast.save(update_fields=["next_episode_number"])
+    except BaseException:
+        if revision is not None:
+            revision.content = original_content
+        raise
 
-        episode_number = _next_available_episode_number(locked_podcast, episode)
-        episode.episode_number = episode_number
-        _update_revision_episode_number(revision, episode_number)
-        locked_podcast.next_episode_number = episode_number + 1
-        locked_podcast.save(update_fields=["next_episode_number"])
-        return episode_number
+    episode.episode_number = episode_number
+    return episode_number

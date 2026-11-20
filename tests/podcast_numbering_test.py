@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from xml.etree import ElementTree
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.db import close_old_connections, connection
 from django.urls import reverse
@@ -350,6 +351,90 @@ def test_service_without_revision_assigns_object_and_counter(podcast, audio, bod
     assert episode.episode_number == 4
     podcast.refresh_from_db()
     assert podcast.next_episode_number == 5
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("as_previous_revision", [False, True])
+def test_service_rejects_revision_of_another_episode(podcast, audio, body, as_previous_revision):
+    enable_numbering(podcast, next_number=4)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="number-target")
+    other = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="different-episode")
+    other_revision = other.save_revision()
+    own_revision = episode.save_revision()
+    revision = own_revision if as_previous_revision else other_revision
+    previous_revision = other_revision if as_previous_revision else None
+
+    with pytest.raises(ValidationError, match="revision belongs to a different object"):
+        assign_episode_number_for_publish(episode, revision, previous_revision=previous_revision)
+
+    assert episode.episode_number is None
+    episode.refresh_from_db()
+    assert episode.episode_number is None
+    for item in (own_revision, other_revision):
+        item.refresh_from_db()
+        assert item.content["episode_number"] is None
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == 4
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("already_published", [False, True])
+def test_service_can_retry_with_same_objects_after_revision_save_fails(
+    podcast, audio, body, mocker, already_published
+):
+    enable_numbering(podcast, next_number=4)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="retry-numbering")
+    revision = episode.save_revision()
+    if already_published:
+        publish_episode(Episode.objects.get(pk=episode.pk))
+    original_content = revision.content
+    original_save = revision.save
+    save_error = RuntimeError("synthetic revision save failure")
+
+    def fail_after_write(**kwargs):
+        original_save(**kwargs)
+        raise save_error
+
+    revision_save = mocker.patch.object(revision, "save", side_effect=fail_after_write)
+    with pytest.raises(RuntimeError, match="synthetic revision save failure"):
+        assign_episode_number_for_publish(episode, revision)
+
+    assert episode.episode_number is None
+    assert revision.content is original_content
+    assert revision.content["episode_number"] is None
+    assert type(revision).objects.get(pk=revision.pk).content["episode_number"] is None
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == (5 if already_published else 4)
+
+    revision_save.side_effect = original_save
+    assert assign_episode_number_for_publish(episode, revision) == 4
+    assert episode.episode_number == 4
+    assert revision.content["episode_number"] == 4
+    revision.refresh_from_db()
+    podcast.refresh_from_db()
+    assert revision.content["episode_number"] == 4
+    assert podcast.next_episode_number == 5
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("with_revision", [False, True])
+def test_service_can_retry_after_counter_save_fails(podcast, audio, body, mocker, with_revision):
+    enable_numbering(podcast, next_number=4)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="retry-counter")
+    revision = episode.save_revision() if with_revision else None
+
+    counter_save = mocker.patch.object(Podcast, "save", side_effect=RuntimeError("synthetic counter save failure"))
+    with pytest.raises(RuntimeError, match="synthetic counter save failure"):
+        assign_episode_number_for_publish(episode, revision)
+    mocker.stop(counter_save)
+
+    assert episode.episode_number is None
+    if revision is not None:
+        assert revision.content["episode_number"] is None
+        assert type(revision).objects.get(pk=revision.pk).content["episode_number"] is None
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == 4
+    assert assign_episode_number_for_publish(episode, revision) == 4
 
 
 @pytest.mark.django_db
