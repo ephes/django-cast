@@ -81,6 +81,18 @@ class TestPostDetail:
         assert "Title of my Site!" not in content
         assert "Description of my site" not in content
 
+    def test_post_uses_blog_default_after_session_theme_is_retired(self, client, post, blog):
+        blog.template_base_dir = "plain"
+        blog.save()
+        session = client.session
+        session["template_base_dir"] = "retired-theme"
+        session.save()
+
+        response = client.get(post.get_url())
+
+        assert response.status_code == 200
+        assert "cast/plain/post.html" in [template.name for template in response.templates]
+
     def test_post_social_metadata_prefers_promote_fields(self, client, post):
         post.seo_title = "Concise search title"
         post.search_description = "A concise search and social description."

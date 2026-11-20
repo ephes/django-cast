@@ -45,13 +45,11 @@ following precedence chain (highest wins):
 
 3. **Session** — ``request.session["template_base_dir"]``, set when a user
    selects a theme via the ``/cast/select-theme/`` endpoint or the theme API.
-   This is the canonical source of truth for the active theme: after a full
-   page reload without a ``?theme`` query parameter, the rendered theme always
-   matches the session value.
+   The saved choice applies while it is still available. If the theme is
+   retired, requests fall back to the configured blog or site theme.
 
 4. **Blog-level setting** — the ``template_base_dir`` field on the Blog page.
-   Acts as a default for all users viewing that blog who have not chosen a
-   theme in their session.
+   Acts as the default for visitors without an available session theme.
 
 5. **Site-level setting** — the ``TemplateBaseDirectory`` Wagtail site
    setting. The global fallback when none of the above are set. Defaults to
@@ -479,7 +477,9 @@ django-cast discovers themes by scanning the template directories of all
 configured Django template loaders that implement ``get_dirs()``
 (``FilesystemLoader``, ``CachedLoader``, ``AppDirectoriesLoader``). It
 examines only immediate directories under ``<template-root>/cast/<theme>/``
-and checks that each candidate contains all strictly required templates.
+and checks that each strictly required template is a regular file. A symlink
+to a regular file also qualifies. A directory at a soft-required template
+path produces a warning.
 Unrelated template trees and nested theme subdirectories are not traversed.
 Discovered theme identities are deduplicated and sorted by name. Themes in
 other layouts must be moved to this supported layout or registered manually.

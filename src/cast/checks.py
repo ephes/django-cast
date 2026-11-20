@@ -412,7 +412,7 @@ def check_theme_contract(
                 get_template(template_name)
             except TemplateDoesNotExist:
                 message = f"Theme '{theme}' is missing soft-required template '{template_name}'."
-            except TemplateSyntaxError as exc:
+            except (IsADirectoryError, TemplateSyntaxError) as exc:
                 message = f"Theme '{theme}' cannot load soft-required template '{template_name}': {exc}"
             else:
                 continue
