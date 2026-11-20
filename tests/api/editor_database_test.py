@@ -4,11 +4,14 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import connections
+from django.test import override_settings
 from django.urls import reverse
 from taggit.models import Tag
 from wagtail.models import Locale, Page, Revision
 
-from cast.models import Blog, Podcast, Post
+from cast.api.editor.views import PostEditorMixin
+from cast.models import Blog, Episode, Podcast, Post
+from tests.factories import EpisodeFactory, PostFactory
 
 
 class EditorRouter:
@@ -70,6 +73,135 @@ def test_routed_editor_revision_failure_rolls_back(settings, api_client, monkeyp
     assert after == before
     assert not Page.objects.using("default").filter(slug__in=["routed-child", "changed-slug"]).exists()
     ContentType.objects.clear_cache()
+
+
+@pytest.fixture
+def replica_parent():
+    def create(parent):
+        with override_settings(DATABASE_ROUTERS=[EditorRouter()]):
+            ContentType.objects.clear_cache()
+            try:
+                locale = Locale.objects.create(language_code="en")
+                root = Page.add_root(instance=Page(title="Replica root", slug="replica-root", locale=locale))
+                return root.add_child(
+                    instance=type(parent)(pk=parent.pk, title="Replica parent", slug="replica-parent", locale=locale)
+                )
+            finally:
+                ContentType.objects.clear_cache()
+
+    return create
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("kind", ["post", "episode"])
+def test_publish_response_reads_published_generation(
+    settings, api_client, admin_user, blog, podcast, audio, replica_parent, monkeypatch, kind
+):
+    parent = blog if kind == "post" else podcast
+    factory = PostFactory if kind == "post" else EpisodeFactory
+    extra = {"podcast_audio": audio} if kind == "episode" else {}
+    page = factory(parent=parent, title="Draft title", slug="draft-slug", owner=admin_user, live=False, **extra)
+    page.title = "Published title"
+    page.slug = "published-slug"
+    revision = page.save_revision(user=admin_user)
+
+    stale_parent = replica_parent(parent)
+    with override_settings(DATABASE_ROUTERS=[EditorRouter()]):
+        ContentType.objects.clear_cache()
+        stale_parent.add_child(
+            instance=type(page)(
+                pk=page.pk, title="Stale title", slug="stale-slug", live=False, locale_id=stale_parent.locale_id
+            )
+        )
+        ContentType.objects.clear_cache()
+
+    class ReadRouter:
+        published = False
+
+        def db_for_read(self, model, **hints):
+            if self.published and model in (Post, Episode):
+                return "migration_other"
+            return None
+
+    read_router = ReadRouter()
+    settings.DATABASE_ROUTERS = [read_router]
+    original_publish = Revision.publish
+
+    def publish(self, *args, **kwargs):
+        result = original_publish(self, *args, **kwargs)
+        read_router.published = True
+        return result
+
+    monkeypatch.setattr(Revision, "publish", publish)
+    api_client.force_authenticate(user=admin_user)
+    response = api_client.post(reverse(f"cast:api:editor_{kind}_publish", args=[page.pk]), {}, format="json")
+
+    assert response.status_code == 200, response.content
+    data = response.json()
+    assert data["status"] == "live"
+    assert data["live"] is True
+    assert data["title"] == "Published title"
+    assert data["page_slug"] == "published-slug"
+    assert data["public_url"].endswith("/published-slug/")
+    assert data["latest_revision_id"] == data["published_revision_id"] == revision.pk
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("kind", ["post", "episode"])
+def test_create_checks_siblings_under_locked_writer_parent(
+    settings, api_client, admin_user, blog, podcast, replica_parent, monkeypatch, kind
+):
+    parent = blog if kind == "post" else podcast
+    factory = PostFactory if kind == "post" else EpisodeFactory
+    factory(parent=parent, title="Writer child", slug="reserved-slug", owner=admin_user)
+    stale_parent = replica_parent(parent)
+    with override_settings(DATABASE_ROUTERS=[EditorRouter()]):
+        ContentType.objects.clear_cache()
+        root = stale_parent.get_parent()
+        ancestor = root.add_child(instance=Page(title="Previous location", slug="previous-location"))
+        stale_parent.move(ancestor, pos="last-child")
+        stale_parent.refresh_from_db()
+        ContentType.objects.clear_cache()
+    assert stale_parent.path != parent.path
+
+    class ReadRouter:
+        locked = False
+
+        def db_for_read(self, model, **hints):
+            if self.locked and model in (Blog, Podcast):
+                return "migration_other"
+            return None
+
+    read_router = ReadRouter()
+    settings.DATABASE_ROUTERS = [read_router]
+    original_lock = PostEditorMixin._lock_parent_for_slug_check
+
+    def route_after_lock(execute, sql, params, many, context):
+        result = execute(sql, params, many, context)
+        if sql.startswith('UPDATE "wagtailcore_page" SET "numchild"'):
+            read_router.locked = True
+        return result
+
+    def lock_parent(self, selected_parent, *, noun):
+        with connections["default"].execute_wrapper(route_after_lock):
+            try:
+                locked_parent = original_lock(self, selected_parent, noun=noun)
+                assert read_router.locked
+                return locked_parent
+            finally:
+                read_router.locked = False
+
+    monkeypatch.setattr(PostEditorMixin, "_lock_parent_for_slug_check", lock_parent)
+    api_client.force_authenticate(user=admin_user)
+    response = api_client.post(
+        reverse(f"cast:api:editor_{kind}_create"),
+        {"parent": {"id": parent.pk}, "title": "New child", "slug": "reserved-slug", "overview": []},
+        format="json",
+    )
+
+    assert response.status_code == 400, response.content
+    errors = response.json()["errors"]
+    assert errors.get("slug", [{}])[0].get("code") == "duplicate", errors
 
 
 @pytest.mark.parametrize("case", ["split_write", "split_read", "instance"])
