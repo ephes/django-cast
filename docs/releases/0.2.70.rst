@@ -17,6 +17,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Fill missing player cue ends in one pass after sorting, including equal-start groups.
+- Skip malformed chapter entries in the player payload and chapters endpoint.
 - Resolve the selected blog in one query before syncing renditions.
 - Canonicalize SVG rendition specifications before detecting misses in post previews.
 - Fall back to the configured theme when a visitor's session theme has been retired.

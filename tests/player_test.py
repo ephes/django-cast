@@ -2,6 +2,7 @@
 
 import logging
 from datetime import timedelta
+from unittest.mock import PropertyMock
 
 import pytest
 from django.urls import reverse
@@ -9,7 +10,7 @@ from django.urls import reverse
 from cast import appsettings
 from cast.checks import check_cast_audio_player_settings, check_cast_setting_types
 from cast.devdata import create_transcript
-from cast.models.audio import ChapterMark
+from cast.models.audio import Audio, ChapterMark
 from cast.player import (
     _clock_seconds,
     _finite_number,
@@ -217,6 +218,34 @@ class TestBuildCues:
         transcript.podlove.save("podlove.json", ContentFile(b"[1, 2, 3]"))
         transcript.save()
         assert build_cues(audio, episode=episode, duration=None) == []
+
+
+def test_build_cues_bounds_equal_start_comparisons(mocker):
+    comparisons = 0
+
+    class CountingStart(float):
+        def __lt__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            return super().__lt__(other)
+
+        def __gt__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            return super().__gt__(other)
+
+    count = 2_000
+    segments = [{"start": CountingStart(3), "text": "later"}]
+    segments.extend({"start": CountingStart(1), "text": str(index)} for index in range(count))
+    mocker.patch("cast.player._load_sanitized_segments", return_value=segments)
+    mocker.patch("cast.player._timestamp_seconds", side_effect=lambda value: value)
+
+    cues = build_cues(None, episode=None, duration=10)
+
+    assert cues == [{"start": 1, "end": 3, "speaker": "", "text": str(index)} for index in range(count)] + [
+        {"start": 3, "end": 10, "speaker": "", "text": "later"}
+    ]
+    assert comparisons <= 5 * len(segments)
 
 
 @pytest.mark.django_db
@@ -504,6 +533,28 @@ def test_subsecond_chapters_survive_audio_player_and_chapters_endpoint(client, e
     response = client.get(reverse("cast:chapters-json", kwargs={"pk": audio.pk}), {"episode_id": episode.pk})
     assert response.status_code == 200
     assert [chapter["startTime"] for chapter in response.json()["chapters"]] == [60.1, 60.9]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("valid_container", [True, False])
+def test_player_and_chapters_endpoint_agree_on_malformed_data(
+    client, episode, rf_request, mocker, caplog, valid_container
+):
+    audio = episode.podcast_audio
+    chapter = {"start": "00:01:00.100", "title": "Intro"}
+    # Simulate restored chapter data at the input shared by both public surfaces.
+    rows = [None, chapter, "bad row", 42, {"start": "invalid", "title": "Bad time"}] if valid_container else chapter
+    mocker.patch.object(Audio, "chapters", new_callable=PropertyMock, return_value=rows)
+
+    with caplog.at_level(logging.INFO, logger="cast.player"):
+        payload = build_player_payload(audio, post=episode, request=rf_request)
+        response = client.get(reverse("cast:chapters-json", kwargs={"pk": audio.pk}), {"episode_id": episode.pk})
+
+    assert payload["chapters"] == ([{"start": 60.1, "title": "Intro"}] if valid_container else [])
+    assert response.status_code == 200
+    assert response.json()["chapters"] == ([{"startTime": 60.1, "title": "Intro"}] if valid_container else [])
+    expected_log = "skipped 4 chapter" if valid_container else "invalid chapter container"
+    assert sum(expected_log in message for message in caplog.messages) == 2
 
 
 @pytest.mark.django_db
