@@ -17,6 +17,7 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Seed a new transcript correction sidecar from the Podlove read used to validate segment timing.
 - Fill missing player cue ends in one pass after sorting, including equal-start groups.
 - Skip malformed chapter entries in the player payload and chapters endpoint.
 - Resolve the selected blog in one query before syncing renditions.

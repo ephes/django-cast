@@ -318,12 +318,13 @@ def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _S
     """
     _uses_audio(episode, transcript)
     services.validate_editor_artifacts(transcript)
-    podlove.validate_edit_times(transcript._load_transcript_json("podlove"))
+    podlove_data = transcript._load_transcript_json("podlove")
+    podlove.validate_edit_times(podlove_data)
     data = transcript.corrections_data
     if _is_current(data, transcript.mapping_fingerprint()):
         previously = {segment["start_ms"] for segment in data["segments"] if segment["replacements"]}
         return _State(data, _stored_episode(transcript, data), previously)
-    texts = podlove.get_texts(transcript._load_transcript_json("podlove"))
+    texts = podlove.get_texts(podlove_data)
     if not texts:
         return CorrectionsResult(STATUS_NO_SEGMENTS)
     return _State(_fresh_data(transcript, texts), _initial_episode(transcript, episode), fresh=True)

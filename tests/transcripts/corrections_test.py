@@ -2,6 +2,7 @@
 
 import json
 import logging
+from io import BytesIO
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -207,6 +208,32 @@ def test_dry_run_writes_nothing(transcript):
 
     assert result.changed == 2
     assert file_bytes(transcript) == before
+
+
+@pytest.mark.django_db
+def test_fresh_corrections_seed_from_the_podlove_read_used_for_timing_validation(transcript, monkeypatch):
+    storage = transcript.podlove.storage
+    original_open = storage.open
+    admitted = podlove_data([(1000, "First snapshot")])
+    replacement = podlove_data([(2000, "Later snapshot")])
+    # Strict artifact validation and timing validation each see the first snapshot.
+    snapshots = iter((admitted, admitted, replacement))
+    podlove_opens = []
+
+    def open_artifact(name, mode="rb"):
+        if name != transcript.podlove.name:
+            return original_open(name, mode)
+        data = next(snapshots)
+        podlove_opens.append(data)
+        return BytesIO(json.dumps(data).encode("utf-8"))
+
+    monkeypatch.setattr(storage, "open", open_artifact)
+
+    state = corrections._load_state(transcript)
+
+    assert state.fresh
+    assert state.data["segments"] == [{"start_ms": 1000, "raw_text": "First snapshot", "replacements": []}]
+    assert len(podlove_opens) == 2
 
 
 @pytest.mark.django_db
