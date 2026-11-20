@@ -731,7 +731,9 @@ class TestGeneratedFeeds:
             podcast_audio=episode.podcast_audio,
         )
         for entry in (episode, other_episode):
-            EpisodeContributor.objects.create(episode=entry, contributor=known, role=EpisodeContributor.ROLE_HOST)
+            EpisodeContributor.objects.create(
+                episode=entry, contributor=known, role=EpisodeContributor.ROLE_HOST, sort_order=0
+            )
             EpisodeContributor.objects.create(episode=entry, contributor=legacy, role="producer", sort_order=1)
 
         class CountingChoices(tuple):
