@@ -14,8 +14,9 @@ from rest_framework.exceptions import APIException
 from taggit.models import Tag
 
 from cast import appsettings
+from cast.blog_index import live_posts_below_blog, public_posts
 from cast.filters import parse_date_facets
-from cast.models import Blog, Post
+from cast.models import Blog
 from cast.models.snippets import PostCategory
 from cast.search_utils import ModelSearchQuerySet, safe_modelsearch_results
 
@@ -84,7 +85,7 @@ def _facet_snapshot(using: str) -> Iterator[None]:
     change. Repeatable read or serializable already give one snapshot; under a
     weaker level each read sees its own committed state, as before exact
     snapshots existed, instead of failing a public endpoint. The public view
-    opts out of ``ATOMIC_REQUESTS`` so requests always own the snapshot.
+    opts out of ``ATOMIC_REQUESTS`` on the default database.
     """
     connection = connections[using]
     if connection.vendor not in {"sqlite", "postgresql"}:
@@ -103,15 +104,17 @@ def _facet_snapshot(using: str) -> Iterator[None]:
 
 
 def get_modal_facet_counts(blog: Blog, params: Mapping[str, str]) -> ModalFacetResponse:
-    using = Post.objects.db
+    posts = live_posts_below_blog(blog)
+    using = posts.db
     with _facet_snapshot(using):
-        return _get_modal_facet_counts(blog, params, using)
+        posts = posts.using(using)
+        base_queryset = posts if blog.pk is None else public_posts(posts)
+        return _get_modal_facet_counts(base_queryset, params)
 
 
-def _get_modal_facet_counts(blog: Blog, params: Mapping[str, str], using: str) -> ModalFacetResponse:
+def _get_modal_facet_counts(base_queryset: models.QuerySet, params: Mapping[str, str]) -> ModalFacetResponse:
     selection = _normalize_selection(params)
     configured_groups = _get_configured_modal_groups()
-    base_queryset = blog.unfiltered_published_posts.using(using)
     aggregation_resolver = AggregationQueryResolver()
 
     result_queryset = _apply_selection(base_queryset, selection)

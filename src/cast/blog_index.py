@@ -31,13 +31,20 @@ def public_posts(queryset: Any) -> Any:
     return queryset
 
 
-def unfiltered_published_posts(blog: Blog) -> models.QuerySet[Post]:
-    """Return the live public posts below ``blog`` in display order."""
+def live_posts_below_blog(blog: Blog) -> models.QuerySet[Post]:
+    """Build the blog's live post queryset before reading visibility restrictions."""
     from cast.models.pages import Post
 
+    posts = Post.objects.using(blog._state.db)
     if blog.pk is None:
-        return Post.objects.none()
-    return public_posts(Post.objects.using(blog._state.db).live()).descendant_of(blog).order_by("-visible_date", "-pk")
+        return posts.none()
+    return posts.live().descendant_of(blog).order_by("-visible_date", "-pk")
+
+
+def unfiltered_published_posts(blog: Blog) -> models.QuerySet[Post]:
+    """Return the live public posts below ``blog`` in display order."""
+    posts = live_posts_below_blog(blog)
+    return posts if blog.pk is None else public_posts(posts)
 
 
 def create_blog_filterset(blog: Blog, get_params: QueryDict) -> PostFilterset:

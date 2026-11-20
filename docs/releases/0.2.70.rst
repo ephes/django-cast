@@ -17,6 +17,7 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Keep modal facet snapshots and taxonomy counts on the resolved blog's database.
 - Copy nested Podlove font overrides for each player configuration.
 - Report malformed nested Podlove theme settings in Django system checks
   and keep the player configuration endpoint usable with safe fallbacks.

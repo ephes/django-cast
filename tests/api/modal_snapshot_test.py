@@ -3,11 +3,52 @@
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from django.db import close_old_connections, connection, transaction
+from django.contrib.contenttypes.models import ContentType
+from django.db import close_old_connections, connection, connections, transaction
+from django.test.utils import CaptureQueriesContext
 from taggit.models import Tag
+from wagtail.models import Locale, Page
 
 from cast import modal_facet_counts as facets
-from cast.models import Post
+from cast.models import Blog, Post
+from cast.models.pages import PostTag
+from cast.models.snippets import PostCategory
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_modal_facets_use_the_database_of_the_resolved_blog(blog, post):
+    alias = "migration_other"
+    locale, _ = Locale.objects.using(alias).get_or_create(language_code=post.locale.language_code)
+    # Copy the page rows to give both databases identical tree paths and IDs.
+    for instance in (blog, post):
+        page = Page.objects.get(pk=instance.pk)
+        page.locale_id = locale.pk
+        page.content_type_id = ContentType.objects.db_manager(alias).get_for_model(type(instance)).pk
+        page.owner_id = None
+        page.save_base(raw=True, using=alias, force_insert=True)
+        instance.save_base(raw=True, using=alias, force_insert=True)
+
+    for database, slug in (("default", "primary"), (alias, "secondary")):
+        tag = Tag.objects.using(database).create(name=slug, slug=slug)
+        category = PostCategory.objects.using(database).create(name=slug, slug=slug)
+        PostTag.objects.using(database).create(content_object_id=post.pk, tag_id=tag.pk)
+        Post.categories.through.objects.using(database).create(post_id=post.pk, postcategory_id=category.pk)
+
+    other_blog = Blog.objects.using(alias).get(pk=blog.pk)
+    assert other_blog.path == blog.path
+    with CaptureQueriesContext(connections["default"]) as default_queries:
+        result = facets.get_modal_facet_counts(other_blog, {})
+    assert result["result_count"] == 1
+    for group in ("tag_facets", "category_facets"):
+        assert result["groups"][group]["options"] == [{"slug": "secondary", "name": "secondary", "count": 1}]
+    assert list(default_queries) == []
+
+
+@pytest.mark.django_db
+def test_modal_facets_for_unsaved_blog_are_empty():
+    result = facets.get_modal_facet_counts(Blog(), {})
+    assert result["result_count"] == 0
+    assert all(group["all_count"] == 0 and not group["options"] for group in result["groups"].values())
 
 
 @pytest.mark.django_db
