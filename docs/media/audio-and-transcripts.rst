@@ -818,7 +818,9 @@ common-word list.
   occurrences found later; a rejected one is no longer proposed. Occurrences
   decided one by one keep their decision: approving a group leaves occurrences
   rejected individually as they are, and rejecting it keeps those approved
-  individually.
+  individually. A group action records each normalized original once per
+  replacement target, using the first spelling in the group. Updated decisions
+  follow the existing entries in group order.
 
 Editor decisions are stored as such and do not depend on what the current
 glossary still finds. A decision on one occurrence (position, original and
@@ -849,7 +851,7 @@ the replacements with their state (``auto``, ``approved``, ``rejected``), the
 proposals and the editor's decisions. It is never served: APIs, feeds, the
 player and theme templates read only the Podlove, DOTe and WebVTT files. For a
 transcript that has no sidecar yet, the first run takes the current Podlove
-text as raw text.
+text as raw text from the same read used to validate segment timing.
 
 Applying is a function of the raw text and the replacements that are not
 rejected: it rewrites the text of the corrected segments in Podlove, DOTe

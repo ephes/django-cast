@@ -2,6 +2,7 @@
 
 import json
 import logging
+from io import BytesIO
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -210,6 +211,32 @@ def test_dry_run_writes_nothing(transcript):
 
 
 @pytest.mark.django_db
+def test_fresh_corrections_seed_from_the_podlove_read_used_for_timing_validation(transcript, monkeypatch):
+    storage = transcript.podlove.storage
+    original_open = storage.open
+    admitted = podlove_data([(1000, "First snapshot")])
+    replacement = podlove_data([(2000, "Later snapshot")])
+    # Strict artifact validation and timing validation each see the first snapshot.
+    snapshots = iter((admitted, admitted, replacement))
+    podlove_opens = []
+
+    def open_artifact(name, mode="rb"):
+        if name != transcript.podlove.name:
+            return original_open(name, mode)
+        data = next(snapshots)
+        podlove_opens.append(data)
+        return BytesIO(json.dumps(data).encode("utf-8"))
+
+    monkeypatch.setattr(storage, "open", open_artifact)
+
+    state = corrections._load_state(transcript)
+
+    assert state.fresh
+    assert state.data["segments"] == [{"start_ms": 1000, "raw_text": "First snapshot", "replacements": []}]
+    assert len(podlove_opens) == 2
+
+
+@pytest.mark.django_db
 def test_transcript_without_podlove_segments(audio):
     transcript = Transcript.objects.create(audio=audio)
     assert refresh_transcript_corrections(transcript).status == STATUS_NO_SEGMENTS
@@ -297,6 +324,39 @@ def test_approved_original_also_replaces_unproposed_occurrences(audio, glossary_
     assert public_texts(transcript)[0] == {1000: "The newsletter Buttondown.", 2000: "Another Buttondown."}
     decisions = transcript.corrections_data["decisions"]
     assert decisions == [{"original": "tool", "to": "Buttondown", "state": STATE_APPROVED}]
+
+
+@pytest.mark.django_db
+def test_group_decisions_merge_once_and_keep_sidecar_order(transcript, mocker):
+    refresh_transcript_corrections(transcript)
+    data = transcript.corrections_data
+    target = "Synthetic Target"
+    kept = [{"original": f"Existing {index}", "to": target, "state": STATE_REJECTED} for index in range(128)]
+    other_target = {"original": "Variant 0", "to": "Other Target", "state": STATE_REJECTED}
+    replaced = {"original": "variant 0", "to": target, "state": STATE_APPROVED}
+    duplicate = {**replaced, "original": "VARIANT 0"}
+    data["decisions"] = [replaced, *kept[:64], other_target, duplicate, *kept[64:]]
+    transcript._write_corrections_data(data)
+    transcript.save(update_fields=["corrections"])
+
+    decide_correction_group(transcript, target, STATE_REJECTED, originals=[])
+    assert transcript.corrections_data["decisions"] == data["decisions"]
+
+    originals = [f"Variant {index}" for index in range(32)]
+    normalized = mocker.spy(corrections, "normalize_phrase")
+    decide_correction_group(transcript, target, STATE_REJECTED, originals=iter([*originals, " Variant  0 "]))
+
+    transcript.refresh_from_db()
+    assert transcript.corrections_data["decisions"] == [
+        *kept[:64],
+        other_target,
+        *kept[64:],
+        *({"original": original, "to": target, "state": STATE_REJECTED} for original in originals),
+    ]
+    assert normalized.call_args_list.count(mocker.call(replaced["original"])) == 1
+    assert normalized.call_args_list.count(mocker.call(" Variant  0 ")) == 1
+    # The kept decision is visited by the merge and by the subsequent glossary rebuild.
+    assert normalized.call_args_list.count(mocker.call(kept[0]["original"])) == 2
 
 
 @pytest.mark.django_db
