@@ -123,15 +123,20 @@ def _get_modal_facet_counts(base_queryset: models.QuerySet, params: Mapping[str,
 
     groups: dict[ModalFacetName, ModalFacetGroup] = {}
     for group_name in configured_groups:
-        selection_without_group = _apply_selection(search_queryset, selection, excluded_group=group_name)
-        all_count = _count_posts(selection_without_group, aggregation_resolver)
+        selected = selection.get(group_name)
+        if selected:
+            selection_without_group = _apply_selection(search_queryset, selection, excluded_group=group_name)
+            all_count = _count_posts(selection_without_group, aggregation_resolver)
+        else:
+            selection_without_group = result_queryset
+            all_count = result_count
         filtered_counts = _fetch_group_counts(group_name, selection_without_group, aggregation_resolver)
         universe = _fetch_universe(group_name, base_queryset, aggregation_resolver)
         options: list[ModalFacetOption] = []
         for slug, name in universe:
             options.append({"slug": slug, "name": name, "count": filtered_counts.get(slug, 0)})
         groups[group_name] = {
-            "selected": selection.get(group_name),
+            "selected": selected,
             "all_count": all_count,
             "options": options,
         }

@@ -1910,6 +1910,8 @@ Database search membership remains in SQL subqueries, including the aggregation
 fallback: result IDs are never expanded into a Python list or SQL parameters.
 Each request prepares database search membership once for the result count and
 all facet groups. The available options come from the blog's full public post set.
+An unselected group uses the result count for its ``all_count``. A selected
+group counts again with its own selection removed.
 Search index contents outside the database have no cross-system snapshot guarantee.
 
 Editor JSON admission

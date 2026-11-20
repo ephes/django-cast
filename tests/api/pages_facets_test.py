@@ -2,6 +2,8 @@ from datetime import datetime
 from urllib.parse import urlencode
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.request import Request
@@ -13,6 +15,7 @@ from cast.api.views import (
     FilteredPagesAPIViewSet,
 )
 from cast.models import PostCategory
+from cast.models.pages import PostTag
 from tests.factories import PostFactory, UserFactory
 
 SCANNER_SEARCH_PAYLOAD = "-9399862) UNION ALL SELECT CONCAT('a','b'),NULL,NULL -- -"
@@ -411,6 +414,51 @@ def test_modal_resolves_search_once_for_all_facet_branches(blog, body, mocker, r
             slug: count if matches else 0 for slug, count in counts.items()
         }
     search.assert_called_once()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("selected", [False, True])
+def test_modal_reuses_result_count_for_unselected_groups(blog, body, selected):
+    _create_modal_facet_posts(blog, body)
+    tagged = PostTag.objects.get(content_object__slug="python-january", tag__slug="python")
+    PostTag.objects.create(content_object_id=tagged.content_object_id, tag_id=tagged.tag_id)
+
+    params = {"tag_facets": "python"} if selected else {}
+    with CaptureQueriesContext(connection) as queries:
+        result = modal_facet_counts.get_modal_facet_counts(blog, params)
+
+    assert result == {
+        "mode": "modal",
+        "result_count": 2 if selected else 3,
+        "groups": {
+            "date_facets": {
+                "selected": "",
+                "all_count": 2 if selected else 3,
+                "options": [
+                    {"slug": "2026-02", "name": "2026-02", "count": 1 if selected else 2},
+                    {"slug": "2026-01", "name": "2026-01", "count": 1},
+                ],
+            },
+            "tag_facets": {
+                "selected": "python" if selected else "",
+                "all_count": 3,
+                "options": [
+                    {"slug": "django", "name": "django", "count": 1},
+                    {"slug": "python", "name": "python", "count": 2},
+                ],
+            },
+            "category_facets": {
+                "selected": "",
+                "all_count": 2 if selected else 3,
+                "options": [
+                    {"slug": "til", "name": "Today I Learned", "count": 1 if selected else 2},
+                    {"slug": "weeknotes", "name": "WeekNotes", "count": 1},
+                ],
+            },
+        },
+    }
+    post_counts = [query for query in queries if query["sql"].startswith("SELECT COUNT(*) FROM (SELECT DISTINCT ")]
+    assert len(post_counts) == (2 if selected else 1)
 
 
 @pytest.mark.django_db
