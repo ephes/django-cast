@@ -3,6 +3,7 @@ from typing import cast
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.core.files.storage import Storage
 from django.template.loader import get_template
 from wagtail.images.blocks import ImageChooserBlock
 from wagtail.images.models import AbstractImage, AbstractRendition, Image
@@ -184,6 +185,23 @@ def test_get_srcset_images_for_slots_use_original_if_image_too_small():
     assert image_for_slot.srcset["avif"] == "https://example.com/test.avif 1w"
 
 
+def test_get_srcset_images_for_slots_shares_one_signed_original_url(mocker):
+    image = Image(file="original_images/tiny.jpg", width=1, height=1, collection=None)
+    storage = mocker.Mock(spec=Storage)
+    storage.url.side_effect = lambda name: f"https://example.com/{name}?signature={storage.url.call_count}"
+    image.file.storage = storage
+
+    result = get_srcset_images_for_slots(image, "gallery", renditions={})
+
+    assert len(result) > 1
+    storage.url.assert_called_once_with(image.file.name)
+    url = f"https://example.com/{image.file.name}?signature=1"
+    for slot, asset in result.items():
+        assert asset.src["jpeg"] == url
+        assert asset.srcset["jpeg"] == f"{url} 1w"
+        assert (asset.width, asset.height) == (min(slot.width, slot.height), slot.height)
+
+
 def test_get_srcset_images_for_slots_fallback_uses_renditions(monkeypatch):
     slot = renditions.Rectangle(Width(100), Height(100))
 
@@ -314,7 +332,7 @@ def test_gallery_block_with_layout_get_empty_images_from_cache():
     block = GalleryBlockWithLayout()
 
     # no images
-    values = block._get_images_from_repository(None, {"gallery": []})
+    values = block.from_repository_to_python(GalleryProxyRepository(), {"gallery": []})
     assert values["gallery"] == []
 
 
@@ -331,26 +349,11 @@ def test_gallery_block_with_layout_return_early():
     assert values_out == values_in
 
 
-def test_gallery_block_with_layout_from_repository_to_python(mocker):
-    class Image:
-        pk = 1
-
-    class Repository:
-        image_by_id: dict = {}
-        renditions_for_posts: dict = {}
-
+def test_gallery_block_with_layout_from_repository_to_python():
     block = GalleryBlockWithLayout()
-
-    # values ist not a list of image dicts, but a list of images
-    values = {
-        "gallery": [Image()],
-    }
-    result = block.from_repository_to_python(Repository(), values)
-    assert result == values
-
-    # values raises a KeyError and bulk_to_python_from_database is called
-    mocker.patch.object(block, "bulk_to_python_from_database", return_value=values)
-    result = block.from_repository_to_python(Repository(), {})
+    image = Image(pk=1, collection=None)
+    values = {"gallery": [image]}
+    result = block.from_repository_to_python(EmptyImageRepository(), values)
     assert result == values
 
 
@@ -415,12 +418,11 @@ def test_gallery_image_chooser_block_clean_none_with_deferred_validation():
 def test_gallery_block_with_layout_get_images_from_repository_skips_none():
     block = GalleryBlockWithLayout()
 
-    values = block._get_images_from_repository(None, {"gallery": [None]})
+    values = block.from_repository_to_python(GalleryProxyRepository(), {"gallery": [None]})
     assert values["gallery"] == []
 
-    # a saved draft revision serializes an empty slot as a null value -> skip it
-    # without touching the repository (which is None here and would raise)
-    values = block._get_images_from_repository(None, {"gallery": [{"type": "item", "value": None}]})
+    # A saved draft revision can serialize an empty slot as a null value.
+    values = block.from_repository_to_python(GalleryProxyRepository(), {"gallery": [{"type": "item", "value": None}]})
     assert values["gallery"] == []
 
 

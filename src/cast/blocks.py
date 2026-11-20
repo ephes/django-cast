@@ -55,29 +55,28 @@ def get_srcset_images_for_slots(
     rendition_filters = RenditionFilters.from_wagtail_image_with_type(image=image, image_type=image_type)
     slots, image_formats = rendition_filters.slots, rendition_filters.image_formats
     rendition_filters.set_filter_to_url_via_wagtail_renditions(renditions)
+    fallback_urls = None
     for slot in slots:
         try:
             images_for_slots[slot] = rendition_filters.get_image_for_slot(slot)
         except ValueError:
-            # no fitting image found for slot -> use original image
-            src = {}
-            for image_format in image_formats:
-                if image_format == rendition_filters.original_format:
-                    src[image_format] = image.file.url
-                else:
-                    rendition = renditions.get(f"format-{image_format}")
-                    if rendition is not None:
-                        src[image_format] = rendition.url
-            srcset = {}
-            for image_format in image_formats:
-                if image_format == rendition_filters.original_format:
-                    srcset[image_format] = f"{image.file.url} {image.width}w"
-                else:
-                    rendition = renditions.get(f"format-{image_format}")
-                    if rendition is not None:
-                        srcset[image_format] = f"{rendition.url} {rendition.width}w"
-            width = rendition_filters.slot_to_fitting_width[slot]
-            images_for_slots[slot] = ImageForSlot(Rectangle(width, slot.height), src, srcset)
+            # Resolve fallback URLs once so signed src and srcset agree across slots.
+            if fallback_urls is None:
+                src = {}
+                srcset = {}
+                for image_format in dict.fromkeys(image_formats):
+                    if image_format == rendition_filters.original_format:
+                        url, width = image.file.url, image.width
+                    elif (rendition := renditions.get(f"format-{image_format}")) is not None:
+                        url, width = rendition.url, rendition.width
+                    else:
+                        continue
+                    src[image_format] = url
+                    srcset[image_format] = f"{url} {width}w"
+                fallback_urls = src, srcset
+            src, srcset = fallback_urls
+            fitting_width = rendition_filters.slot_to_fitting_width[slot]
+            images_for_slots[slot] = ImageForSlot(Rectangle(fitting_width, slot.height), src.copy(), srcset.copy())
     return images_for_slots
 
 
@@ -448,19 +447,19 @@ class GalleryBlockWithLayout(StructBlock):
         return get_block_template(default_template_name, context, file_name=template_file_name)
 
     @staticmethod
-    def _get_images_from_repository(
-        repository: HasImagesAndRenditions,
-        values: dict[str, Any],
-    ) -> dict[str, Any]:
+    def _resolve_gallery_images(values: dict[str, Any], cached_images: ImageById) -> dict[str, Any]:
         values = copy(values)
+        parts = [gallery_item_parts(item) for item in values["gallery"]]
+        image_ids = {image for image, _caption in parts if isinstance(image, int)}
+        images_by_id = {pk: cached_images[pk] for pk in image_ids if pk in cached_images}
+        if missing_ids := image_ids - images_by_id.keys():
+            images_by_id.update(Image.objects.in_bulk(missing_ids))
+
         images = []
-        for item in values["gallery"]:
-            image, caption = gallery_item_parts(item)
-            if image is None:
-                continue
-            # Missing ids raise KeyError to trigger the database fallback.
-            image = repository.image_by_id[image] if isinstance(image, int) else image
-            images.append({"image": image, "caption": caption} if caption else image)
+        for image, caption in parts:
+            image = images_by_id.get(image) if isinstance(image, int) else image
+            if image is not None:
+                images.append({"image": image, "caption": caption} if caption else image)
         values["gallery"] = images
         return values
 
@@ -470,24 +469,16 @@ class GalleryBlockWithLayout(StructBlock):
 
     @staticmethod
     def bulk_to_python_from_database(values: dict[str, Any]) -> dict[str, Any]:
-        values = copy(values)
-        parts = [gallery_item_parts(item) for item in values["gallery"]]
-        image_ids = [image for image, _caption in parts if isinstance(image, int)]
-        images_by_id = {img.pk: img for img in Image.objects.filter(pk__in=image_ids)} if image_ids else {}
-        entries = [(images_by_id.get(image) if isinstance(image, int) else image, caption) for image, caption in parts]
-        entries = [(image, caption) for image, caption in entries if image is not None]
-        values["gallery"] = [{"image": image, "caption": caption} if caption else image for image, caption in entries]
-        return values
+        return GalleryBlockWithLayout._resolve_gallery_images(values, {})
 
     def from_repository_to_python(
         self,
-        repository: HasImagesAndRenditions,
+        repository: HasRenditionsForPosts,
         values: dict[str, Any],
     ) -> dict[str, Any]:
-        try:
-            return self._get_images_from_repository(repository, values)
-        except KeyError:
-            return self.bulk_to_python_from_database(values)
+        # Standalone and styleguide galleries can supply only renditions.
+        cached_images: ImageById = getattr(repository, "image_by_id", {})
+        return self._resolve_gallery_images(values, cached_images)
 
     def get_context(self, value: dict[str, Any], parent_context: dict[str, Any] | None = None) -> dict[str, Any]:
         assert parent_context is not None

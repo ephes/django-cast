@@ -17,6 +17,13 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Fetch only uncached gallery image IDs, preserving the order and captions of surviving entries.
+- Resolve the original storage URL once for all image slots that fall back to it.
+- Build inline transcript rows when the panel first opens.
+- Show loading status in transcript panels opened during an existing request.
+- Update only the previous and next active transcript marks during navigation.
+- Reuse folded transcript cue text and leave unmarked rows intact during search edits.
+
 - Reload the parent and its concrete type on the locked database before checking editor slugs.
 - Build editor publish responses from the concrete page reloaded on the write database.
 - Match post transition handoffs to the exact destination URL and navigation entry where available.
