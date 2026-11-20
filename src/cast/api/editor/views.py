@@ -230,13 +230,22 @@ class PostEditorMixin:
                 status_code=status.HTTP_409_CONFLICT,
             )
 
-    def _get_parent(self, parent_id: int) -> Blog:
-        blog = Blog.objects.filter(pk=parent_id).first()
+    def _get_parent(self, parent_id: int, *, using: str | None = None) -> Blog:
+        blogs = Blog.objects.using(using)
+        if using is not None:
+            blogs = blogs.select_related("content_type")
+        blog = blogs.filter(pk=parent_id).first()
         if blog is None:
             raise EditorValidationError(
                 {"parent": [{"code": "not_found", "message": f"Parent {parent_id} does not exist."}]}
             )
-        return blog.specific
+        if using is None:
+            return blog.specific
+        # Wagtail's specific lookup uses the router for its subclass query.
+        model = blog.content_type.model_class() or Blog
+        if isinstance(blog, model):
+            return blog
+        return model._default_manager.using(using).get(pk=parent_id)
 
     def _get_post(self, pk: int, user: Any, *, denied_message: str, for_update: bool = False) -> Post:
         posts = Post.objects.select_for_update() if for_update else Post.objects
@@ -264,7 +273,7 @@ class PostEditorMixin:
         updated = Page.objects.using(alias).filter(pk=parent.pk).update(numchild=F("numchild"))
         if updated != 1:
             raise EditorNotFound(f"{noun} parent not found.")
-        return self._get_parent(parent.pk)
+        return self._get_parent(parent.pk, using=alias)
 
     @staticmethod
     def _check_write_user(page: Any, user: Any) -> None:
@@ -522,7 +531,7 @@ class PostEditorMixin:
 
         self._reject_unpublishable_episode(revision.as_object())
         revision.publish(user=user)
-        page = Post.objects.get(pk=page.pk).specific
+        page = type(page)._default_manager.using(page._state.db).get(pk=page.pk)
         data = self._serialize(page, user=user, content_post=page, revision=revision)
         data["published_revision_id"] = revision.id
         data["public_url"] = self._public_url(page, request)
@@ -753,8 +762,8 @@ class EpisodeEditorMixin(PostEditorMixin):
 
     detail_url_name = "cast:api:editor_episode_detail"
 
-    def _get_parent(self, parent_id: int) -> Podcast:
-        parent = super()._get_parent(parent_id)
+    def _get_parent(self, parent_id: int, *, using: str | None = None) -> Podcast:
+        parent = super()._get_parent(parent_id, using=using)
         if not isinstance(parent, Podcast):
             raise EditorValidationError(
                 {"parent": [{"code": "invalid", "message": "An episode parent must be a podcast."}]}

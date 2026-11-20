@@ -599,17 +599,18 @@ templates, handles this:
   inside ``.block-overview`` ``cast-post-image``. Images inside
   ``<podlove-player>`` or ``<cast-audio-player>`` are skipped, because list and
   detail pages load audio players in different modes.
-- It hands the post URL and the destination URL to the next page through
-  ``sessionStorage``. On ``pagereveal`` the destination names the same post's
-  elements, but only when the destination URL matches. It never names
-  elements from two different posts.
+- It passes the post and exact destination URL through ``sessionStorage``.
+  The handoff expires after five seconds and includes the destination history
+  entry ID when the browser provides it. A matching ``pagereveal`` consumes
+  the handoff and names the same post's elements if the transition is active.
 - When a handoff targets the page being loaded, the script adds
   ``<link rel="expect" blocking="render">`` so the first render waits until
   the document is parsed and ``pagereveal`` can find the incoming post. This
   applies only to ``cast-page`` navigations that open or leave a post. Other
   page loads render as usual.
-- Names are removed when the transition finishes, so they never collide with
-  HTMX pagination swaps or pages restored from the back/forward cache.
+- Names are removed when the transition settles, including when it is
+  skipped, so they never collide with HTMX pagination swaps or pages restored
+  from the back/forward cache.
 - During ``cast-page`` transitions the theme CSS forces
   ``content-visibility: visible`` on ``#paging-area``. Otherwise a site that
   sets ``content-visibility: auto`` there would skip the post list on the first

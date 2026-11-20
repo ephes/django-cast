@@ -481,7 +481,8 @@ change create behavior on the same collection URL.
 
 Post creation performs a no-op write to the selected parent inside the same
 transaction as the sibling slug check and child insertion, then reloads the
-parent's tree metadata. PostgreSQL therefore holds the parent row's write lock;
+parent's tree metadata on the locked write database, including the concrete
+parent type. PostgreSQL holds the parent row's write lock;
 SQLite holds its database write lock. Concurrent creators for the same parent and
 slug serialize on both supported backends: one succeeds and the other receives
 the normal duplicate-slug validation response, which lookup-first clients can
@@ -564,7 +565,8 @@ Editor page writes, sibling slug checks, revisions and publication use one
 transaction on the routed page write database. Page/revision/related models
 must route reads and writes consistently to that database; split layouts and
 users from another database are rejected with a ``database`` validation error.
-Single-database behavior is unchanged.
+The publish response reloads the concrete page on that write database and uses
+that published page for its status, content and public URL.
 
 .. warning::
 
