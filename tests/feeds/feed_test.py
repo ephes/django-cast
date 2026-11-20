@@ -717,6 +717,46 @@ class TestGeneratedFeeds:
         assert people[1].attrib == {"role": "guest"}
         assert "Hidden Guest" not in content
 
+    @pytest.mark.parametrize("format", ["rss", "atom"])
+    def test_podcast_feed_reuses_person_role_allowlist(
+        self, client, episode, podcast, use_dummy_cache_backend, monkeypatch, format
+    ):
+        known = Contributor.objects.create(display_name="Known Host", slug="known-host")
+        legacy = Contributor.objects.create(display_name="Legacy Contributor", slug="legacy-contributor")
+        other_episode = EpisodeFactory(
+            owner=podcast.owner,
+            parent=podcast,
+            title="Other episode",
+            slug="other-episode",
+            podcast_audio=episode.podcast_audio,
+        )
+        for entry in (episode, other_episode):
+            EpisodeContributor.objects.create(episode=entry, contributor=known, role=EpisodeContributor.ROLE_HOST)
+            EpisodeContributor.objects.create(episode=entry, contributor=legacy, role="producer", sort_order=1)
+
+        class CountingChoices(tuple):
+            iterations = 0
+
+            def __iter__(self):
+                self.iterations += 1
+                return super().__iter__()
+
+        choices = CountingChoices(EpisodeContributor.ROLE_CHOICES)
+        monkeypatch.setattr(EpisodeContributor, "ROLE_CHOICES", choices)
+        url = reverse(f"cast:podcast_feed_{format}", kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"})
+
+        response = client.get(url)
+
+        assert response.status_code == 200
+        people = ElementTree.fromstring(response.content).findall(
+            ".//podcast:person", {"podcast": "https://podcastindex.org/namespace/1.0/"}
+        )
+        assert [(person.text, person.attrib) for person in people] == [
+            ("Known Host", {"role": "host"}),
+            ("Legacy Contributor", {}),
+        ] * 2
+        assert choices.iterations == 0
+
     def test_podcast_feed_omits_blank_publishing_metadata(self, client, episode, use_dummy_cache_backend):
         feed_url = reverse(
             "cast:podcast_feed_rss",

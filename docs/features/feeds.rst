@@ -127,6 +127,10 @@ Additional metadata for podcast feeds:
 - **Chapter Marks**: Time-indexed navigation points
 - **Transcripts**: Links to VTT and DOTE transcript files
 
+- **Contributors**: Visible episode contributors appear as ``podcast:person``
+  elements in RSS and Atom. Both formats use the episode contributor field's
+  role choices and omit the role attribute for unrecognized legacy values.
+
 Podlove Simple Chapters
 ~~~~~~~~~~~~~~~~~~~~~~~
 

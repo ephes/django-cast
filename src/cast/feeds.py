@@ -42,6 +42,7 @@ _feed_stylesheets: list | None = [Stylesheet("/static/cast/feed-style.xsl", "tex
 logger = logging.getLogger(__name__)
 
 PSC_NAMESPACE = "http://podlove.org/simple-chapters"
+_PODCAST_PERSON_ROLES = frozenset(role for role, _label in EpisodeContributor.ROLE_CHOICES)
 
 
 class _RepositoryAwareFeed(Protocol):
@@ -476,8 +477,7 @@ class PodcastIndexElements(ITunesElements):
     @staticmethod
     def get_person_attributes(assignment: EpisodeContributor, request: HttpRequest) -> dict[str, str]:
         attrs = {}
-        valid_roles = {role for role, _label in EpisodeContributor.ROLE_CHOICES}
-        if assignment.role in valid_roles:
+        if assignment.role in _PODCAST_PERSON_ROLES:
             attrs["role"] = assignment.role
         if avatar_url := assignment.get_avatar_rendition_url(request):
             attrs["img"] = avatar_url

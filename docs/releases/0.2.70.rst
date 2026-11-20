@@ -57,5 +57,6 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Reuse the PodcastIndex contributor role allowlist across RSS and Atom items.
 - Read only stored file names when scanning django-cast rows for ``media_stale``.
 - Request storage sizes only for ``media_stale`` candidates.
