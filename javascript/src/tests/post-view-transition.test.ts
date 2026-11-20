@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const STORAGE_KEY = "cast-post-view-transition";
 const ORIGIN = window.location.origin;
@@ -19,9 +19,9 @@ function fakeTransition(types: string[] = ["cast-page"]) {
   return { viewTransition: { types: new Set(types), finished }, finish };
 }
 
-function dispatchPageSwap(viewTransition: object | null, url: string | null) {
+function dispatchPageSwap(viewTransition: object | null, url: string | null, id = "") {
   const event = new Event("pageswap");
-  Object.assign(event, { viewTransition, activation: url ? { entry: { url } } : null });
+  Object.assign(event, { viewTransition, activation: url ? { entry: { url, id } } : null });
   window.dispatchEvent(event);
 }
 
@@ -51,6 +51,7 @@ describe("post-view-transition", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllGlobals();
     document.body.innerHTML = "";
     setLocation("/");
   });
@@ -61,7 +62,7 @@ describe("post-view-transition", () => {
       document.body.innerHTML = `<div id="paging-area">${article("first")}${article("second")}</div>`;
       const { viewTransition, finish } = fakeTransition();
 
-      dispatchPageSwap(viewTransition, `${ORIGIN}/blog/second/?utm=x`);
+      dispatchPageSwap(viewTransition, `${ORIGIN}/blog/second/?utm=x`, "target-entry");
 
       const second = document.querySelectorAll("article")[1];
       expect(second.querySelector("h2")?.style.viewTransitionName).toBe("cast-post-title");
@@ -69,12 +70,28 @@ describe("post-view-transition", () => {
       expect(namedElements()).toHaveLength(2);
       expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY) ?? "null")).toEqual({
         post: `${ORIGIN}/blog/second/`,
-        to: `${ORIGIN}/blog/second/`,
+        to: `${ORIGIN}/blog/second/?utm=x`,
+        entryId: "target-entry",
+        createdAt: expect.any(Number),
       });
 
       finish();
       await viewTransition.finished;
       await Promise.resolve();
+      expect(namedElements()).toEqual([]);
+    });
+
+    it("clears names when a rejected transition settles without an unhandled rejection", async () => {
+      setLocation("/blog/");
+      document.body.innerHTML = article("first");
+      // Observe the rejected source directly. Vitest also checks for any
+      // unhandled rejection from the promise returned by the production handler.
+      const finished = Promise.reject(new Error("Transition skipped"));
+      const observed = finished.catch(() => {});
+      dispatchPageSwap({ types: new Set(["cast-page"]), finished }, `${ORIGIN}/blog/first/`);
+      expect(namedElements()).toHaveLength(2);
+
+      await observed;
       expect(namedElements()).toEqual([]);
     });
 
@@ -89,6 +106,8 @@ describe("post-view-transition", () => {
       expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY) ?? "null")).toEqual({
         post: `${ORIGIN}/blog/first/`,
         to: `${ORIGIN}/blog/`,
+        entryId: null,
+        createdAt: expect.any(Number),
       });
     });
 
@@ -178,7 +197,7 @@ describe("post-view-transition", () => {
       document.body.innerHTML = `<div id="paging-area">${article("first")}${article("second")}</div>`;
       window.sessionStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ post: `${ORIGIN}/blog/second/`, to: `${ORIGIN}/blog/` }),
+        JSON.stringify({ post: `${ORIGIN}/blog/second/`, to: `${ORIGIN}/blog/`, createdAt: Date.now() }),
       );
       const { viewTransition, finish } = fakeTransition();
 
@@ -195,38 +214,60 @@ describe("post-view-transition", () => {
       expect(namedElements()).toEqual([]);
     });
 
+    it("leaves a handoff for its matching navigation entry", () => {
+      setLocation("/blog/first/");
+      document.body.innerHTML = article("first");
+      const handoff = JSON.stringify({
+        post: `${ORIGIN}/blog/first/`,
+        to: `${ORIGIN}/blog/first/`,
+        entryId: "target-entry",
+        createdAt: Date.now(),
+      });
+      window.sessionStorage.setItem(STORAGE_KEY, handoff);
+      vi.stubGlobal("navigation", { currentEntry: { id: "other-entry" } });
+
+      dispatchPageReveal(fakeTransition().viewTransition);
+      expect(namedElements()).toEqual([]);
+      expect(window.sessionStorage.getItem(STORAGE_KEY)).toBe(handoff);
+
+      vi.stubGlobal("navigation", { currentEntry: { id: "target-entry" } });
+      dispatchPageReveal(fakeTransition().viewTransition);
+      expect(namedElements()).toHaveLength(2);
+      expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+    });
+
     it("ignores a handoff meant for another destination", () => {
       setLocation("/blog/first/");
       document.body.innerHTML = article("first");
       window.sessionStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ post: `${ORIGIN}/blog/first/`, to: `${ORIGIN}/elsewhere/` }),
+        JSON.stringify({ post: `${ORIGIN}/blog/first/`, to: `${ORIGIN}/elsewhere/`, createdAt: Date.now() }),
       );
 
       dispatchPageReveal(fakeTransition().viewTransition);
 
       expect(namedElements()).toEqual([]);
-      expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+      expect(window.sessionStorage.getItem(STORAGE_KEY)).not.toBeNull();
     });
 
     it("ignores reveals without a cast-page transition, a handoff, or a matching post", () => {
       setLocation("/blog/first/");
       document.body.innerHTML = article("first");
-      const handoff = JSON.stringify({ post: `${ORIGIN}/blog/first/`, to: `${ORIGIN}/blog/first/` });
+      const handoff = JSON.stringify({ post: `${ORIGIN}/blog/first/`, to: `${ORIGIN}/blog/first/`, createdAt: Date.now() });
 
       window.sessionStorage.setItem(STORAGE_KEY, handoff);
       dispatchPageReveal(null);
       dispatchPageReveal(fakeTransition().viewTransition);
       window.sessionStorage.setItem(
         STORAGE_KEY,
-        JSON.stringify({ post: `${ORIGIN}/blog/missing/`, to: `${ORIGIN}/blog/first/` }),
+        JSON.stringify({ post: `${ORIGIN}/blog/missing/`, to: `${ORIGIN}/blog/first/`, createdAt: Date.now() }),
       );
       dispatchPageReveal(fakeTransition().viewTransition);
       window.sessionStorage.setItem(STORAGE_KEY, "{not json");
       dispatchPageReveal(fakeTransition().viewTransition);
 
       expect(namedElements()).toEqual([]);
-      expect(window.sessionStorage.getItem(STORAGE_KEY)).toBeNull();
+      expect(window.sessionStorage.getItem(STORAGE_KEY)).not.toBeNull();
     });
   });
 });

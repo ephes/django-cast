@@ -8,6 +8,7 @@
   // Names are assigned only to the one post involved, so pages never carry
   // colliding names and htmx pagination swaps are unaffected.
   var TRANSITION_TYPE = "cast-page";
+  var HANDOFF_MAX_AGE_MS = 5000;
   var STORAGE_KEY = "cast-post-view-transition";
   var TITLE_NAME = "cast-post-title";
   var IMAGE_NAME = "cast-post-image";
@@ -66,19 +67,17 @@
     }
     // Clear the names once the transition ends, so a page restored from the
     // back/forward cache or a later htmx swap does not reuse them.
-    viewTransition.finished.finally(function () {
+    function clearNames() {
       named.forEach(function (element) {
         element.style.viewTransitionName = "";
       });
-    });
+    }
+    viewTransition.finished.then(clearNames, clearNames);
   }
 
-  function readHandoff(consume) {
+  function readHandoff() {
     try {
       var value = window.sessionStorage.getItem(STORAGE_KEY);
-      if (consume) {
-        window.sessionStorage.removeItem(STORAGE_KEY);
-      }
       return value ? JSON.parse(value) : null;
     } catch (error) {
       return null;
@@ -86,7 +85,15 @@
   }
 
   function isHandoffForThisPage(handoff) {
-    return Boolean(handoff && handoff.to === pagePath(window.location.href));
+    if (!handoff || handoff.to !== window.location.href) {
+      return false;
+    }
+    var age = Date.now() - handoff.createdAt;
+    if (!(age >= 0 && age <= HANDOFF_MAX_AGE_MS)) {
+      return false;
+    }
+    var entry = window.navigation && window.navigation.currentEntry;
+    return !handoff.entryId || Boolean(entry && entry.id === handoff.entryId);
   }
 
   function writeHandoff(handoff) {
@@ -115,7 +122,12 @@
       return;
     }
     nameElements(findArticle(postUrl), viewTransition);
-    writeHandoff({ post: pagePath(postUrl), to: pagePath(entry.url) });
+    writeHandoff({
+      post: pagePath(postUrl),
+      to: entry.url,
+      entryId: entry.id || null,
+      createdAt: Date.now(),
+    });
   });
 
   // This script runs in the <head>. When a handoff targets this page, hold the
@@ -123,7 +135,7 @@
   // incoming post. The expect link points at an id that no page defines, which
   // keeps rendering blocked until parsing completes. Other page loads are not
   // blocked.
-  if (isHandoffForThisPage(readHandoff(false)) && document.head) {
+  if (isHandoffForThisPage(readHandoff()) && document.head) {
     var expectLink = document.createElement("link");
     expectLink.rel = "expect";
     expectLink.href = "#cast-post-view-transition-parsed";
@@ -132,9 +144,13 @@
   }
 
   window.addEventListener("pagereveal", function (event) {
-    var handoff = readHandoff(true);
+    var handoff = readHandoff();
+    if (!isHandoffForThisPage(handoff)) {
+      return;
+    }
+    writeHandoff(null);
     var viewTransition = event.viewTransition;
-    if (!isHandoffForThisPage(handoff) || !isCastPageTransition(viewTransition)) {
+    if (!isCastPageTransition(viewTransition)) {
       return;
     }
     var article = findArticle(handoff.post);

@@ -17,6 +17,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Match post transition handoffs to the exact destination URL and navigation entry where available.
+- Clear shared post transition names without an unhandled rejection when a transition is skipped.
+
 - Seed a new transcript correction sidecar from the Podlove read used to validate segment timing.
 - Fill missing player cue ends in one pass after sorting, including equal-start groups.
 - Skip malformed chapter entries in the player payload and chapters endpoint.
