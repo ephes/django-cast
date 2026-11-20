@@ -389,6 +389,31 @@ def test_facet_counts_detail_mode_modal_uses_own_group_exclusion(api_client, blo
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("raw_search, matches", [("-\x00Python--", True), ("\x00--", False)])
+def test_modal_resolves_search_once_for_all_facet_branches(blog, body, mocker, raw_search, matches):
+    _create_modal_facet_posts(blog, body)
+    search = mocker.spy(modal_facet_counts, "safe_modelsearch_results")
+
+    result = modal_facet_counts.get_modal_facet_counts(blog, {"search": raw_search, "category_facets": "til"})
+
+    assert result["result_count"] == int(matches)
+    expected = {
+        "date_facets": (1, {"2026-02": 0, "2026-01": 1}),
+        "tag_facets": (1, {"django": 0, "python": 1}),
+        "category_facets": (2, {"til": 1, "weeknotes": 1}),
+    }
+    assert set(result["groups"]) == set(expected)
+    for group, (all_count, counts) in expected.items():
+        group_result = result["groups"][group]
+        assert group_result["selected"] == ("til" if group == "category_facets" else "")
+        assert group_result["all_count"] == (all_count if matches else 0)
+        assert {o["slug"]: o["count"] for o in group_result["options"]} == {
+            slug: count if matches else 0 for slug, count in counts.items()
+        }
+    search.assert_called_once()
+
+
+@pytest.mark.django_db
 def test_facet_counts_detail_mode_modal_omits_groups_not_configured(api_client, blog, post, mocker):
     post.tags.add("tag")
     post.save()

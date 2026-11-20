@@ -19,6 +19,7 @@ Fixes
 
 - Keep modal facet snapshots and taxonomy counts on the resolved blog's database.
 - Reuse prefetched image and gallery renditions in warm post previews.
+- Resolve database search membership once per modal facet request.
 - Copy nested Podlove font overrides for each player configuration.
 - Report malformed nested Podlove theme settings in Django system checks
   and keep the player configuration endpoint usable with safe fallbacks.

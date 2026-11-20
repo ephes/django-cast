@@ -1908,6 +1908,8 @@ backends without a database ``get_queryset()`` return HTTP 503 with code
 ``facet_snapshot_unavailable`` rather than approximate or truncated counts.
 Database search membership remains in SQL subqueries, including the aggregation
 fallback: result IDs are never expanded into a Python list or SQL parameters.
+Each request prepares database search membership once for the result count and
+all facet groups. The available options come from the blog's full public post set.
 Search index contents outside the database have no cross-system snapshot guarantee.
 
 Editor JSON admission

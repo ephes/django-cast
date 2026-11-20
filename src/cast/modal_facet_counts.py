@@ -115,14 +115,15 @@ def get_modal_facet_counts(blog: Blog, params: Mapping[str, str]) -> ModalFacetR
 def _get_modal_facet_counts(base_queryset: models.QuerySet, params: Mapping[str, str]) -> ModalFacetResponse:
     selection = _normalize_selection(params)
     configured_groups = _get_configured_modal_groups()
+    search_queryset = _resolve_search_queryset(base_queryset, selection.search)
     aggregation_resolver = AggregationQueryResolver()
 
-    result_queryset = _apply_selection(base_queryset, selection)
+    result_queryset = _apply_selection(search_queryset, selection)
     result_count = _count_posts(result_queryset, aggregation_resolver)
 
     groups: dict[ModalFacetName, ModalFacetGroup] = {}
     for group_name in configured_groups:
-        selection_without_group = _apply_selection(base_queryset, selection, excluded_group=group_name)
+        selection_without_group = _apply_selection(search_queryset, selection, excluded_group=group_name)
         all_count = _count_posts(selection_without_group, aggregation_resolver)
         filtered_counts = _fetch_group_counts(group_name, selection_without_group, aggregation_resolver)
         universe = _fetch_universe(group_name, base_queryset, aggregation_resolver)
@@ -185,25 +186,29 @@ def _normalize_slug_facet(value: str) -> str:
     return value
 
 
+def _resolve_search_queryset(queryset: models.QuerySet, search: str) -> models.QuerySet:
+    if not search:
+        return queryset
+    results = safe_modelsearch_results(cast(ModelSearchQuerySet, queryset), search)
+    if isinstance(results, models.QuerySet):
+        # The results helper returns the input queryset for normalized-empty
+        # searches. Facet filtering historically treats those as no matches.
+        return results.none()
+    get_queryset = getattr(results, "get_queryset", None)
+    if get_queryset is None:
+        raise FacetSnapshotUnavailable()
+    search_queryset = get_queryset()
+    if not isinstance(search_queryset, models.QuerySet):
+        raise FacetSnapshotUnavailable()
+    return search_queryset.using(queryset.db)
+
+
 def _apply_selection(
     queryset: models.QuerySet,
     selection: ModalFacetSelection,
     excluded_group: ModalFacetName | None = None,
 ) -> models.QuerySet:
     selected_queryset = queryset
-    if selection.search:
-        results = safe_modelsearch_results(cast(ModelSearchQuerySet, selected_queryset), selection.search)
-        if isinstance(results, models.QuerySet):
-            # The results helper returns the input queryset for normalized-empty
-            # searches. Facet filtering historically treats those as no matches.
-            selected_queryset = results.none()
-        else:
-            get_queryset = getattr(results, "get_queryset", None)
-            if get_queryset is None:
-                raise FacetSnapshotUnavailable()
-            selected_queryset = get_queryset()
-            if not isinstance(selected_queryset, models.QuerySet):
-                raise FacetSnapshotUnavailable()
 
     if excluded_group != "date_facets" and selection.date_facets:
         year_month = parse_date_facets(selection.date_facets)

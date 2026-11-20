@@ -152,12 +152,11 @@ def test_search_requires_database_membership(mocker, backend):
     else:
         backend_result = backend
     mocker.patch.object(facets, "safe_modelsearch_results", return_value=backend_result)
-    selection = facets._normalize_selection({"search": "synthetic"})
     if backend == "queryset":
-        assert not facets._apply_selection(Post.objects.all(), selection).exists()
+        assert not facets._resolve_search_queryset(Post.objects.all(), "synthetic").exists()
     else:
         with pytest.raises(facets.FacetSnapshotUnavailable):
-            facets._apply_selection(Post.objects.all(), selection)
+            facets._resolve_search_queryset(Post.objects.all(), "synthetic")
 
 
 @pytest.mark.django_db
