@@ -377,6 +377,67 @@ describe("cast-transcript search", () => {
     expect(audio.currentTime).toBe(99);
   });
 
+  it("navigates a long transcript by updating only the previous and next marks", () => {
+    const cues = Array.from({ length: 2000 }, (_, start) => ({ start, end: start + 1, speaker: "", text: "match" }));
+    const { transcript } = mount(makePayload({ transcript: { cues } }));
+    openPanel(transcript);
+    const input = searchInput(transcript);
+    input.value = "match";
+    input.dispatchEvent(new Event("input"));
+    const list = transcript.querySelector(".cast-transcript__cues")!;
+    const marks = list.querySelectorAll("mark");
+    expect(marks).toHaveLength(cues.length);
+    const scan = vi.spyOn(list, "querySelectorAll");
+    const observer = new MutationObserver(() => {});
+    observer.observe(list, { subtree: true, attributes: true, attributeFilter: ["class"] });
+    const prev = transcript.querySelector<HTMLButtonElement>("[aria-label='Previous match']")!;
+    const next = transcript.querySelector<HTMLButtonElement>("[aria-label='Next match']")!;
+    const last = marks[marks.length - 1];
+    prev.click();
+    expect(observer.takeRecords().map(({ target }) => target)).toEqual([marks[0], last]);
+    expect(last.classList.contains("is-active-match")).toBe(true);
+    expect(document.activeElement).toBe(last.closest("button"));
+    next.click();
+    expect(observer.takeRecords().map(({ target }) => target)).toEqual([last, marks[0]]);
+    expect(marks[0].classList.contains("is-active-match")).toBe(true);
+    observer.disconnect();
+    expect(scan).not.toHaveBeenCalled();
+  });
+
+  it("only rewrites matched rows when extending and clearing a Unicode query", () => {
+    const cues = Array.from({ length: 1000 }, (_, start) => ({
+      start,
+      end: start + 1,
+      speaker: "",
+      text: start === 0 ? "İstanbul" : start === 1 ? "İzmir" : "unrelated",
+    }));
+    const { transcript } = mount(makePayload({ transcript: { cues } }));
+    openPanel(transcript);
+    const input = searchInput(transcript);
+    const status = transcript.querySelector(".cast-transcript__search-status")!;
+    const list = transcript.querySelector(".cast-transcript__cues")!;
+    const spans = list.querySelectorAll(".cast-transcript__text");
+    const observer = new MutationObserver(() => {});
+    observer.observe(list, { childList: true, subtree: true });
+    const search = (query: string) => {
+      input.value = query;
+      input.dispatchEvent(new Event("input"));
+      return new Set(observer.takeRecords().map(({ target }) => target));
+    };
+
+    expect(search("i̇")).toEqual(new Set([spans[0], spans[1]]));
+    expect(status.textContent).toBe("2 matches");
+    expect(spans[0].querySelector("mark")?.textContent).toBe("İ");
+    expect(search("i̇s")).toEqual(new Set([spans[0], spans[1]]));
+    expect(status.textContent).toBe("1 match");
+    expect(spans[0].querySelector("mark")?.textContent).toBe("İs");
+    expect(spans[1].querySelector("mark")).toBeNull();
+    expect(search("")).toEqual(new Set([spans[0]]));
+    expect(status.textContent).toBe("");
+    expect(spans[0].textContent).toBe("İstanbul");
+    observer.disconnect();
+  });
+
   it("keeps focus in the search input while typing (auto-jump does not steal focus)", () => {
     const { transcript } = mount(makePayload());
     openPanel(transcript);

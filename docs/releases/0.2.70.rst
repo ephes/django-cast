@@ -17,6 +17,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Update only the previous and next active transcript marks during navigation.
+- Reuse folded transcript cue text and leave unmarked rows intact during search edits.
+
 - Reload the parent and its concrete type on the locked database before checking editor slugs.
 - Build editor publish responses from the concrete page reloaded on the write database.
 - Match post transition handoffs to the exact destination URL and navigation entry where available.

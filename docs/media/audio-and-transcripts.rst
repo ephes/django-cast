@@ -191,7 +191,9 @@ can relocate them anywhere on the detail page by moving the
 ``<cast-transcript for="...">`` / ``<cast-chapters for="...">`` elements while
 keeping the same ``for=`` id. The transcript is a collapsible panel (search, a
 follow-along auto-scroll toggle, current-cue highlight, and a share-with-time
-control on the transport are built in).
+control on the transport are built in). Search reuses the folded cue text and
+updates highlights only in rows with current or previous matches. Previous and
+Next wrap through matching cues, moving focus without seeking the audio.
 
 .. _transcript_overview:
 

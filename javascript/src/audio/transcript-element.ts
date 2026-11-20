@@ -51,13 +51,14 @@ export class CastTranscriptElement extends CastPlayerView {
   private tabbableButton?: HTMLButtonElement;
   private loadingEl?: HTMLElement;
   private cueButtons: HTMLButtonElement[] = [];
-  private cues: readonly Cue[] = [];
+  private cueSearchRows: { span: HTMLElement; text: string; folded: string; marked: boolean }[] = [];
   private activeIndex = -1;
   private open = false;
   private follow = true;
   private tabbable = false;
   private matchIndices: number[] = [];
   private matchCursor = -1;
+  private activeMatch?: HTMLElement;
   // True while the search query is non-empty: follow-along scrolling is
   // suspended so cuechange never scrolls away from the match being read.
   private searchSuspended = false;
@@ -323,7 +324,8 @@ export class CastTranscriptElement extends CastPlayerView {
     if (!this.list) {
       return;
     }
-    this.cues = cues;
+    this.cueSearchRows = [];
+    this.activeMatch = undefined;
     this.list.textContent = "";
     this.loadingEl = undefined;
     this.scrollRegion?.removeAttribute("aria-busy");
@@ -402,6 +404,7 @@ export class CastTranscriptElement extends CastPlayerView {
       const text = document.createElement("span");
       text.className = "cast-transcript__text";
       text.textContent = cue.text; // textContent only — never innerHTML
+      this.cueSearchRows.push({ span: text, text: cue.text, folded: cue.text.toLowerCase(), marked: false });
 
       if (labelled && speakerName) {
         // Focus context for AT: a heading div is skipped when tabbing straight
@@ -487,15 +490,15 @@ export class CastTranscriptElement extends CastPlayerView {
     this.followButton?.classList.toggle("is-suspended", this.searchSuspended && this.follow);
     this.matchIndices = [];
     this.matchCursor = -1;
-    this.cues.forEach((cue, index) => {
-      const textSpan = this.cueButtons[index]?.querySelector<HTMLElement>(".cast-transcript__text");
-      if (!textSpan) {
-        return;
-      }
-      textSpan.textContent = cue.text; // clear previous marks (textContent only)
-      if (needle && cue.text.toLowerCase().includes(needle)) {
-        this.markMatches(textSpan, cue.text, needle);
+    this.activeMatch = undefined;
+    this.cueSearchRows.forEach((row, index) => {
+      if (needle && row.folded.includes(needle)) {
+        this.markMatches(row.span, row.text, row.folded, needle);
+        row.marked = true;
         this.matchIndices.push(index);
+      } else if (row.marked) {
+        row.span.textContent = row.text;
+        row.marked = false;
       }
     });
     this.announceMatches(needle);
@@ -510,8 +513,7 @@ export class CastTranscriptElement extends CastPlayerView {
     }
   }
 
-  private markMatches(textSpan: HTMLElement, text: string, needle: string): void {
-    const haystack = text.toLowerCase();
+  private markMatches(textSpan: HTMLElement, text: string, haystack: string, needle: string): void {
     // Lowercasing can expand a code point (e.g. İ -> i + combining dot).
     // Map folded UTF-16 offsets back to complete original code points, while
     // searching the whole-string fold so contextual casing (Greek sigma) stays intact.
@@ -559,8 +561,7 @@ export class CastTranscriptElement extends CastPlayerView {
     if (this.matchIndices.length === 0) {
       return;
     }
-    // Clear the previously active match highlight.
-    this.list?.querySelectorAll("mark.is-active-match").forEach((m) => m.classList.remove("is-active-match"));
+    this.activeMatch?.classList.remove("is-active-match");
     if (this.matchCursor === -1) {
       this.matchCursor = direction === 1 ? 0 : this.matchIndices.length - 1;
     } else {
@@ -569,7 +570,8 @@ export class CastTranscriptElement extends CastPlayerView {
     const cueIndex = this.matchIndices[this.matchCursor];
     const button = this.cueButtons[cueIndex];
     if (button) {
-      button.querySelector("mark")?.classList.add("is-active-match");
+      this.activeMatch = button.querySelector("mark") ?? undefined;
+      this.activeMatch?.classList.add("is-active-match");
       this.scrollCueIntoView(button);
       if (focus) {
         button.focus(); // explicit prev/next: scroll + focus, never seek
