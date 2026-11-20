@@ -195,6 +195,11 @@ control on the transport are built in). Search reuses the folded cue text and
 updates highlights only in rows with current or previous matches. Previous and
 Next wrap through matching cues, moving focus without seeking the audio.
 
+The panel starts collapsed. It builds rows for inline cues on first open and
+keeps those rows when closed and reopened. For a URL-backed transcript, opening
+the panel starts the load or shows the loading status for a request already in
+progress on the same controller.
+
 .. _transcript_overview:
 
 Transcripts

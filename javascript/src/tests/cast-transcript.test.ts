@@ -28,16 +28,16 @@ function makePayload(overrides: Partial<PlayerPayload> = {}): PlayerPayload {
 function mount(payload: PlayerPayload, { transcriptFirst = false } = {}) {
   const script = document.createElement("script");
   script.type = "application/json";
-  script.id = "cast-player-data-5";
+  script.id = `cast-player-data-${payload.audioId}`;
   script.textContent = JSON.stringify(payload);
   document.body.appendChild(script);
 
   const player = document.createElement("cast-audio-player");
-  player.id = "cast-player-5";
-  player.setAttribute("data-payload", "cast-player-data-5");
+  player.id = `cast-player-${payload.audioId}`;
+  player.setAttribute("data-payload", script.id);
 
   const transcript = document.createElement("cast-transcript");
-  transcript.setAttribute("for", "cast-player-5");
+  transcript.setAttribute("for", player.id);
 
   if (transcriptFirst) {
     document.body.appendChild(transcript);
@@ -84,6 +84,7 @@ describe("cast-transcript rendering", () => {
       transcript: { cues: [{ start: 0, end: 1, speaker: "X", text: "<script>alert(1)</script>" }] },
     });
     const { transcript } = mount(payload);
+    openPanel(transcript);
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLElement;
     expect(cue.querySelector("script")).toBeNull();
     expect(cue.textContent).toContain("<script>alert(1)</script>");
@@ -91,6 +92,7 @@ describe("cast-transcript rendering", () => {
 
   it("renders a speaker heading per turn with initial chip, name, and run timestamp", () => {
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLElement;
     // The speaker is its own block heading (not nested inside the cue button).
     expect(cue.querySelector(".cast-transcript__speaker")).toBeNull();
@@ -112,6 +114,7 @@ describe("cast-transcript rendering", () => {
       { start: 2, end: 3, speaker: "Bob", text: "three" },
     ];
     const { transcript } = mount(makePayload({ transcript: { cues } }));
+    openPanel(transcript);
     const names = transcript.querySelectorAll(".cast-transcript__speaker-name");
     expect(Array.from(names).map((s) => s.textContent)).toEqual(["Alice", "Bob"]);
   });
@@ -123,6 +126,7 @@ describe("cast-transcript rendering", () => {
       { start: 2, end: 3, speaker: "Bob", text: "three" },
     ];
     const { transcript } = mount(makePayload({ transcript: { cues } }));
+    openPanel(transcript);
     const names = transcript.querySelectorAll(".cast-transcript__speaker-name");
     expect(Array.from(names).map((s) => s.textContent)).toEqual(["Alice", "Bob"]);
   });
@@ -135,6 +139,7 @@ describe("cast-transcript rendering", () => {
       { start: 3, end: 4, speaker: "", text: "four" }, // empty-speaker reset = anchored
     ];
     const { transcript } = mount(makePayload({ transcript: { cues } }));
+    openPanel(transcript);
     const list = transcript.querySelector(".cast-transcript__cues") as HTMLElement;
     expect(list.classList.contains("cast-transcript__cues--labelled")).toBe(true);
     const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
@@ -161,6 +166,7 @@ describe("cast-transcript rendering", () => {
       { start: 2, end: 3, speaker: "Alice", text: "world" },
     ];
     const { transcript } = mount(makePayload({ transcript: { cues } }));
+    openPanel(transcript);
     const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
     expect(cueButtons[0].classList.contains("is-run-start")).toBe(true); // leading empty cue anchored
     expect(cueButtons[1].classList.contains("is-run-start")).toBe(true); // named-speaker run start
@@ -173,6 +179,7 @@ describe("cast-transcript rendering", () => {
 
   it("labelled mode: cue buttons carry a visually-hidden speaker prefix for AT focus context", () => {
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
     expect(cueButtons[0].querySelector(".cast-transcript__sr")?.textContent).toBe("Alice: ");
     expect(cueButtons[1].querySelector(".cast-transcript__sr")?.textContent).toBe("Bob: ");
@@ -184,6 +191,7 @@ describe("cast-transcript rendering", () => {
       { start: 1, end: 2, speaker: "", text: "two" },
     ];
     const { transcript } = mount(makePayload({ transcript: { cues } }));
+    openPanel(transcript);
     expect(transcript.querySelectorAll(".cast-transcript__sr")).toHaveLength(0);
     expect(transcript.querySelectorAll(".cast-transcript__speaker")).toHaveLength(0);
   });
@@ -194,6 +202,7 @@ describe("cast-transcript rendering", () => {
       { start: 1, end: 2, speaker: "", text: "two" },
     ];
     const { transcript } = mount(makePayload({ transcript: { cues } }));
+    openPanel(transcript);
     const list = transcript.querySelector(".cast-transcript__cues") as HTMLElement;
     expect(list.classList.contains("cast-transcript__cues--labelled")).toBe(false);
     const cueButtons = transcript.querySelectorAll(".cast-transcript__cue");
@@ -213,12 +222,14 @@ describe("cast-transcript rendering", () => {
 
   it("cue buttons are not tabbable by default", () => {
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLButtonElement;
     expect(cue.tabIndex).toBe(-1);
   });
 
   it("seeks on cue activation", () => {
     const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
     const audio = player.querySelector("audio") as HTMLAudioElement;
     (transcript.querySelectorAll(".cast-transcript__cue")[1] as HTMLButtonElement).click();
     expect(audio.currentTime).toBeCloseTo(2.01);
@@ -226,6 +237,7 @@ describe("cast-transcript rendering", () => {
 
   it("starts playback on cue activation (click to listen, no second play press)", () => {
     const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
     const audio = player.querySelector("audio") as HTMLAudioElement;
     expect(audio.paused).toBe(true);
     (transcript.querySelectorAll(".cast-transcript__cue")[1] as HTMLButtonElement).click();
@@ -236,9 +248,37 @@ describe("cast-transcript rendering", () => {
 
   it("keeps the line count out of the toggle (constant-width pill)", () => {
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const toggle = transcript.querySelector(".cast-panel__toggle") as HTMLElement;
     expect(toggle.querySelector(".cast-panel__count")).toBeNull();
     expect(transcript.querySelector(".cast-panel__tools .cast-panel__count")?.textContent).toContain("lines");
+  });
+
+  it("builds inline rows only when each panel first opens", () => {
+    const players = [5, 6, 7].map((audioId) => mount(makePayload({ audioId })));
+    const [{ player, transcript }] = players;
+    const audio = player.querySelector("audio")!;
+    audio.currentTime = 3;
+    audio.dispatchEvent(new Event("timeupdate"));
+    players[1].player.controller.setCues(CUES.slice(0, 1));
+    expect(document.querySelectorAll(".cast-transcript__cue")).toHaveLength(0);
+
+    const toggle = transcript.querySelector<HTMLButtonElement>(".cast-panel__toggle")!;
+    toggle.focus();
+    openPanel(transcript);
+    const rows = transcript.querySelectorAll<HTMLButtonElement>(".cast-transcript__cue");
+    expect(document.querySelectorAll(".cast-transcript__cue")).toHaveLength(CUES.length);
+    expect(rows[1].getAttribute("aria-current")).toBe("true");
+    expect(document.activeElement).toBe(toggle);
+    rows[2].click();
+    expect(audio.currentTime).toBeCloseTo(4.01);
+
+    openPanel(transcript);
+    openPanel(transcript);
+    expect(transcript.querySelectorAll(".cast-transcript__cue")[2]).toBe(rows[2]);
+    expect(rows[2].getAttribute("aria-current")).toBe("true");
+    openPanel(players[1].transcript);
+    expect(document.querySelectorAll(".cast-transcript__cue")).toHaveLength(CUES.length + 1);
   });
 
   it("is collapsed by default and toggles open", () => {
@@ -264,6 +304,7 @@ describe("cast-transcript rendering", () => {
 describe("cast-transcript highlight + follow", () => {
   it("marks the current cue with aria-current on cuechange (no aria-live region)", () => {
     const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
     const audio = player.querySelector("audio") as HTMLAudioElement;
     audio.currentTime = 3;
     audio.dispatchEvent(new Event("timeupdate"));
@@ -547,6 +588,7 @@ describe("cast-transcript keyboard-navigable toggle", () => {
 
   it("flips tabindex and persists the preference", () => {
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const toggle = tabbableToggle(transcript);
     toggle.click();
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLButtonElement;
@@ -558,6 +600,7 @@ describe("cast-transcript keyboard-navigable toggle", () => {
   it("restores tabbable cues from a persisted preference", () => {
     window.localStorage.setItem("cast-transcript-tabbable", "true");
     const { transcript } = mount(makePayload());
+    openPanel(transcript);
     const cue = transcript.querySelector(".cast-transcript__cue") as HTMLButtonElement;
     expect(cue.tabIndex).toBe(0);
   });
@@ -605,6 +648,34 @@ describe("cast-transcript lazy fallback path", () => {
     await vi.waitFor(() => expect(transcript.querySelectorAll(".cast-transcript__cue").length).toBe(3));
     expect(scroll.hasAttribute("aria-busy")).toBe(false);
     expect(transcript.querySelector(".cast-transcript__spinner")).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it.each([true, false])("shows busy state in a view opened midflight (fetch ok: %s)", async (ok) => {
+    let resolveFetch: (value: unknown) => void = () => {};
+    const fetchMock = vi.fn(() => new Promise((resolve) => (resolveFetch = resolve)));
+    vi.stubGlobal("fetch", fetchMock);
+    const { player, transcript } = mount(makePayload({ transcript: { url: "/transcript" } }));
+    openPanel(transcript);
+
+    const lateView = document.createElement("cast-transcript");
+    lateView.setAttribute("for", player.id);
+    document.body.appendChild(lateView);
+    openPanel(lateView);
+    const scroll = lateView.querySelector(".cast-panel__scroll")!;
+    expect(scroll.getAttribute("aria-busy")).toBe("true");
+    expect(lateView.querySelector("[role='status'].cast-transcript__loading")?.textContent).toBe("Loading transcript…");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    resolveFetch({ ok, json: () => Promise.resolve({ cues: CUES }) });
+    await vi.waitFor(() => expect(scroll.hasAttribute("aria-busy")).toBe(false));
+    expect(lateView.querySelector(".cast-transcript__spinner")).toBeNull();
+    if (ok) {
+      expect(lateView.querySelectorAll(".cast-transcript__cue")).toHaveLength(CUES.length);
+    } else {
+      expect(lateView.querySelector(".cast-transcript__loading")?.textContent).toBe("Transcript unavailable.");
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
     vi.unstubAllGlobals();
   });
 
@@ -679,6 +750,7 @@ describe("cast-transcript lazy fallback path", () => {
 describe("cast-transcript late wiring", () => {
   it("resolves a controller that connects after the transcript (cast:player-ready)", () => {
     const { transcript } = mount(makePayload(), { transcriptFirst: true });
+    openPanel(transcript);
     expect(transcript.querySelectorAll(".cast-transcript__cue")).toHaveLength(3);
   });
 });

@@ -51,6 +51,7 @@ export class CastTranscriptElement extends CastPlayerView {
   private tabbableButton?: HTMLButtonElement;
   private loadingEl?: HTMLElement;
   private cueButtons: HTMLButtonElement[] = [];
+  private pendingCues?: readonly Cue[];
   private cueSearchRows: { span: HTMLElement; text: string; folded: string; marked: boolean }[] = [];
   private activeIndex = -1;
   private open = false;
@@ -77,10 +78,15 @@ export class CastTranscriptElement extends CastPlayerView {
     this.follow = readBool(FOLLOW_STORAGE_KEY, true);
     this.tabbable = readBool(TABBABLE_STORAGE_KEY, false);
     this.build();
-    if (controller.transcriptLoaded) {
-      this.renderCues(controller.getCues());
-    }
-    this.listen("cueschange", () => this.renderCues(controller.getCues()));
+    this.pendingCues = controller.transcriptLoaded ? controller.getCues() : undefined;
+    this.listen("cueschange", () => {
+      const cues = controller.getCues();
+      if (this.pendingCues !== undefined) {
+        this.pendingCues = cues;
+      } else {
+        this.renderCues(cues);
+      }
+    });
     this.listen("cuechange", () => this.setActive(controller.currentCueIndex));
     this.listen("transcripterror", () => this.onTranscriptError());
     // Accordion: when the sibling panel (chapters) opens, collapse this one so
@@ -288,12 +294,19 @@ export class CastTranscriptElement extends CastPlayerView {
     if (this.open && this.controller) {
       // Accordion: tell the sibling chapters panel to collapse.
       this.controller.dispatchEvent(new CustomEvent("castpanelopen", { detail: { kind: "transcript" } }));
-      // Lazy load on first open: fetch the transcript only now, never on connect.
-      if (!this.controller.transcriptLoaded && !this.controller.transcriptLoading) {
+      // Show loading even if another view already requested the transcript.
+      // The controller only starts a fetch when no request is in flight.
+      if (!this.controller.transcriptLoaded) {
         this.showLoading();
         this.controller.requestTranscript();
       }
-      this.setActive(this.controller.currentCueIndex, true);
+      if (this.pendingCues !== undefined) {
+        const cues = this.pendingCues;
+        this.pendingCues = undefined;
+        this.renderCues(cues, true);
+      } else {
+        this.setActive(this.controller.currentCueIndex, true);
+      }
     }
   }
 
@@ -320,7 +333,7 @@ export class CastTranscriptElement extends CastPlayerView {
 
   // ---- cue rendering --------------------------------------------------------
 
-  private renderCues(cues: readonly Cue[]): void {
+  private renderCues(cues: readonly Cue[], forceScroll = false): void {
     if (!this.list) {
       return;
     }
@@ -428,7 +441,7 @@ export class CastTranscriptElement extends CastPlayerView {
 
     this.activeIndex = -1;
     if (this.controller) {
-      this.setActive(this.controller.currentCueIndex);
+      this.setActive(this.controller.currentCueIndex, forceScroll);
     }
     if (this.searchInput && this.searchInput.value) {
       this.runSearch(this.searchInput.value);

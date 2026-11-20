@@ -17,6 +17,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Build inline transcript rows when the panel first opens.
+- Show loading status in transcript panels opened during an existing request.
 - Update only the previous and next active transcript marks during navigation.
 - Reuse folded transcript cue text and leave unmarked rows intact during search edits.
 
