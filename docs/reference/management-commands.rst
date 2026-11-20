@@ -471,7 +471,8 @@ media_stale
 Find media files in production storage that are not referenced by any
 database record. The command checks paths referenced by image, video,
 audio, transcript and contributor voice-reference records before classifying
-anything as stale. Only known django-cast/Wagtail-managed media prefixes are
+anything as stale. For django-cast models, this scan reads only the stored
+file-name columns. Only known django-cast/Wagtail-managed media prefixes are
 eligible for stale reporting or deletion, so unrelated objects in the same
 storage backend are ignored by default. Leftover uploads of the removed
 ``File`` model under ``cast_files/`` are no longer reported.
@@ -496,7 +497,10 @@ are candidates. The command uses the newest available storage modification or
 creation timestamp; a backend without either timestamp leaves the file untouched
 and reports its age as unknown. Naive timestamps use the Django default timezone.
 The setting must be a non-negative integer; ``0`` removes the age delay.
-The age boundary is inclusive. Configure the setting in your project settings::
+The age boundary is inclusive. The command completes the storage listing
+before requesting sizes and only requests sizes for stale candidates.
+An incomplete listing aborts the command before any deletion.
+Configure the age setting in your project settings::
 
     CAST_MEDIA_STALE_MIN_AGE_DAYS = 7
 

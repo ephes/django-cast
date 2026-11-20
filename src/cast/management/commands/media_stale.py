@@ -47,15 +47,13 @@ class Command(BaseCommand):
         return any(normalized_path.startswith(prefix) for prefix in MANAGED_MEDIA_PREFIXES)
 
     @staticmethod
-    def get_paths(storage: Storage) -> dict[str, int]:
-        paths: dict[str, int] = {}
+    def get_paths(storage: Storage) -> dict[str, None]:
+        paths: dict[str, None] = {}
         try:
             for num, path in enumerate(storage_walk_paths(storage)):
-                size = storage.size(path)
-                paths[path] = size
+                paths[path] = None
                 if num % 100 == 0:
                     print(".", end="", flush=True)
-                # print(path, size / 2 ** 20)
         except StorageInventoryError as exc:
             raise CommandError(f"media inventory incomplete: {exc}") from exc
         return paths
@@ -64,14 +62,11 @@ class Command(BaseCommand):
     def get_cast_file_field_paths() -> set[str]:
         paths: set[str] = set()
         for model in apps.get_app_config("cast").get_models():
-            file_fields = [field for field in model._meta.get_fields() if isinstance(field, models.FileField)]
+            file_fields = [field.name for field in model._meta.get_fields() if isinstance(field, models.FileField)]
             if not file_fields:
                 continue
-            for instance in model._default_manager.all().iterator():
-                for field in file_fields:
-                    field_file = getattr(instance, field.name)
-                    if field_file and field_file.name:
-                        paths.add(field_file.name)
+            for names in model._default_manager.values_list(*file_fields).iterator():
+                paths.update(name for name in names if name)
         return paths
 
     @staticmethod
@@ -131,20 +126,19 @@ class Command(BaseCommand):
         print("stale production")
         production_paths = self.get_paths(production_storage)
         stale_production: dict[str, int] = {}
-        for path, size in production_paths.items():
-            if not self.is_managed_media_path(path):
+        for path in production_paths:
+            if not self.is_managed_media_path(path) or path in paths_from_models:
                 continue
-            if path not in paths_from_models:
-                if not self.is_old_enough(production_storage, path, cutoff):
-                    skipped_too_young += 1
-                    print(f"Skipped too young or unknown age: {path}")
-                    continue
-                print(path)
-                stale_production[path] = size
+            if not self.is_old_enough(production_storage, path, cutoff):
+                skipped_too_young += 1
+                print(f"Skipped too young or unknown age: {path}")
+                continue
+            stale_production[path] = production_storage.size(path)
+            print(path)
         print(f"stale production size: {sum(stale_production.values()) / 2**20} Mb")
 
         if options["delete"]:
-            for path in stale_production.keys():
+            for path in stale_production:
                 if not self.is_old_enough(production_storage, path, cutoff):
                     skipped_too_young += 1
                     print(f"Skipped too young or unknown age: {path}")

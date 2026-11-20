@@ -50,3 +50,6 @@ Fixes
 
 Internal
 ~~~~~~~~
+
+- Read only stored file names when scanning django-cast rows for ``media_stale``.
+- Request storage sizes only for ``media_stale`` candidates.

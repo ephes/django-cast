@@ -10,12 +10,14 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.core.management import CommandError, call_command
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from cast.devdata import create_transcript
 from cast.management.commands.media_backup import Command as MediaBackupCommand
 from cast.management.commands.media_stale import Command as MediaStaleCommand
-from cast.models import Contributor, Video
+from cast.models import Audio, Contributor, Video
 from cast.models.contributors import ContributorVoiceReference
 from cast.voxhelm import TranscriptGenerationResult, VoxhelmError
 from tests.management_command_helpers import StubOverwriteStorage, storage_listing
@@ -544,6 +546,32 @@ def test_media_stale_get_models_paths_includes_all_managed_media(audio, video):
 
 
 @pytest.mark.django_db
+def test_media_stale_projects_only_audio_file_columns(audio):
+    stored_keys = {"cast_audio/é : episode.m4a", "cast_audio/episode.mp3"}
+    Audio.objects.filter(pk=audio.pk).update(
+        data={"payload": "x" * 100_000},
+        m4a="cast_audio/é : episode.m4a",
+        mp3="cast_audio/episode.mp3",
+        oga=None,
+        opus="",
+    )
+
+    with CaptureQueriesContext(connection) as queries:
+        paths = MediaStaleCommand.get_cast_file_field_paths()
+
+    assert stored_keys <= paths
+    assert "" not in paths
+    quote = connection.ops.quote_name
+    table = quote(Audio._meta.db_table)
+    audio_queries = [query["sql"] for query in queries if f" FROM {table}" in query["sql"]]
+    assert len(audio_queries) == 1
+    selection, _, _ = audio_queries[0].partition(f" FROM {table}")
+    assert {column.split(" AS ", 1)[0] for column in selection.removeprefix("SELECT ").split(", ")} == {
+        f"{table}.{quote(name)}" for name in ("m4a", "mp3", "oga", "opus")
+    }
+
+
+@pytest.mark.django_db
 def test_media_stale_get_image_paths_includes_renditions(image):
     rendition = image.get_rendition("fill-1x1")
 
@@ -555,11 +583,15 @@ def test_media_stale_get_image_paths_includes_renditions(image):
 
 @pytest.mark.django_db
 def test_media_stale_handle_reports_and_deletes_managed_stale_files(mocker, capsys):
+    recent = "cast_audio/recent.mp3"
+    unknown = "cast_audio/unknown.mp3"
     production = StubWalkStorage(
         {
             "cast_audio/keep.mp3": b"keep",
             "cast_audio/stale.mp3": b"stale",
             "unrelated/stale.jpg": b"outside",
+            recent: b"new",
+            unknown: b"unknown age",
         }
     )
     mocker.patch(
@@ -568,7 +600,14 @@ def test_media_stale_handle_reports_and_deletes_managed_stale_files(mocker, caps
     )
     mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value={"cast_audio/keep.mp3"})
 
+    old_time = timezone.now() - timedelta(days=8)
+    modified_times = {recent: timezone.now(), unknown: None}
+    mocker.patch.object(production, "get_modified_time", side_effect=lambda path: modified_times.get(path, old_time))
+    size = mocker.spy(production, "size")
+
     call_command("media_stale", delete=True)
+
+    size.assert_called_once_with("cast_audio/stale.mp3")
 
     assert production.deleted == ["cast_audio/stale.mp3"]
     text = capsys.readouterr().out

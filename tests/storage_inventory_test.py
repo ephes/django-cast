@@ -54,11 +54,19 @@ def test_inventory_refusal_is_a_command_error(mocker, command):
     mocker.patch.object(source, "listdir", return_value=([], ["a\x00b"]))
     module = f"cast.management.commands.{command}"
     if command == "media_stale":
-        mocker.patch(f"{module}.storages", {"production": source}, create=True)
         from cast.management.commands.media_stale import Command
 
+        mocker.patch(f"{module}.get_production_and_backup_storage", return_value=(source, None))
+        mocker.patch.object(Command, "get_models_paths", return_value=set())
+        source.listdir.side_effect = [(["cast_audio", "broken"], []), ([], ["stale.mp3"]), ([], ["a\x00b"])]
+        size = mocker.spy(source, "size")
+        delete = mocker.spy(source, "delete")
+
         with pytest.raises(CommandError, match="media inventory incomplete"):
-            Command.get_paths(source)
+            call_command("media_stale", delete=True)
+
+        size.assert_not_called()
+        delete.assert_not_called()
     else:
         from cast.management.commands.media_sizes import Command
 
