@@ -60,5 +60,6 @@ Internal
 
 - Reuse the PodcastIndex contributor role allowlist across RSS and Atom items.
 - Use the admitted feed cache generation immediately after a successful cache add.
+- Merge transcript-wide correction decisions in one pass for group actions.
 - Read only stored file names when scanning django-cast rows for ``media_stale``.
 - Request storage sizes only for ``media_stale`` candidates.

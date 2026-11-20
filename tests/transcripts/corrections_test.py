@@ -327,6 +327,39 @@ def test_approved_original_also_replaces_unproposed_occurrences(audio, glossary_
 
 
 @pytest.mark.django_db
+def test_group_decisions_merge_once_and_keep_sidecar_order(transcript, mocker):
+    refresh_transcript_corrections(transcript)
+    data = transcript.corrections_data
+    target = "Synthetic Target"
+    kept = [{"original": f"Existing {index}", "to": target, "state": STATE_REJECTED} for index in range(128)]
+    other_target = {"original": "Variant 0", "to": "Other Target", "state": STATE_REJECTED}
+    replaced = {"original": "variant 0", "to": target, "state": STATE_APPROVED}
+    duplicate = {**replaced, "original": "VARIANT 0"}
+    data["decisions"] = [replaced, *kept[:64], other_target, duplicate, *kept[64:]]
+    transcript._write_corrections_data(data)
+    transcript.save(update_fields=["corrections"])
+
+    decide_correction_group(transcript, target, STATE_REJECTED, originals=[])
+    assert transcript.corrections_data["decisions"] == data["decisions"]
+
+    originals = [f"Variant {index}" for index in range(32)]
+    normalized = mocker.spy(corrections, "normalize_phrase")
+    decide_correction_group(transcript, target, STATE_REJECTED, originals=iter([*originals, " Variant  0 "]))
+
+    transcript.refresh_from_db()
+    assert transcript.corrections_data["decisions"] == [
+        *kept[:64],
+        other_target,
+        *kept[64:],
+        *({"original": original, "to": target, "state": STATE_REJECTED} for original in originals),
+    ]
+    assert normalized.call_args_list.count(mocker.call(replaced["original"])) == 1
+    assert normalized.call_args_list.count(mocker.call(" Variant  0 ")) == 1
+    # The kept decision is visited by the merge and by the subsequent glossary rebuild.
+    assert normalized.call_args_list.count(mocker.call(kept[0]["original"])) == 2
+
+
+@pytest.mark.django_db
 def test_rejected_group_suppresses_proposals(transcript):
     refresh_transcript_corrections(transcript)
 

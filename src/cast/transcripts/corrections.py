@@ -619,14 +619,20 @@ def set_corrections_episode(transcript: Transcript, episode: Episode) -> Correct
     return _commit(transcript, state)
 
 
-def _set_decision(data: dict[str, Any], original: str, to: str, action: str) -> None:
-    key = normalize_phrase(original)
-    data["decisions"] = [
+def _set_decisions(data: dict[str, Any], originals: Iterable[str], to: str, action: str) -> None:
+    chosen: dict[tuple[str, str], str] = {}
+    for original in originals:
+        chosen.setdefault((normalize_phrase(original), to), original)
+    if not chosen:
+        return
+
+    decisions = [
         decision
         for decision in data["decisions"]
-        if (normalize_phrase(decision["original"]), decision["to"]) != (key, to)
+        if (normalize_phrase(decision["original"]), decision["to"]) not in chosen
     ]
-    data["decisions"].append({"original": original, "to": to, "state": action})
+    decisions.extend({"original": original, "to": to, "state": action} for original in chosen.values())
+    data["decisions"] = decisions
 
 
 def _check_action(action: str) -> None:
@@ -646,15 +652,10 @@ def decide_correction_group(
     _check_action(action)
 
     def change(data: dict[str, Any]) -> None:
-        if originals is None:
-            chosen = [item["original"] for item in data["proposals"] if item["to"] == to]
-        else:
-            chosen = list(originals)
-        seen: set[str] = set()
-        for original in chosen:
-            if normalize_phrase(original) not in seen:
-                seen.add(normalize_phrase(original))
-                _set_decision(data, original, to, action)
+        chosen = (
+            (item["original"] for item in data["proposals"] if item["to"] == to) if originals is None else originals
+        )
+        _set_decisions(data, chosen, to, action)
 
     return _update(transcript, change)
 
@@ -760,7 +761,7 @@ def add_original_to_glossary(transcript: Transcript, original: str, to: str) -> 
             term.variants = "\n".join(filter(None, [term.variants.rstrip(), original]))
             _validated(term.full_clean)
             term.save(using=using)
-        _set_decision(state.data, original, to, STATE_APPROVED)
+        _set_decisions(state.data, (original,), to, STATE_APPROVED)
         return _commit(transcript, state)
 
 

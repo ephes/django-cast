@@ -818,7 +818,9 @@ common-word list.
   occurrences found later; a rejected one is no longer proposed. Occurrences
   decided one by one keep their decision: approving a group leaves occurrences
   rejected individually as they are, and rejecting it keeps those approved
-  individually.
+  individually. A group action records each normalized original once per
+  replacement target, using the first spelling in the group. Updated decisions
+  follow the existing entries in group order.
 
 Editor decisions are stored as such and do not depend on what the current
 glossary still finds. A decision on one occurrence (position, original and
