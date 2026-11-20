@@ -566,7 +566,9 @@ def test_media_stale_projects_only_audio_file_columns(audio):
     audio_queries = [query["sql"] for query in queries if f" FROM {table}" in query["sql"]]
     assert len(audio_queries) == 1
     selection, _, _ = audio_queries[0].partition(f" FROM {table}")
-    assert {column.split(" AS ", 1)[0] for column in selection.removeprefix("SELECT ").split(", ")} == {
+    # PostgreSQL wraps iterator() queries in "DECLARE ... CURSOR FOR SELECT ...".
+    _, _, columns = selection.rpartition("SELECT ")
+    assert {column.split(" AS ", 1)[0] for column in columns.split(", ")} == {
         f"{table}.{quote(name)}" for name in ("m4a", "mp3", "oga", "opus")
     }
 
