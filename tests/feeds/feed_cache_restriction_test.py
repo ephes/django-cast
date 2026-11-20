@@ -174,12 +174,19 @@ def test_feed_cache_generation_is_created_once_and_reused():
     assert feeds.feed_cache_generation() != generation
 
 
-def test_feed_cache_generation_falls_back_when_cache_drops_the_key(mocker):
-    # A cache that does not keep the key (e.g. it is evicted at once) still
-    # yields a usable generation for this request.
-    mocker.patch.object(cache, "get", return_value=None)
+@pytest.mark.parametrize(
+    ("added", "reread", "expected", "reads"),
+    [(True, None, "candidate", 1), (False, "winner", "winner", 2), (False, None, "candidate", 2)],
+)
+def test_feed_cache_generation_uses_the_admitted_token(mocker, added, reread, expected, reads):
+    response_cache = mocker.patch("cast.feeds._feed_response_cache").return_value
+    response_cache.get.side_effect = [None, reread]
+    response_cache.add.return_value = added
+    mocker.patch("cast.feeds.uuid4").return_value.hex = "candidate"
 
-    assert feeds.feed_cache_generation()
+    assert feeds.feed_cache_generation() == expected
+    response_cache.add.assert_called_once_with(feeds.FEED_CACHE_GENERATION_KEY, "candidate", timeout=None)
+    assert response_cache.get.call_args_list == [mocker.call(feeds.FEED_CACHE_GENERATION_KEY)] * reads
 
 
 def test_feed_cache_key_prefix_keeps_the_configured_middleware_prefix(settings, mocker):

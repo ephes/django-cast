@@ -308,6 +308,8 @@ old generation, so no later request is served the stale entry. The generation
 lives in the cache named by ``CACHE_MIDDLEWARE_ALIAS``; with a per-process
 cache such as ``LocMemCache`` only the process that committed the change sees
 the rotation, so use a shared cache backend in multi-process deployments.
+When the generation is missing, the request uses the token it successfully adds
+to the cache. If another request adds a token first, it reads the winning token.
 
 Other entry changes (edits, unpublishing, deletion) can remain in a warm
 response until it expires. Downstream HTTP caches and proxies are not purged;

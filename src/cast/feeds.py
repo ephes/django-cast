@@ -212,7 +212,8 @@ def feed_cache_generation() -> str:
     generation = response_cache.get(FEED_CACHE_GENERATION_KEY)
     if generation is None:
         candidate = uuid4().hex
-        response_cache.add(FEED_CACHE_GENERATION_KEY, candidate, timeout=None)
+        if response_cache.add(FEED_CACHE_GENERATION_KEY, candidate, timeout=None):
+            return candidate
         generation = response_cache.get(FEED_CACHE_GENERATION_KEY) or candidate
     return str(generation)
 
