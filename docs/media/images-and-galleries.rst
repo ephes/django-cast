@@ -336,7 +336,10 @@ Rendition Workflow
 The full rendering pipeline works as follows:
 
 1. When a post is requested, the repository pattern prefetches all images
-   and their existing renditions in bulk.
+   and their existing renditions in bulk. If a gallery references image IDs
+   absent from the prefetched data, rendering fetches only those IDs in bulk.
+   It omits deleted images and preserves the order and captions of surviving
+   entries, including repeated images.
 2. Each image block (``CastImageChooserBlock`` or ``GalleryBlockWithLayout``)
    creates a ``RenditionFilters`` instance for the image.
 3. The filter strings are matched against prefetched renditions. In the
@@ -345,7 +348,9 @@ The full rendering pipeline works as follows:
    thumbnail rendition temporarily uses its existing sRGB/non-sRGB counterpart
    instead of emitting an empty image URL.
 4. The ``get_image_for_slot()`` method produces an ``ImageForSlot`` object
-   that is attached to the image and passed to the template context.
+   that is attached to the image and passed to the template context. If several
+   slots fall back to the original, they reuse the same storage URL in their
+   ``src`` and ``srcset`` values and keep the dimensions calculated for each slot.
 5. Theme templates use the ``ImageForSlot`` attributes to render
    ``<picture>`` elements with appropriate ``<source>`` and ``<img>`` tags.
 

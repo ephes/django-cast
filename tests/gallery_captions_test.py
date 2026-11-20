@@ -1,5 +1,7 @@
 import pytest
+from django.db import connection
 from wagtail.blocks import StructBlockValidationError
+from wagtail.images.models import Image
 
 from cast.blocks import EmptyImageRepository, GalleryBlockWithLayout, GalleryItemBlock, gallery_item_parts
 
@@ -83,6 +85,61 @@ def test_gallery_fallback_drops_missing_image_with_caption(image):
     resolved = block.bulk_to_python_from_database(value)
     assert resolved["gallery"] == [{"image": image, "caption": "Present"}]
     assert block.get_prep_value(resolved)["gallery"][0]["value"]["caption"] == "Present"
+
+
+@pytest.mark.django_db
+def test_gallery_resolves_only_distinct_uncached_image_ids(image):
+    def create_image(title):
+        return Image.objects.create(
+            title=title,
+            file=image.file.name,
+            width=image.width,
+            height=image.height,
+            collection_id=image.collection_id,
+        )
+
+    uncached = create_image("Uncached")
+    deleted = create_image("Deleted")
+    deleted_id = deleted.pk
+    deleted.delete()
+
+    repository = EmptyImageRepository()
+    repository.image_by_id[image.pk] = image
+    values = {
+        "layout": "default",
+        "gallery": [
+            {"image": image.pk, "caption": "First"},
+            {"image": uncached.pk, "caption": "Fetched"},
+            {"image": deleted_id, "caption": "Omitted"},
+            {"value": {"image": image.pk, "caption": "Repeated"}},
+            uncached.pk,
+        ],
+    }
+    query_params = []
+
+    def record_query(execute, sql, params, many, context):
+        query_params.append(params)
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(record_query):
+        resolved = GalleryBlockWithLayout().from_repository_to_python(repository, values)
+
+    [params] = query_params
+    assert len(params) == 2
+    assert set(params) == {uncached.pk, deleted_id}
+    assert resolved == {
+        "layout": "default",
+        "gallery": [
+            {"image": image, "caption": "First"},
+            {"image": uncached, "caption": "Fetched"},
+            {"image": image, "caption": "Repeated"},
+            uncached,
+        ],
+    }
+    assert resolved["gallery"][0]["image"] is image
+    assert resolved["gallery"][2]["image"] is image
+    assert repository.image_by_id == {image.pk: image}
+    assert values["gallery"][0]["image"] == image.pk
 
 
 @pytest.mark.django_db
