@@ -5,10 +5,12 @@ from pathlib import Path
 
 import pytest
 from django.core.management import CommandError, call_command
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from wagtail.images.models import Image, Rendition
 
 from cast.management.commands.storage_backend import sync_media_files
-from cast.models import Post
+from cast.models import Blog, Post
 from tests.factories import BlogFactory
 from tests.management_command_helpers import StubOverwriteStorage
 
@@ -64,6 +66,34 @@ def test_combined_rendition_selectors_intersect_blog_and_post(mocker, blog, post
     )
     call_command("sync_renditions", post_slug=post.slug, blog_slug=blog.slug)
     assert [(kind, current.pk) for kind, current in seen] == [("regular", image.pk)]
+
+
+@pytest.mark.django_db
+def test_rendition_sync_pins_blog_in_one_select(mocker, blog, post, image):
+    post.images.add(image)
+    slug = blog.slug
+    descendant_of = Post.objects.descendant_of
+
+    def rename_before_work(selected_blog):
+        assert selected_blog.pk == blog.pk
+        Blog.objects.filter(pk=blog.pk).update(slug="renamed-sync-blog")
+        return descendant_of(selected_blog)
+
+    def plan(images, *, check_files):
+        assert check_files
+        assert [(kind, current.pk) for kind, current in images] == [("regular", image.pk)]
+        return set(), {}
+
+    mocker.patch.object(Post.objects, "descendant_of", side_effect=rename_before_work)
+    mocker.patch(
+        "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings", side_effect=plan
+    )
+    with CaptureQueriesContext(connection) as queries:
+        call_command("sync_renditions", blog_slug=slug)
+
+    selection = [row["sql"] for row in queries if row["sql"].startswith("SELECT") and f"'{slug}'" in row["sql"]]
+    assert len(selection) == 1
+    assert "LIMIT 2" in selection[0]
 
 
 @pytest.mark.django_db

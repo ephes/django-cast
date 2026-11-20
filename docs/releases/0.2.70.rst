@@ -17,6 +17,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Resolve the selected blog in one query before syncing renditions.
+- Canonicalize SVG rendition specifications before detecting misses in post previews.
 - Fall back to the configured theme when a visitor's session theme has been retired.
 - Require template files during theme discovery and warn about directories at soft-required template paths.
 - Reject revisions belonging to another object before assigning an episode number.

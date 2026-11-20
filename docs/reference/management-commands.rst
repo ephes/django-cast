@@ -182,6 +182,9 @@ created the requested key.
     # Sync renditions for all posts in a blog
     python manage.py sync_renditions --blog-slug my-blog-slug
 
+The command resolves ``--blog-slug`` once and uses that blog throughout the run,
+even if its slug is renamed after selection.
+
 Options:
 
 ``--post-slug SLUG``

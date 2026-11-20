@@ -8,7 +8,7 @@ from django.contrib.sessions.models import Session
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from wagtail.images.models import Rendition
+from wagtail.images.models import Image, Rendition
 from wagtail.models import PageLogEntry, Revision
 
 from cast.devdata import create_image
@@ -72,6 +72,37 @@ def test_preview_gallery_loads_warm_renditions_once(post):
     }
     selects = [q["sql"] for q in queries if q["sql"].startswith("SELECT") and '"wagtailimages_rendition"' in q["sql"]]
     assert len(selects) == 1
+
+
+@pytest.mark.django_db
+@pytest.mark.skipif(not hasattr(Image, "clean_filter_for_svg"), reason="Requires Wagtail SVG filter cleaning")
+def test_preview_uses_one_rendition_per_canonical_svg_spec(post, mocker):
+    image = Image.objects.create(title="Synthetic SVG", file="synthetic.svg", width=20, height=20)
+    post.body = [{"type": "overview", "value": [{"type": "image", "value": image.pk}]}]
+    mocker.patch(
+        "cast.preview_media.get_all_filterstrings",
+        return_value=[
+            (image.pk, "width-10|format-png|preserve-svg"),
+            (image.pk, "width-10|format-webp|preserve-svg"),
+        ],
+    )
+
+    def create_rendition(current, image_filter):
+        row, _ = current.renditions.get_or_create(
+            filter_spec=image_filter.spec, defaults={"width": 10, "height": 10, "file": "synthetic.width-10.svg"}
+        )
+        return row
+
+    create = mocker.patch.object(Image, "create_rendition", autospec=True, side_effect=create_rendition)
+    cold = PreviewMedia.from_post(post)
+    cold_specs = [call.args[1].spec for call in create.call_args_list]
+    create.reset_mock()
+    warm = PreviewMedia.from_post(post)
+
+    create.assert_not_called()
+    assert cold_specs == ["width-10"]
+    assert [row.filter_spec for row in cold.renditions[image.pk]] == ["width-10"]
+    assert warm.renditions == cold.renditions
 
 
 @pytest.mark.django_db
