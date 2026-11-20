@@ -420,9 +420,10 @@ The command prints summary counters in the form
 ``planned=<n> replaced=<n> skipped=<n> errors=<n>``. Missing local files are
 reported as skipped. Replacement files are staged to a temporary production
 key before the target path is written. Replacement and sync share the reserved
-``.django-cast-refresh-<uuid>.tmp`` suffix. Backup and restore inventory also
-skips legacy ``.django-cast-replace-<uuid>.tmp`` keys and reports the excluded
-keys on stderr. The command verifies the staged bytes against the local file
+``.django-cast-refresh-<32 lowercase hexadecimal characters>.tmp`` suffix
+described above. Backup and restore inventory also skips legacy
+``.django-cast-replace-<32 lowercase hexadecimal characters>.tmp`` keys and
+reports the excluded keys on stderr. The command verifies the staged bytes against the local file
 and reopens the published object to verify its bytes before reporting success.
 Each SHA-256 read uses the same 16 GiB ceiling and size-scaled deadline as
 media backup. For existing production files, the command only reports success
