@@ -11,7 +11,9 @@ from django.urls import reverse
 from wagtail.images.models import Rendition
 from wagtail.models import PageLogEntry, Revision
 
+from cast.devdata import create_image
 from cast.models import Gallery, Post
+from cast.models.image_renditions import get_all_filterstrings
 from cast.preview import render_editor_preview
 from cast.preview_media import PreviewMedia, _media_id
 
@@ -39,6 +41,37 @@ def test_preview_media_ignores_empty_and_missing_choosers(post):
     ]
     media = PreviewMedia.from_post(post)
     assert media.images == media.audios == media.videos == media.renditions == {}
+
+
+@pytest.mark.django_db
+def test_preview_gallery_loads_warm_renditions_once(post):
+    images = [create_image() for _ in range(3)]
+    first_image = images[0]
+    post.body = [
+        {
+            "type": "overview",
+            "value": [
+                {"type": "image", "value": first_image.pk},
+                {"type": "gallery", "value": {"gallery": [{"type": "item", "value": image.pk} for image in images]}},
+            ],
+        }
+    ]
+    required = set(get_all_filterstrings([("regular", first_image), *(("gallery", image) for image in images)]))
+    additional = Rendition.objects.create(
+        image=first_image, filter_spec="width-1", width=1, height=1, file="extra.png"
+    )
+
+    cold = PreviewMedia.from_post(post)
+    assert {(row.image_id, row.filter_spec) for rows in cold.renditions.values() for row in rows} == required | {
+        (first_image.pk, additional.filter_spec)
+    }
+    with CaptureQueriesContext(connection) as queries:
+        warm = PreviewMedia.from_post(post)
+    assert {pk: {row.pk for row in rows} for pk, rows in warm.renditions.items()} == {
+        pk: {row.pk for row in rows} for pk, rows in cold.renditions.items()
+    }
+    selects = [q["sql"] for q in queries if q["sql"].startswith("SELECT") and '"wagtailimages_rendition"' in q["sql"]]
+    assert len(selects) == 1
 
 
 @pytest.mark.django_db

@@ -888,9 +888,11 @@ so proxy-terminated HTTPS still reaches the internal renderer as HTTPS.
 Previews use the preview body's media in memory. They do not save pages,
 revisions, edit logs, media relationships, or Gallery records. Missing image
 renditions (including cover images and contributor avatars) may be generated as
-derived cache data; previews do not delete obsolete renditions. Publication
-still synchronizes persisted media relationships. Custom blocks, middleware,
-and site overrides must respect this policy too.
+derived cache data; previews do not delete obsolete renditions. Post body image
+and gallery previews reuse prefetched renditions and reload them on the post's
+database after generating missing variants. Publication still synchronizes
+persisted media relationships. Custom blocks, middleware, and site overrides
+must respect this policy too.
 
 Anonymous rendering does not grant access to protected audio or transcript
 endpoints. Interactive requests still require their own authorization; previews

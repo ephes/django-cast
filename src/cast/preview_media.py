@@ -9,7 +9,7 @@ from wagtail.images import get_image_model
 from wagtail.images.models import Filter
 
 from .blocks import gallery_item_parts
-from .models.image_renditions import get_obsolete_and_missing_rendition_strings
+from .models.image_renditions import get_all_filterstrings
 from .models.repository.types import AudioById, ImageById, RenditionsForPosts, VideoById
 from .renditions import ImageType
 
@@ -72,21 +72,21 @@ class PreviewMedia:
         )
         kinds: tuple[tuple[str, ImageType], ...] = (("image", "regular"), ("gallery", "gallery"))
         images_with_type = [(image_type, images[pk]) for kind, image_type in kinds for pk in ids[kind] if pk in images]
+        prefetched = [rendition for image in images.values() for rendition in image.renditions.all()]
+        available = {(rendition.image_id, rendition.filter_spec) for rendition in prefetched}
+        missing = set(get_all_filterstrings(images_with_type)) - available
         # Renditions are derived cache data. Never delete obsolete renditions here.
-        _, missing = get_obsolete_and_missing_rendition_strings(
-            images_with_type, using=using, rendition_model=rendition_model
-        )
-        for image_id, specs in missing.items():
-            for spec in specs:
-                # create_rendition uses get_or_create but does not publish to
-                # Wagtail's shared cache, whose keys omit the database alias.
-                image = images[image_id]
-                # Wagtail 7.0 predates clean_filter_for_svg; its get_rendition
-                # passes the filter through unchanged, so do the same there.
-                clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
-                image.create_rendition(clean_filter(Filter(spec)))
+        for image_id, spec in missing:
+            # create_rendition uses get_or_create but does not publish to
+            # Wagtail's shared cache, whose keys omit the database alias.
+            image = images[image_id]
+            # Wagtail 7.0 predates clean_filter_for_svg; its get_rendition
+            # passes the filter through unchanged, so do the same there.
+            clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
+            image.create_rendition(clean_filter(Filter(spec)))
+        rows = rendition_model.objects.using(using).filter(image_id__in=images) if missing else prefetched
         renditions: RenditionsForPosts = {}
-        for rendition in rendition_model.objects.using(using).filter(image_id__in=images):
+        for rendition in rows:
             renditions.setdefault(rendition.image_id, []).append(rendition)
         return cls(
             images,
