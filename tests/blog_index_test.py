@@ -86,10 +86,8 @@ class TestBlogIndex:
 
     def test_session_template_base_dir_overwrites_blog_setting(self, simple_request):
         blog = Blog(template_base_dir="plain")
-        chosen_base_dir = "from_session"
-        simple_request.session["template_base_dir"] = "from_session"
-        template = blog.get_template(simple_request)
-        assert chosen_base_dir in template
+        simple_request.session["template_base_dir"] = "bootstrap4"
+        assert blog.get_template(simple_request) == "cast/bootstrap4/blog_list_of_posts.html"
 
     def test_blog_use_partial_template_for_htmx_request_without_target(self, caplog, htmx_request_without_target):
         Blog().get_template(htmx_request_without_target)
@@ -114,10 +112,9 @@ class TestBlogIndex:
         assert context["template_base_dir"] == "plain"
 
         # from session
-        chosen_base_dir = "from_session"
-        simple_request.session["template_base_dir"] = "from_session"
+        simple_request.session["template_base_dir"] = "bootstrap4"
         context = blog.get_context(simple_request)
-        assert context["template_base_dir"] == chosen_base_dir
+        assert context["template_base_dir"] == "bootstrap4"
 
 
 class TestBlogIndexFilter:

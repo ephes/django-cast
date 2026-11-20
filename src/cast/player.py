@@ -134,20 +134,29 @@ def parse_chapter_start_seconds(value: Any) -> int | float | None:
 def build_chapters(audio: Any) -> list[dict[str, Any]]:
     """Return ``[{"start": seconds, "title": str}, ...]`` for ``audio``.
 
-    Rows with an unparseable ``start`` or an empty ``title`` are skipped and the
-    skipped count is logged. ``href``/``image`` are intentionally omitted in v1.
+    A non-list container is treated as empty. Non-object rows and rows with an
+    unparseable ``start`` or an empty ``title`` are skipped and counted in the log.
+    ``href``/``image`` are intentionally omitted in v1.
     """
+    rows = audio.chapters
+    if not isinstance(rows, list):
+        logger.info("cast player: invalid chapter container")
+        return []
     chapters: list[dict[str, Any]] = []
     skipped = 0
-    for chapter in audio.chapters:
-        title = (chapter.get("title") or "").strip() if isinstance(chapter.get("title"), str) else ""
+    for chapter in rows:
+        if not isinstance(chapter, dict):
+            skipped += 1
+            continue
+        raw_title = chapter.get("title")
+        title = raw_title.strip() if isinstance(raw_title, str) else ""
         start = parse_chapter_start_seconds(chapter.get("start"))
         if start is None or not title:
             skipped += 1
             continue
         chapters.append({"start": start, "title": title})
     if skipped:
-        logger.info("cast player: skipped %d chapter(s) with unparseable start or empty title", skipped)
+        logger.info("cast player: skipped %d chapter(s) with an invalid row, start or title", skipped)
     return chapters
 
 
@@ -253,15 +262,26 @@ def build_cues(audio: Any, *, episode: Any, duration: int | None) -> list[dict[s
     synthesized = 0
     cues: list[dict[str, Any]] = []
     finite_duration = float(duration) if isinstance(duration, (int, float)) and duration is not None else None
-    for index, cue in enumerate(collected):
-        start = cue["start"]
+    previous_start: float | None = None
+    next_start: float | None = None
+    # In reverse order, crossing a group boundary reveals the next distinct start.
+    for cue in reversed(collected):
+        cue_start: float = cue["start"]
+        if previous_start is not None and previous_start > cue_start:
+            next_start = previous_start
+        previous_start = cue_start
         end = cue["raw_end"]
-        if end is None or not math.isfinite(end) or end <= start:
+        if end is None or not math.isfinite(end) or end <= cue_start:
             synthesized += 1
-            end = _synthesize_end(collected, index, start, finite_duration)
+            if next_start is not None:
+                end = next_start
+            elif finite_duration is not None and finite_duration > cue_start:
+                end = finite_duration
+            else:
+                end = cue_start + DEFAULT_CUE_SPAN_SECONDS
         cues.append(
             {
-                "start": start,
+                "start": cue_start,
                 "end": end,
                 "speaker": cue["speaker"],
                 "text": cue["text"],
@@ -272,17 +292,8 @@ def build_cues(audio: Any, *, episode: Any, duration: int | None) -> list[dict[s
         logger.info("cast player: skipped %d transcript cue(s) with missing start or empty text", skipped)
     if synthesized:
         logger.info("cast player: synthesized end for %d transcript cue(s)", synthesized)
+    cues.reverse()
     return cues
-
-
-def _synthesize_end(collected: list[dict[str, Any]], index: int, start: float, finite_duration: float | None) -> float:
-    """Return a finite end ``> start`` borrowed from the next strictly-later cue."""
-    for later in collected[index + 1 :]:
-        if later["start"] > start:
-            return later["start"]
-    if finite_duration is not None and finite_duration > start:
-        return finite_duration
-    return start + DEFAULT_CUE_SPAN_SECONDS
 
 
 def audio_has_transcript(audio: Any) -> bool:

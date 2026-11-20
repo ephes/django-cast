@@ -579,3 +579,33 @@ def test_theme_discovery_prunes_unrelated_and_nested_trees(tmp_path, mocker):
     assert [call.args[0] for call in iterdir.call_args_list] == [root / "cast" for root in reversed(roots)]
     glob.assert_not_called()
     assert get_template_base_dir_candidates(roots) == ["alpha", "zeta"]
+
+
+def test_theme_discovery_rejects_directory_at_required_template(tmp_path):
+    template = create_new_theme(tmp_path, "candidate") / "post.html"
+    template.unlink()
+    template.mkdir()
+
+    assert get_template_base_dir_candidates([tmp_path]) == []
+
+
+def test_theme_discovery_warns_about_directory_at_soft_required_template(theme_template_dir):
+    template = create_new_theme(theme_template_dir, "candidate") / "base.html"
+    template.unlink()
+    template.mkdir()
+
+    with pytest.warns(DeprecationWarning, match="candidate.*base.html"):
+        assert "candidate" in get_template_base_dir_candidates([theme_template_dir])
+    messages = theme_contract_warnings()
+    assert len(messages) == 1
+    assert "candidate/base.html" in messages[0].msg
+
+
+def test_theme_discovery_accepts_symlink_to_template_file(tmp_path):
+    theme_dir = create_new_theme(tmp_path, "linked")
+    template = theme_dir / "post.html"
+    target = tmp_path / "post.html"
+    template.rename(target)
+    template.symlink_to(target)
+
+    assert get_template_base_dir_candidates([tmp_path]) == ["linked"]

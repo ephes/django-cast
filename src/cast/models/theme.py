@@ -24,7 +24,7 @@ def _clear_template_base_dir_choices_cache() -> None:
 
 def get_strictly_required_template_names() -> list[str]:
     """
-    Return the template names that *must* exist for a theme to be discovered.
+    Return the template names that *must* be files for a theme to be discovered.
     Missing any of these causes the theme directory to be skipped entirely.
     """
     return [
@@ -92,8 +92,7 @@ def is_cast_template_base_dir_candidate(base_dir: Path, required_template_names:
     it contains all required template files from required_template_names.
     """
     for template_name in required_template_names:
-        if not (base_dir / template_name).exists():
-            # a required template does not exist -> base_dir is not a candidate
+        if not (base_dir / template_name).is_file():
             return False
     return True
 
@@ -106,7 +105,7 @@ def check_theme_soft_requirements(base_dir: Path) -> list[str]:
     """
     missing: list[str] = []
     for template_name in get_soft_required_template_names():
-        if not (base_dir / template_name).exists():
+        if not (base_dir / template_name).is_file():
             missing.append(template_name)
             warnings.warn(
                 f"Theme '{base_dir.name}' is missing '{template_name}'. "
@@ -201,22 +200,25 @@ def get_template_base_dir(request: HttpRequest, pre_selected: str | None) -> str
     5. Site-level ``TemplateBaseDirectory`` Wagtail setting — global
        default fallback.
 
-    The Django session is the **canonical source of truth** for the active
-    theme, regardless of whether the theme is server-rendered (SSR) or a
-    single-page app (SPA).  After a full page reload *without* a
-    ``?theme`` query param, the rendered theme always matches the session
-    value (or the blog/site default if no session value exists).
+    The session selection applies while it remains in the theme registry.
+    After a theme is retired, the configured blog or site default applies.
     """
     if (override := getattr(request, "cast_template_base_dir", None)) is not None:
         return override
+    choices = None
     if hasattr(request, "GET"):
-        template_base_dir = request.GET.get("template_base_dir") or request.GET.get("theme")
-        if template_base_dir:
+        query_theme = request.GET.get("template_base_dir") or request.GET.get("theme")
+        if query_theme:
             choices = {slug for slug, _name in get_template_base_dir_choices()}
-            if template_base_dir in choices:
-                return template_base_dir
-    if hasattr(request, "session") and (template_base_dir := request.session.get("template_base_dir")) is not None:
-        return template_base_dir
+            if query_theme in choices:
+                return query_theme
+    if hasattr(request, "session"):
+        session_theme = request.session.get("template_base_dir")
+        if isinstance(session_theme, str) and session_theme:
+            if choices is None:
+                choices = {slug for slug, _name in get_template_base_dir_choices()}
+            if session_theme in choices:
+                return session_theme
     return get_default_template_base_dir(request, pre_selected)
 
 

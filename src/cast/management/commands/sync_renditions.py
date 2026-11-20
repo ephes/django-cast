@@ -49,15 +49,14 @@ By default all posts are synced.
 
         posts_queryset = Post.objects.all()
         if blog_slug is not None:
-            matching_blogs = Blog.objects.filter(slug=blog_slug).order_by("pk")
-            if not matching_blogs.exists():
+            matching_blogs = list(Blog.objects.filter(slug=blog_slug).order_by("pk")[:2])
+            if not matching_blogs:
                 raise CommandError(f"No blog found for slug '{blog_slug}'.")
-            if matching_blogs.count() > 1:
+            if len(matching_blogs) > 1:
                 raise CommandError(
                     f"Multiple blogs found for slug '{blog_slug}'. Use a unique slug or target posts more explicitly."
                 )
-            blog = matching_blogs.get()
-            posts_queryset = Post.objects.descendant_of(blog)
+            posts_queryset = Post.objects.descendant_of(matching_blogs[0])
         if post_slug is not None:
             posts_queryset = posts_queryset.filter(slug=post_slug)
         if (post_slug is not None or blog_slug is not None) and not posts_queryset.exists():

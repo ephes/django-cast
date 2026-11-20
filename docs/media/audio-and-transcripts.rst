@@ -147,7 +147,11 @@ validates that the post is live and owns the audio, and returns the normalized,
 sanitized ``{"cues": [...]}`` shape — **never** the raw Podlove file. The cue
 normalization and the public speaker-label sanitization (the same applied to the
 Podlove API output) run only in this endpoint, so non-public speaker labels and
-raw ``podlove_data`` never leak.
+raw ``podlove_data`` never leak. Cues sharing a start keep their original order
+and borrow the next strictly later start when their end is missing or invalid.
+After sorting, a single pass fills these ends. When there is no later start,
+the player uses the audio duration if it exceeds the cue start, or adds five
+seconds to the start.
 
 Public transcript responses include a strong ``ETag`` and a short shared-cache
 freshness window (``Cache-Control: public, max-age=30, must-revalidate``).
@@ -1043,6 +1047,9 @@ Chapter starts preserve milliseconds from stored marks through ``Audio.chapters`
 the shared player payload and Podcasting 2.0 chapters JSON. Distinct marks within
 one second remain distinct and ordered. Whole-second JSON values remain integers;
 the TypeScript chapter ``number`` accepts both, and seeking keeps the fraction.
+The player and the chapters endpoint skip non-object entries and chapters with
+invalid starts or blank titles. Both return an empty chapter list if the
+chapter container is invalid.
 
 The lazy public transcript endpoint treats numeric-conversion or clock-arithmetic
 overflow as an unusable timing value. Invalid starts are skipped; invalid ends

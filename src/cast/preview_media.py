@@ -74,16 +74,19 @@ class PreviewMedia:
         images_with_type = [(image_type, images[pk]) for kind, image_type in kinds for pk in ids[kind] if pk in images]
         prefetched = [rendition for image in images.values() for rendition in image.renditions.all()]
         available = {(rendition.image_id, rendition.filter_spec) for rendition in prefetched}
-        missing = set(get_all_filterstrings(images_with_type)) - available
+        requested: dict[tuple[int, str], Filter] = {}
+        for image_id, spec in get_all_filterstrings(images_with_type):
+            image = images[image_id]
+            # Wagtail 7.0 predates clean_filter_for_svg and uses the original filter.
+            clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
+            image_filter = clean_filter(Filter(spec))
+            requested[image_id, image_filter.spec] = image_filter
+        missing = requested.keys() - available
         # Renditions are derived cache data. Never delete obsolete renditions here.
         for image_id, spec in missing:
             # create_rendition uses get_or_create but does not publish to
             # Wagtail's shared cache, whose keys omit the database alias.
-            image = images[image_id]
-            # Wagtail 7.0 predates clean_filter_for_svg; its get_rendition
-            # passes the filter through unchanged, so do the same there.
-            clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
-            image.create_rendition(clean_filter(Filter(spec)))
+            images[image_id].create_rendition(requested[image_id, spec])
         rows = rendition_model.objects.using(using).filter(image_id__in=images) if missing else prefetched
         renditions: RenditionsForPosts = {}
         for rendition in rows:
