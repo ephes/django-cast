@@ -17,6 +17,7 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Synchronize speaker mappings on the database where the transcript was saved.
 - Fetch only uncached gallery image IDs, preserving the order and captions of surviving entries.
 - Resolve the original storage URL once for all image slots that fall back to it.
 - Build inline transcript rows when the panel first opens.

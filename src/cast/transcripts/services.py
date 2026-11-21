@@ -106,7 +106,7 @@ def save_editor_artifacts(
         raise
 
 
-def sync_speaker_mappings(transcript: Transcript) -> None:
+def sync_speaker_mappings(transcript: Transcript, *, using: str | None = None) -> None:
     """Synchronize durable anonymous-speaker mapping rows with raw artifacts.
 
     Approved rows stay current while their fingerprint equals
@@ -115,30 +115,34 @@ def sync_speaker_mappings(transcript: Transcript) -> None:
     """
     if transcript.pk is None:
         return
-    using = router.db_for_write(type(transcript), instance=transcript)
+    if using is None:
+        using = router.db_for_write(type(transcript), instance=transcript)
     with transaction.atomic(using=using):
         # Serialize discovery before taking any snapshot, including on SQLite.
         type(transcript).objects.using(using).filter(pk=transcript.pk).update(
             source_fingerprint=models.F("source_fingerprint")
         )
         current = type(transcript).objects.using(using).get(pk=transcript.pk)
-        _sync_speaker_mappings(current)
+        _sync_speaker_mappings(current, using=using)
 
 
-def _sync_speaker_mappings(transcript: Transcript) -> None:
-    ReviewState = transcript.speaker_mappings.model.ReviewState
+def _sync_speaker_mappings(transcript: Transcript, *, using: str) -> None:
+    mapping_model = transcript.speaker_mappings.model
+    ReviewState = mapping_model.ReviewState
+    mappings = mapping_model.objects.using(using)
     speaker_labels = transcript.get_speaker_labels()
     seen_labels = set(speaker_labels)
     fingerprint = transcript.mapping_fingerprint()
     now = timezone.now()
     existing_mappings = {
-        mapping.speaker_label: mapping for mapping in transcript.speaker_mappings.select_for_update().all()
+        mapping.speaker_label: mapping for mapping in mappings.select_for_update().filter(transcript_id=transcript.pk)
     }
 
     for speaker_label in speaker_labels:
         mapping = existing_mappings.get(speaker_label)
         if mapping is None:
-            mapping, _ = transcript.speaker_mappings.get_or_create(
+            mapping, _ = mappings.get_or_create(
+                transcript_id=transcript.pk,
                 speaker_label=speaker_label,
                 defaults={"source_artifact_fingerprint": fingerprint, "last_seen": now},
             )
@@ -160,7 +164,7 @@ def _sync_speaker_mappings(transcript: Transcript) -> None:
             mapping.source_artifact_fingerprint = fingerprint
             update_fields.append("source_artifact_fingerprint")
         if update_fields:
-            mapping.save(update_fields=update_fields)
+            mapping.save(update_fields=update_fields, using=using)
 
     for speaker_label, mapping in existing_mappings.items():
         if speaker_label in seen_labels:
@@ -173,7 +177,7 @@ def _sync_speaker_mappings(transcript: Transcript) -> None:
             mapping.review_state = ReviewState.STALE
             update_fields.append("review_state")
         if update_fields:
-            mapping.save(update_fields=update_fields)
+            mapping.save(update_fields=update_fields, using=using)
 
 
 def resolve_unreferenced_contributor_name(transcript: Transcript, sent_names: Collection[str]) -> str | None:
