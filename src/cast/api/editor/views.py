@@ -530,7 +530,10 @@ class PostEditorMixin:
         revision = page.revisions.get(pk=current_revision_id)
 
         self._reject_unpublishable_episode(revision.as_object())
-        revision.publish(user=user)
+        try:
+            revision.publish(user=user)
+        except PublicationRejected as error:
+            raise EditorValidationError(error.as_error_map()) from error
         page = type(page)._default_manager.using(page._state.db).get(pk=page.pk)
         data = self._serialize(page, user=user, content_post=page, revision=revision)
         data["published_revision_id"] = revision.id

@@ -882,6 +882,19 @@ class TestEditorEpisodePublish:
         assert data["public_url"] is not None
         assert "publishable-with-audio" in data["public_url"]
 
+    def test_publish_reports_exhausted_automatic_numbering(self, api_client, podcast, superuser, audio):
+        podcast.automatic_episode_numbering_enabled = True
+        podcast.next_episode_number = 2**31 - 1
+        podcast.save(update_fields=["automatic_episode_numbering_enabled", "next_episode_number"])
+        created = self._create_draft(api_client, podcast, superuser, podcast_audio={"id": audio.id})
+        url = reverse("cast:api:editor_episode_publish", kwargs={"pk": created["id"]})
+
+        response = api_client.post(url, {}, format="json")
+
+        assert response.status_code == 400
+        assert response.json()["errors"]["episode_number"][0]["code"] == "numbering_exhausted"
+        assert not Episode.objects.get(pk=created["id"]).live
+
     def test_publish_without_podcast_audio_is_rejected(self, api_client, podcast, admin_user):
         created = self._create_draft(api_client, podcast, admin_user, slug="publishable-no-audio")
         url = reverse("cast:api:editor_episode_publish", kwargs={"pk": created["id"]})

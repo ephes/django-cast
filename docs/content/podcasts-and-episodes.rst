@@ -43,6 +43,12 @@ If publication persistence fails, the number and counter roll back. The failed
 attempt consumes no number; retrying the persisted revision uses the next
 available number.
 
+Automatic assignment requires room for both the episode number and the next
+counter within the portable field limit of 2,147,483,647. If the sequence
+cannot advance, publication leaves the episode unnumbered and the counter
+unchanged. Enter a manual episode number or set the podcast's next episode
+number to an available value below the limit, then publish again.
+
 Episode numbers remain publishing metadata only. RSS GUIDs, slugs, and URLs are
 not derived from episode numbers.
 

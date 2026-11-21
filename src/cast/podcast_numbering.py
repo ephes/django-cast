@@ -6,11 +6,18 @@ from typing import TYPE_CHECKING
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import router, transaction
 from django.utils import timezone
+from django.utils.translation import gettext as _
+
+from cast.publication import PublicationRejected, PublicationViolation
 
 if TYPE_CHECKING:
     from wagtail.models import Revision
 
     from cast.models import Episode, Podcast
+
+
+# Both fields are PositiveIntegerField, even on backends that store larger values.
+PORTABLE_NUMBER_MAX = 2**31 - 1
 
 
 def episode_type_consumes_number(episode_type: str) -> bool:
@@ -144,6 +151,20 @@ def assign_episode_number_for_publish(
                 if already_published or not _is_first_publish_candidate(episode, locked_podcast):
                     return None
                 episode_number = _next_available_episode_number(locked_podcast, episode)
+                # The assigned number and its successor both need to fit.
+                if not 1 <= episode_number < PORTABLE_NUMBER_MAX:
+                    raise PublicationRejected(
+                        (
+                            PublicationViolation(
+                                field="episode_number",
+                                code="numbering_exhausted",
+                                message=_(
+                                    "Automatic episode numbering cannot advance. "
+                                    "Enter an episode number manually or adjust the podcast's next episode number."
+                                ),
+                            ),
+                        )
+                    )
 
             _update_revision_episode_number(revision, episode_number)
             if not preserve_current_number:

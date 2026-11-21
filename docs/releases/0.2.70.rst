@@ -18,6 +18,7 @@ Fixes
 ~~~~~
 
 - Run every quickstart child with the generated settings and project import path.
+- Refuse automatic episode numbering when the next counter would exceed the portable field limit.
 - Use manual transcript overrides directly, including empty stored overrides.
 - Let editors repair missing or invalid glossary episode references while keeping saved decisions.
 - Retire glossary occurrence decisions for missing raw segments during refresh.

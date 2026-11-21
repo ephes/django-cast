@@ -22,6 +22,7 @@ from cast.podcast_numbering import (
     assign_episode_number_for_publish,
     episode_type_consumes_number,
 )
+from cast.publication import PublicationRejected
 from tests.factories import EpisodeFactory
 
 
@@ -150,6 +151,39 @@ def test_enabled_podcast_assigns_first_blank_full_episode_and_persists_revision(
     assert episode.live_revision.as_object().episode_number == 1
     podcast.refresh_from_db()
     assert podcast.next_episode_number == 2
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("occupied", [False, True])
+def test_publish_refuses_numbering_at_portable_ceiling(podcast, audio, body, occupied):
+    ceiling = 2**31 - 1
+    start = ceiling - 1 if occupied else ceiling
+    enable_numbering(podcast, next_number=start)
+    if occupied:
+        make_draft_episode(podcast=podcast, audio=audio, body=body, slug="last-assignable", episode_number=start)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="needs-number")
+    revision = episode.save_revision()
+    revision.refresh_from_db()
+    original_content = revision.content.copy()
+
+    with pytest.raises(PublicationRejected) as error:
+        revision.publish()
+
+    assert error.value.as_error_map()["episode_number"][0]["code"] == "numbering_exhausted"
+    assert revision.content == original_content
+    revision.refresh_from_db()
+    assert revision.content == original_content
+    episode.refresh_from_db()
+    assert episode.episode_number is None
+    assert not episode.live
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == start
+
+    enable_numbering(podcast, next_number=start - 1)
+    revision.publish()
+    episode.refresh_from_db()
+    assert episode.live
+    assert episode.episode_number == start - 1
 
 
 @pytest.mark.django_db
