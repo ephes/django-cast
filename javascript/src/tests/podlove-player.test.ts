@@ -59,6 +59,7 @@ function intersectionEntry(target: Element, isIntersecting: boolean): Intersecti
 describe('PodlovePlayerElement', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    globalThis.podlovePlayer = podlovePlayerMock;
     document.documentElement.removeAttribute('data-bs-theme');
     document.documentElement.removeAttribute('data-theme');
     document.body.removeAttribute('data-bs-theme');
@@ -82,6 +83,7 @@ describe('PodlovePlayerElement', () => {
   });
 
   afterEach(() => {
+    document.querySelectorAll("script[data-podlove-embed]").forEach((script) => script.remove());
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
@@ -535,6 +537,79 @@ describe('PodlovePlayerElement', () => {
 
     appendSpy.mockRestore();
     global.podlovePlayer = originalPodlovePlayer;
+  });
+
+  it.each(['new', 'pending', 'loaded'])('retries a %s script without an entrypoint', async (state) => {
+    globalThis.podlovePlayer = undefined;
+    let failedScript: HTMLScriptElement | null = null;
+    if (state !== 'new') {
+      failedScript = document.createElement('script');
+      failedScript.setAttribute('data-podlove-embed', 'true');
+      if (state === 'loaded') {
+        failedScript.setAttribute('data-podlove-embed-loaded', 'true');
+      }
+      document.head.appendChild(failedScript);
+    }
+
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    element.setAttribute('data-embed', '/embed.js');
+    element.setAttribute('data-load-mode', 'click');
+    document.body.appendChild(element);
+
+    const button = element.loadButton!;
+    button.click();
+    failedScript ??= document.querySelector('script[data-podlove-embed]');
+    expect(failedScript).not.toBeNull();
+    if (state !== 'loaded') {
+      failedScript?.dispatchEvent(new Event('load'));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(failedScript?.isConnected).toBe(false);
+    expect(button).toBeEnabled();
+    expect(button).toHaveTextContent('Try again');
+
+    button.click();
+    const retryScript = document.querySelector('script[data-podlove-embed]');
+    expect(retryScript).not.toBeNull();
+    expect(retryScript).not.toBe(failedScript);
+    globalThis.podlovePlayer = podlovePlayerMock;
+    retryScript?.dispatchEvent(new Event('load'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+    expect(button.isConnected).toBe(false);
+  });
+
+  it('cleans up after a preloaded initializer throws and allows a retry', () => {
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    element.setAttribute('data-load-mode', 'click');
+    document.body.appendChild(element);
+
+    podlovePlayerMock.mockImplementation((host) => {
+      if (typeof host === 'string') throw new Error('Expected a player host');
+      host.append(document.createElement('iframe'));
+    });
+    podlovePlayerMock.mockImplementationOnce((host) => {
+      if (typeof host === 'string') throw new Error('Expected a player host');
+      host.append(document.createElement('iframe'));
+      host.after(document.createElement('iframe'));
+      throw new Error('Synthetic initializer failure');
+    });
+
+    const button = element.loadButton!;
+    button.click();
+    expect(element.querySelectorAll('iframe')).toHaveLength(0);
+    expect(element.errorMessage?.hidden).toBe(false);
+    expect(button).toBeEnabled();
+    expect(button).toHaveTextContent('Try again');
+
+    button.click();
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(2);
+    expect(element.querySelectorAll('iframe')).toHaveLength(1);
+    expect(element.errorMessage?.hidden).toBe(true);
+    expect(button.isConnected).toBe(false);
   });
 
   it('should fail closed when no embed script is configured', async () => {

@@ -35,6 +35,10 @@ Fixes
   load button when a pending click was canceled.
 - Ignore delayed page-load and intersection callbacks from prior Podlove
   element connections.
+- Retire Podlove embed scripts that load without an initializer so the user can
+  try a fresh script.
+- Restore the Podlove retry button and clear partial player markup when the
+  initializer throws, including when the embed script is already loaded.
 
 - Use an available audio variant in Twitter Player embeds and display an
   unavailable message when no source can be played.

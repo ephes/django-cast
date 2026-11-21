@@ -78,57 +78,48 @@ function loadEmbedScript(embedUrl: string): Promise<void> {
     return embedScriptPromise;
   }
 
-  embedScriptPromise = new Promise((resolve, reject) => {
-    const existing = document.querySelector(`script[${EMBED_SCRIPT_ATTR}]`);
-    if (existing) {
-      if (
-        existing.getAttribute(EMBED_SCRIPT_LOADED_ATTR) === "true" &&
-        typeof podlovePlayer === "function"
-      ) {
-        resolve();
-        return;
-      }
-      if (existing.getAttribute(EMBED_SCRIPT_FAILED_ATTR) === "true") {
-        existing.remove();
-      } else {
-        existing.addEventListener("load", () => resolve(), { once: true });
-        existing.addEventListener(
-          "error",
-          () => {
-            existing.setAttribute(EMBED_SCRIPT_FAILED_ATTR, "true");
-            existing.remove();
-            embedScriptPromise = null;
-            reject(new Error("Failed to load Podlove embed script"));
-          },
-          { once: true }
-        );
-        return;
-      }
+  embedScriptPromise = new Promise<void>((resolve, reject) => {
+    let existing = document.querySelector<HTMLScriptElement>(`script[${EMBED_SCRIPT_ATTR}]`);
+    if (existing?.getAttribute(EMBED_SCRIPT_FAILED_ATTR) === "true") {
+      existing.remove();
+      existing = null;
     }
 
-    const script = document.createElement("script");
-    script.src = embedUrl;
-    script.async = true;
-    script.setAttribute(EMBED_SCRIPT_ATTR, "true");
-    script.addEventListener(
-      "load",
-      () => {
-        script.setAttribute(EMBED_SCRIPT_LOADED_ATTR, "true");
-        resolve();
-      },
-      { once: true }
-    );
-    script.addEventListener(
-      "error",
-      () => {
-        script.setAttribute(EMBED_SCRIPT_FAILED_ATTR, "true");
-        script.remove();
-        embedScriptPromise = null;
-        reject(new Error("Failed to load Podlove embed script"));
-      },
-      { once: true }
-    );
-    document.head.appendChild(script);
+    const script = existing ?? document.createElement("script");
+    const fail = (message: string) => {
+      script.setAttribute(EMBED_SCRIPT_FAILED_ATTR, "true");
+      script.remove();
+      reject(new Error(message));
+    };
+    const onLoad = () => {
+      script.removeEventListener("error", onError);
+      if (typeof podlovePlayer !== "function") {
+        fail("Podlove embed script did not install an initializer");
+        return;
+      }
+      script.setAttribute(EMBED_SCRIPT_LOADED_ATTR, "true");
+      resolve();
+    };
+    const onError = () => {
+      script.removeEventListener("load", onLoad);
+      fail("Failed to load Podlove embed script");
+    };
+
+    if (script.getAttribute(EMBED_SCRIPT_LOADED_ATTR) === "true") {
+      onLoad();
+      return;
+    }
+
+    script.addEventListener("load", onLoad, { once: true });
+    script.addEventListener("error", onError, { once: true });
+    if (!existing) {
+      script.src = embedUrl;
+      script.async = true;
+      script.setAttribute(EMBED_SCRIPT_ATTR, "true");
+      document.head.appendChild(script);
+    }
+  }).finally(() => {
+    embedScriptPromise = null;
   });
 
   return embedScriptPromise;
@@ -468,11 +459,32 @@ export class PodlovePlayerElement extends HTMLElement {
 
     // If host is localhost use local embed url
     const { hostname, port } = window.location;
-    const playerDiv = this.getOrCreatePlayerDiv(container, playerId, podloveTemplate);
+    const initialize = () => {
+      if (typeof podlovePlayer !== "function") {
+        this.handleLoadError();
+        return;
+      }
+
+      const placeholderNodes = new Set(container.childNodes);
+      const playerDiv = this.getOrCreatePlayerDiv(container, playerId, podloveTemplate);
+      try {
+        podlovePlayer(playerDiv, url, configUrl);
+      } catch {
+        playerDiv.remove();
+        this.playerDiv = null;
+        for (const node of Array.from(container.childNodes)) {
+          if (!placeholderNodes.has(node)) {
+            node.remove();
+          }
+        }
+        this.handleLoadError();
+        return;
+      }
+      this.finalizeLoad(container);
+    };
 
     if (typeof podlovePlayer === "function") {
-      podlovePlayer(playerDiv, url, configUrl);
-      this.finalizeLoad(container);
+      initialize();
       return;
     }
 
@@ -487,18 +499,7 @@ export class PodlovePlayerElement extends HTMLElement {
       embedUrl = `http://localhost:${port}${embedUrl}`;
     }
 
-    loadEmbedScript(embedUrl)
-      .then(() => {
-        if (typeof podlovePlayer === "function") {
-          podlovePlayer(playerDiv, url, configUrl);
-          this.finalizeLoad(container);
-          return;
-        }
-        this.handleLoadError();
-      })
-      .catch(() => {
-        this.handleLoadError();
-      });
+    loadEmbedScript(embedUrl).then(initialize, () => this.handleLoadError());
   }
 
   getOrCreatePlayerDiv(container: Element, audioId: string, podloveTemplate: string | null) {
