@@ -1616,3 +1616,50 @@ def test_manual_edit_keeps_decisions_with_invalid_episode_reference(transcript, 
     assert stored["decisions"] == data["decisions"]
     assert stored["segments"] == data["segments"]
     assert stored["manual_texts"] == {"10000": "Editor text"}
+
+
+@pytest.mark.django_db
+def test_command_all_materializes_bounded_batches_at_starting_horizon(audio, mocker, capsys):
+    from cast.management.commands import apply_transcript_glossary as command
+
+    def make_transcript():
+        new_audio = Audio.objects.create(title="Synthetic batch audio", collection=audio.collection, user=audio.user)
+        [new_transcript] = Transcript.objects.bulk_create([Transcript(audio=new_audio)])
+        return new_transcript
+
+    ids = [make_transcript().pk for _ in range(5)]
+    reads = []
+    loaded = []
+    original_from_db = Transcript.from_db
+
+    def from_db(cls, db, field_names, values):
+        transcript = original_from_db(db, field_names, values)
+        loaded.append(transcript.pk)
+        return transcript
+
+    def refresh(transcript, *, dry_run):
+        assert dry_run
+        reads.append((transcript.pk, list(loaded)))
+        assert transcript.audio.title == "Synthetic batch audio"
+        if transcript.pk == ids[0]:
+            assert make_transcript().pk > ids[-1]
+        if transcript.pk == ids[2]:
+            raise RuntimeError("synthetic refresh failure")
+        return corrections.CorrectionsResult(STATUS_APPLIED)
+
+    mocker.patch.object(Transcript, "from_db", classmethod(from_db))
+    mocker.patch.object(command, "ALL_BATCH_SIZE", 2, create=True)
+    mocker.patch.object(command, "refresh_transcript_corrections", side_effect=refresh)
+
+    with pytest.raises(CommandError, match=r"^1 transcript\(s\) failed$"):
+        call_command("apply_transcript_glossary", "--all", "--dry-run")
+
+    assert reads == [(pk, ids[:end]) for pk, end in zip(ids, [2, 2, 4, 4, 5])]
+    assert capsys.readouterr().err == f"transcript {ids[2]}: failed (RuntimeError)\n"
+
+
+@pytest.mark.django_db
+def test_command_all_handles_empty_archive(mocker):
+    refresh = mocker.patch("cast.management.commands.apply_transcript_glossary.refresh_transcript_corrections")
+    call_command("apply_transcript_glossary", "--all")
+    refresh.assert_not_called()

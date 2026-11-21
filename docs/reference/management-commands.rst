@@ -136,7 +136,8 @@ Options (one of the first three is required):
     Incompatible read/write routing is refused before artifact access.
 
 ``--all``
-    All transcripts.
+    Read transcripts in batches of up to 100, through the highest ID visible
+    when the command starts. Higher IDs are picked up on a later run.
 
 ``--dry-run``
     Compute and report without writing.

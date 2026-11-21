@@ -20,6 +20,7 @@ Fixes
 - Bound original reads in the GPS inventory before opening images for inspection.
 - Verify final media sync bytes before retiring the recovery stage.
 - Skip glossary import entries containing lone surrogates or NUL without rolling back valid entries.
+- Refresh transcripts in bounded batches when running ``apply_transcript_glossary --all``.
 
 - Run every quickstart child with the generated settings and project import path.
 - Refuse automatic episode numbering when the next counter would exceed the portable field limit, with a field error in the Wagtail page editor and the editor API.

@@ -889,6 +889,9 @@ write database, including when other databases contain identical IDs and tree
 paths. Read/write routing for selection, glossary validation and corrections must
 agree on that alias. Split routing is refused before opening transcript artifacts;
 ``--dry-run`` performs the same preflight and writes no artifacts.
+The ``--all`` run reads batches of up to 100 transcripts in primary-key order.
+It captures the highest primary key at startup and leaves later higher IDs for
+the next run.
 
 .. _transcript_glossary_review:
 

@@ -1,3 +1,4 @@
+from collections.abc import Iterable, Iterator
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
@@ -9,6 +10,22 @@ from cast.transcripts.corrections import refresh_transcript_corrections
 
 from ._selectors import positive_id
 from .import_transcript_glossary import Command as ImportGlossaryCommand
+
+ALL_BATCH_SIZE = 100
+
+
+def _transcripts_at_start(transcripts: QuerySet[Transcript]) -> Iterator[Transcript]:
+    """Read bounded pages on one database without holding a cursor during refresh."""
+    transcripts = transcripts.using(transcripts.db)
+    last_at_start = transcripts.order_by("-pk").values_list("pk", flat=True).first()
+    if last_at_start is None:
+        return
+    admitted = transcripts.filter(pk__lte=last_at_start)
+    remaining = admitted
+    while batch := list(remaining[:ALL_BATCH_SIZE]):
+        yield from batch
+        remaining = admitted.filter(pk__gt=batch[-1].pk)
+        del batch
 
 
 def _failure_status(exc: Exception) -> str:
@@ -62,8 +79,9 @@ class Command(BaseCommand):
         dry_run = options["dry_run"]
         failed = 0
         transcripts = self.get_transcripts(options)
-        selected = list(transcripts)
+        selected: Iterable[Transcript]
         if options["transcripts"] or options["podcast"]:
+            selected = list(transcripts)
             # Validate every actual transcript before refreshing the first one.
             # Instance-sensitive routers may differ from the podcast preflight.
             for transcript in selected:
@@ -72,6 +90,8 @@ class Command(BaseCommand):
                         raise CommandError(
                             "Glossary application requires one database for transcript reads and writes."
                         )
+        else:
+            selected = _transcripts_at_start(transcripts)
         for transcript in selected:
             try:
                 result = refresh_transcript_corrections(transcript, dry_run=dry_run)
