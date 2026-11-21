@@ -759,7 +759,9 @@ replacement may retain the complete opened old generation; an unlink-only
 change to its link count/change time does not invalidate that generation. Duplicate JSON
 object members, including escaped spellings and nested objects, reject the whole
 document before writes; this differs from duplicate glossary terms in separate
-entries, which are skipped individually.
+entries, which are skipped individually. Lone Unicode surrogates and NUL
+characters in a term, variant or note skip that entry before persistence. The
+diagnostic identifies the entry number and field without echoing its contents.
 
 Podcast IDs and explicit transcript IDs must use canonical positive ASCII decimal
 notation within the selected backend's primary-key field range. Zero, signs,

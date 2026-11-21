@@ -105,6 +105,8 @@ Options:
 In-place input changes visible in the file's size or modification/change time are
 refused before writes, including in dry runs (best effort on coarse filesystem clocks).
 Symlinks and atomic pathname replacements retain the coherent opened generation.
+Entries containing lone Unicode surrogates or NUL in a term, variant or note
+are skipped before row validation and reported by entry number and field.
 
 The command prints a summary in the form
 ``<podcast>: created=<n> updated=<n> unchanged=<n> skipped=<n>``.
