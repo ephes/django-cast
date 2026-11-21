@@ -1419,12 +1419,15 @@ Fields:
 
 Lists the ``cast.Contributor`` snippets that can be assigned to episodes, ordered
 by display name, in the shared pagination envelope. ``q`` filters display name
-or slug with ``icontains``; repeatable ``slug`` filters exact slugs. Other query
-parameters return ``unsupported_parameter``. Items carry ``id``, ``slug``,
-``display_name``, ``default_role``, and ``visible``; private voice-reference data
-is never included. Like the contributor select in the Wagtail episode form, the
-list is available to every user with Wagtail admin access and requires no token
-scope.
+or slug with ``icontains``; repeatable ``slug`` filters exact slugs. Up to 100
+distinct slugs are accepted, with duplicates counted once. Requests exceeding
+that limit or containing a slug longer than 50 characters return ``400
+validation_error`` at ``slug`` with code ``too_many`` or ``max_length``,
+respectively. Other query parameters return ``unsupported_parameter``. Items
+carry ``id``, ``slug``, ``display_name``, ``default_role``, and ``visible``;
+private voice-reference data is never included. Like the contributor select in
+the Wagtail episode form, the list is available to every user with Wagtail
+admin access and requires no token scope.
 
 **Error envelopes**
 

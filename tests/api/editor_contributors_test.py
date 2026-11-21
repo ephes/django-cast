@@ -1,5 +1,7 @@
 import pytest
 from django.contrib.auth.models import Permission
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from cast.models import Contributor, ContributorLink, Episode, EpisodeContributor
@@ -56,6 +58,32 @@ class TestContributorList:
         unsupported = api_client.get(f"{url}?role=host")
         assert unsupported.status_code == 400
         assert unsupported.json()["errors"]["role"][0]["code"] == "unsupported_parameter"
+
+    def test_slug_filter_counts_only_distinct_values_and_keeps_display_order(self, api_client, admin_user):
+        api_client.force_authenticate(user=admin_user)
+        Contributor.objects.create(display_name="Fixture B", slug="fixture-b")
+        Contributor.objects.create(display_name="Fixture A", slug="fixture-a")
+        Contributor.objects.create(display_name="Fixture C", slug="fixture-c")
+        slugs = ["fixture-b"] * 101 + ["fixture-a"] + [f"missing-{index}" for index in range(98)]
+
+        response = api_client.get(reverse("cast:api:editor_contributors"), {"q": "fixture", "slug": slugs})
+
+        assert response.status_code == 200
+        assert [item["slug"] for item in response.json()["results"]] == ["fixture-a", "fixture-b"]
+
+    @pytest.mark.parametrize(
+        ("slugs", "code"),
+        [([f"fixture-{index}" for index in range(101)], "too_many"), (["a" * 51], "max_length")],
+    )
+    def test_invalid_slug_filters_are_rejected_before_sql(self, api_client, admin_user, slugs, code):
+        api_client.force_authenticate(user=admin_user)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = api_client.get(reverse("cast:api:editor_contributors"), {"slug": slugs})
+
+        assert response.status_code == 400, response.content
+        assert response.json()["errors"]["slug"][0]["code"] == code
+        assert not any('FROM "cast_contributor"' in query["sql"] for query in queries)
 
     def test_requires_wagtail_admin_access(self, api_client):
         user = UserFactory(is_staff=True)
@@ -198,9 +226,6 @@ class TestEpisodeContributors:
 
 @pytest.mark.django_db
 def test_contributor_list_selects_only_payload_fields(api_client, admin_user):
-    from django.db import connection
-    from django.test.utils import CaptureQueriesContext
-
     contributor = Contributor.objects.create(
         display_name="Synthetic projection",
         slug="projection",
