@@ -310,6 +310,28 @@ def test_scheduled_publish_assigns_when_episode_goes_live(podcast, audio, body):
 
 
 @pytest.mark.django_db
+def test_scheduled_publish_rejects_exhausted_numbering_without_raising(podcast, audio, body):
+    ceiling = 2**31 - 1
+    enable_numbering(podcast, next_number=ceiling)
+    due = timezone.now() - timedelta(minutes=1)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="due-exhausted", go_live_at=due)
+    revision = episode.save_revision(approved_go_live_at=due)
+    revision.refresh_from_db()
+    original_content = revision.content.copy()
+
+    call_command("publish_scheduled", verbosity=0)
+
+    episode.refresh_from_db()
+    revision.refresh_from_db()
+    assert episode.live is False
+    assert episode.episode_number is None
+    assert revision.approved_go_live_at is None
+    assert revision.content == original_content
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == ceiling
+
+
+@pytest.mark.django_db
 def test_existing_manual_number_is_not_changed_on_publish_or_republish(podcast, audio, body):
     enable_numbering(podcast)
     episode = make_draft_episode(
