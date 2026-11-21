@@ -9,33 +9,48 @@ from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404
 from wagtail.models import Site
 
+from .models import Blog, Episode
+
 ModelT = TypeVar("ModelT", bound=Model)
 
 
 def site_specific_queryset(model: type[ModelT], request: HttpRequest, *, live: bool = True) -> QuerySet[ModelT]:
     """Return a site-scoped queryset for Wagtail page models.
 
+    Page querysets are empty without a resolved Wagtail site root.
     Non-page querysets are tolerated and simply skip the Wagtail-specific
     `live()` / `descendant_of()` narrowing when those methods are absent.
     """
     queryset = cast(QuerySet[ModelT], cast(Any, model).objects.all())
     if live and hasattr(queryset, "live"):
         queryset = cast(QuerySet[ModelT], queryset.live())
+    if not hasattr(queryset, "descendant_of"):
+        return queryset
     site = Site.find_for_request(request)
-    if site is not None and site.root_page_id is not None and hasattr(queryset, "descendant_of"):
-        queryset = cast(QuerySet[ModelT], queryset.descendant_of(site.root_page))
-    return queryset
+    if site is None or site.root_page_id is None:
+        return queryset.none()
+    return cast(QuerySet[ModelT], queryset.descendant_of(site.root_page, inclusive=True))
 
 
 def get_site_specific_page_or_404(
     model: type[ModelT], request: HttpRequest, *, slug: str, live: bool = True
 ) -> ModelT:
-    queryset = site_specific_queryset(model, request, live=live)
+    return _get_unique_slug_or_404(site_specific_queryset(model, request, live=live), slug=slug)
+
+
+def get_site_specific_episode_or_404(request: HttpRequest, *, blog_slug: str, episode_slug: str) -> Episode:
+    """Resolve a unique live episode below the requested site's live blog."""
+    blog = get_site_specific_page_or_404(Blog, request, slug=blog_slug)
+    return _get_unique_slug_or_404(Episode.objects.live().descendant_of(blog), slug=episode_slug)
+
+
+def _get_unique_slug_or_404(queryset: QuerySet[ModelT], *, slug: str) -> ModelT:
+    model = queryset.model
     multiple_objects_returned = cast(Any, model).MultipleObjectsReturned
     try:
         return cast(ModelT, get_object_or_404(queryset, slug=slug))
     except multiple_objects_returned as exc:
-        raise Http404(f"Multiple {model.__name__} pages found for slug {slug!r} on this site.") from exc
+        raise Http404(f"Multiple {model.__name__} pages found for slug {slug!r}.") from exc
 
 
 def require_unrestricted_public_page(page: ModelT) -> ModelT:

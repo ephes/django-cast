@@ -5,7 +5,9 @@ from django.test import override_settings
 from django.urls import reverse
 from wagtail.models import PageViewRestriction
 
-from .factories import BlogFactory, EpisodeFactory
+from cast.devdata import create_transcript
+
+from .factories import BlogFactory, EpisodeFactory, PodcastFactory
 from .multisite_helpers import create_site_root
 
 
@@ -79,6 +81,31 @@ def test_twitter_player_uses_current_site_for_duplicate_blog_slug(client, user, 
     assert str(episode1.uuid) in content
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize("route", ["cast:twitter-player", "cast:episode-transcript"])
+def test_episode_slug_must_be_unique_within_blog(client, podcast, audio, route):
+    first_branch = PodcastFactory(owner=podcast.owner, parent=podcast)
+    second_branch = PodcastFactory(owner=podcast.owner, parent=podcast)
+    first_episode = EpisodeFactory(
+        owner=podcast.owner, title="First episode", slug="shared-episode", parent=first_branch, podcast_audio=audio
+    )
+    second_episode = EpisodeFactory(
+        owner=podcast.owner, title="Second episode", slug=first_episode.slug, parent=second_branch, podcast_audio=audio
+    )
+    create_transcript(
+        audio=audio,
+        podlove={"transcripts": [{"start": "00:00:00.000", "end": "00:00:01.000", "text": "Synthetic transcript."}]},
+    )
+    url = reverse(route, args=[podcast.slug, first_episode.slug])
+
+    assert client.get(url).status_code == 404
+
+    second_episode.unpublish()
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.context["episode"].pk == first_episode.pk
+
+
 def _twitter_player_config(content: str) -> dict:
     import json
     import re
@@ -115,27 +142,48 @@ def test_twitter_player_config_is_json_not_interpolated_javascript(client, episo
 
 
 @pytest.mark.django_db
-def test_twitter_player_config_without_m4a_has_empty_audio_url(client, episode):
-    audio = episode.podcast_audio
-    audio.m4a = None
-    audio.save()
-    url = reverse("cast:twitter-player", kwargs={"episode_slug": episode.slug, "blog_slug": episode.blog.slug})
+@pytest.mark.parametrize(
+    ("audio_format", "mime_type"), [("mp3", "audio/mpeg"), ("oga", "audio/ogg"), ("opus", "audio/opus")]
+)
+def test_twitter_player_config_falls_back_to_available_audio(client, episode, audio, audio_format, mime_type):
+    type(audio).objects.filter(pk=audio.pk).update(m4a=None, **{audio_format: f"cast_audio/episode.{audio_format}"})
+    audio.refresh_from_db()
+    url = reverse("cast:twitter-player", args=[episode.blog.slug, episode.slug])
 
     response = client.get(url)
 
     assert response.status_code == 200
-    config = _twitter_player_config(response.content.decode("utf-8"))
-    assert config["audio"] == [{"url": "", "mimeType": "audio/mp4"}]
+    config = _twitter_player_config(response.content.decode())
+    assert config["audio"] == [{"url": getattr(audio, audio_format).url, "mimeType": mime_type}]
 
 
 @pytest.mark.django_db
-def test_twitter_player_config_without_audio_is_empty(episode):
-    from cast.views.meta import twitter_player_config
+@pytest.mark.parametrize("has_audio", [False, True])
+def test_twitter_player_without_playable_audio_shows_unavailable(client, episode, audio, has_audio):
+    if has_audio:
+        type(audio).objects.filter(pk=audio.pk).update(m4a=None)
+    else:
+        type(episode).objects.filter(pk=episode.pk).update(podcast_audio=None)
+    url = reverse("cast:twitter-player", args=[episode.blog.slug, episode.slug])
 
-    episode.podcast_audio = None
+    response = client.get(url)
 
-    config = twitter_player_config(episode)
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Audio unavailable." in content
+    assert "twitter-player-config" not in content
+    assert "data-twitter-player" not in content
+    assert "embed.5.js" not in content
 
-    assert config["duration"] == ""
-    assert config["audio"] == [{"url": "", "mimeType": "audio/mp4"}]
-    assert config["show"]["title"] == episode.blog.title
+
+@pytest.mark.django_db
+def test_twitter_player_skips_empty_storage_url(client, episode, audio, mocker):
+    type(audio).objects.filter(pk=audio.pk).update(mp3="cast_audio/fallback.mp3")
+    mocker.patch.object(audio.m4a.storage, "url", side_effect=lambda name: "" if name.endswith(".m4a") else f"/{name}")
+    url = reverse("cast:twitter-player", args=[episode.blog.slug, episode.slug])
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    config = _twitter_player_config(response.content.decode())
+    assert config["audio"] == [{"url": "/cast_audio/fallback.mp3", "mimeType": "audio/mpeg"}]

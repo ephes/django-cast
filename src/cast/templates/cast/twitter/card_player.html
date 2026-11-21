@@ -1,4 +1,4 @@
-{% load static %}
+{% load i18n static %}
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -6,15 +6,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
   </head>
   <body>
-    <div id="pwp5-{{ episode.uuid }}" data-twitter-player style="width:200px">
-      <root style="max-width:250px;min-width:250px;" class="p-4 flex justify-left ">
-        <play-button></play-button>
-      </root>
+    {% if player_config %}
+      <div id="pwp5-{{ episode.uuid }}" data-twitter-player style="width:200px">
+        <root style="max-width:250px;min-width:250px;" class="p-4 flex justify-left ">
+          <play-button></play-button>
+        </root>
+      </div>
 
-    </div>
-
-    {{ player_config|json_script:"twitter-player-config" }}
-    <script src="{% static 'cast/js/web-player/embed.5.js' %}"></script>
-    <script src="{% static 'cast/js/web-player/twitter-player-bootstrap.js' %}"></script>
+      {{ player_config|json_script:"twitter-player-config" }}
+      <script src="{% static 'cast/js/web-player/embed.5.js' %}"></script>
+      <script src="{% static 'cast/js/web-player/twitter-player-bootstrap.js' %}"></script>
+    {% else %}
+      <p>{% translate "Audio unavailable." %}</p>
+    {% endif %}
   </body>
 </html>

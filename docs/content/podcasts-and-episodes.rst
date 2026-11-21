@@ -63,6 +63,16 @@ Podcast episodes are Wagtail pages that have a :ref:`podcast <podcast_overview>`
 page as a parent. They have the same features as blog :ref:`posts <post_overview>`,
 but with some additional fields for better podcast support.
 
+Slug-based Episode URLs
+-----------------------
+
+The Twitter Player embed and episode transcript URLs use the blog slug and
+episode slug. The blog must be live and within the Wagtail site selected for
+the request, including a blog used as the site root. Wagtail can fall back to
+its configured default site. Both URLs return 404 if multiple live episodes
+below that blog share the requested slug. Use distinct slugs across branches
+under the same blog when publishing episodes addressed by these URLs.
+
 Cover Image
 -----------
 
@@ -82,6 +92,11 @@ Podcast Audio
 The `podcast_audio` field may be empty while an episode is a draft, but it is
 required when publishing through Wagtail or the editor API. It supplies the
 enclosure for the episode in the podcast feed.
+
+The Twitter Player embed prefers M4A and tries MP3, OGA, and Opus in that
+order when needed. The embed uses the selected file's MIME type. If no
+variant has a usable URL, the embed displays an audio-unavailable message
+and leaves out the player.
 
 Editor API clients can bind publication to the exact reviewed episode revision
 with the optional ``If-Match`` header described in
