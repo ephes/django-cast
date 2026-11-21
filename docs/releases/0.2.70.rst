@@ -43,7 +43,8 @@ Fixes
 - Validate podcast seed counts before creating pages or media, and skip
   the MP4 fixture when no videos are requested.
 - Create and reuse the styleguide seed account through the configured Django
-  user model and its login field.
+  user model and its login field, and admit ``ensure_reference_site --reset``
+  roots by that login field. Public author names still use ``username``.
 
 - Use an available audio variant in Twitter Player embeds and display an
   unavailable message when no source can be played.

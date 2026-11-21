@@ -10,7 +10,6 @@ from copy import deepcopy
 from datetime import time, timedelta
 
 import pytest
-from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection, reset_queries
 from django.test.utils import CaptureQueriesContext
@@ -714,7 +713,7 @@ def test_queryset_data_create_from_post_queryset_raises_attribute_error_for_brok
 
     class FakePost:
         pk = 1
-        owner = get_user_model()(username="owner")
+        owner = type("Owner", (), {"username": "owner"})()
         has_audio = True
         full_url = "http://testserver/fake-post/"
         cover_image = None

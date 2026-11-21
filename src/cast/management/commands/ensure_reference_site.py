@@ -116,7 +116,7 @@ class Command(BaseCommand):
                 len(candidates) != 1
                 or candidates[0].specific_class is not model
                 or candidates[0].owner_id is None
-                or candidates[0].owner.username != STYLEGUIDE_USER_NAME
+                or candidates[0].owner.get_username() != STYLEGUIDE_USER_NAME
             ):
                 raise CommandError(f"Reference root ownership is ambiguous for '{slug}'; reset refused.")
             roots.append(candidates[0])

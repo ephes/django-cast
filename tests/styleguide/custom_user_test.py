@@ -28,6 +28,8 @@ def test_styleguide_seeds_and_reuses_configured_user(tmp_path):
 
 
 def _exercise_styleguide():
+    from io import StringIO
+
     import django
     from django.conf import settings
 
@@ -67,6 +69,14 @@ def _exercise_styleguide():
     assert client.get(url).status_code == 200
     assert users.get(handle=STYLEGUIDE_USER_NAME).pk == owner.pk
     assert set(posts.values_list("pk", flat=True)) == post_ids
+
+    # The reference-site reset admits roots owned by the seed account's login field.
+    output = StringIO()
+    call_command("ensure_reference_site", "--reset", stdout=output)
+    assert "Reference site data replaced." in output.getvalue()
+    reset_blog = Blog.objects.get(slug=STYLEGUIDE_BLOG_SLUG)
+    assert reset_blog.pk != blog.pk
+    assert reset_blog.owner == owner
 
 
 if __name__ == "__main__":

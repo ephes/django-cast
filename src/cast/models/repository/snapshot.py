@@ -204,7 +204,7 @@ class PostQuerySnapshot:
         for post in posts:
             specific_post = specific_post_by_id[post.pk]
             post_by_id[post.pk] = specific_post
-            owner_username_by_id[post.pk] = str(post.owner.get_username())
+            owner_username_by_id[post.pk] = post.owner.username
             audios_count = 0
             try:
                 audios_count = post.audios.count()
