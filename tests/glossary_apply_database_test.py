@@ -1,4 +1,4 @@
-"""Podcast glossary application selects and preflights one synthetic database."""
+"""Glossary application selects and preflights synthetic database rows."""
 
 from io import StringIO
 from types import SimpleNamespace
@@ -94,3 +94,28 @@ def test_apply_preflights_actual_transcript_routes(settings, monkeypatch, operat
     monkeypatch.setattr(command, "refresh_transcript_corrections", refuse)
     with pytest.raises(CommandError, match="database"):
         call_command("apply_transcript_glossary", podcast="synthetic", stdout=StringIO())
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_explicit_selection_preflights_later_transcript(settings, mocker, dry_run):
+    first = Transcript.objects.using("default").get()
+    audio = Audio.objects.create(title="second", collection=first.collection, user=first.audio.user)
+    second = Transcript.objects.create(pk=first.pk + 1, audio=audio, collection=first.collection)
+
+    class InstanceRouter:
+        def db_for_write(self, model, **hints):
+            instance = hints.get("instance")
+            if model is Transcript and isinstance(instance, Transcript) and instance.pk == second.pk:
+                return "migration_other"
+            return None
+
+    settings.DATABASE_ROUTERS = [InstanceRouter()]
+    refresh = mocker.patch("cast.management.commands.apply_transcript_glossary.refresh_transcript_corrections")
+
+    with pytest.raises(CommandError, match="one database for transcript reads and writes"):
+        call_command(
+            "apply_transcript_glossary", "--transcript", str(first.pk), "--transcript", str(second.pk), dry_run=dry_run
+        )
+
+    refresh.assert_not_called()

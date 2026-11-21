@@ -11,6 +11,16 @@ from ._selectors import positive_id
 from .import_transcript_glossary import Command as ImportGlossaryCommand
 
 
+def _failure_status(exc: Exception) -> str:
+    # Avoid formatting the exception or consulting a custom metaclass.
+    error_type = type(exc)
+    if type(error_type) is type:
+        category = error_type.__name__
+        if type(category) is str and len(category) <= 80 and category.isascii() and category.isidentifier():
+            return f"failed ({category})"
+    return "failed"
+
+
 class Command(BaseCommand):
     help = (
         "Re-apply the transcript glossary: recompute automatic replacements and proposals from the raw "
@@ -53,7 +63,7 @@ class Command(BaseCommand):
         failed = 0
         transcripts = self.get_transcripts(options)
         selected = list(transcripts)
-        if options["podcast"]:
+        if options["transcripts"] or options["podcast"]:
             # Validate every actual transcript before refreshing the first one.
             # Instance-sensitive routers may differ from the podcast preflight.
             for transcript in selected:
@@ -67,7 +77,7 @@ class Command(BaseCommand):
                 result = refresh_transcript_corrections(transcript, dry_run=dry_run)
             except Exception as exc:
                 failed += 1
-                self.stderr.write(f"transcript {transcript.pk}: failed: {exc}")
+                self.stderr.write(f"transcript {transcript.pk}: {_failure_status(exc)}")
                 continue
             self.stdout.write(
                 f"transcript {transcript.pk}: {result.status} automatic={result.automatic} "

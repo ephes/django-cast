@@ -15,6 +15,7 @@ from wagtail.blocks import StreamValue
 from wagtail.rich_text import RichText
 
 from cast.models import (
+    Audio,
     Contributor,
     EpisodeContributor,
     Transcript,
@@ -798,14 +799,45 @@ def test_command_dry_run(transcript, capsys):
 
 
 @pytest.mark.django_db
-def test_command_reports_failures(transcript, mocker, capsys):
-    mocker.patch(
+def test_command_reports_failures_and_continues(transcript, mocker, capsys):
+    class UnprintableError(RuntimeError):
+        def __str__(self) -> str:
+            raise ValueError("broken formatter")
+
+    audio = Audio.objects.create(title="second", collection=transcript.collection, user=transcript.audio.user)
+    second = Transcript.objects.create(audio=audio, collection=transcript.collection)
+    refresh = mocker.patch(
         "cast.management.commands.apply_transcript_glossary.refresh_transcript_corrections",
-        side_effect=RuntimeError("boom"),
+        side_effect=[UnprintableError(), corrections.CorrectionsResult(STATUS_APPLIED)],
     )
-    with pytest.raises(CommandError):
+
+    with pytest.raises(CommandError, match=r"^1 transcript\(s\) failed$"):
         call_command("apply_transcript_glossary", "--all")
-    assert "failed: boom" in capsys.readouterr().err
+
+    assert [call.args[0].pk for call in refresh.call_args_list] == [transcript.pk, second.pk]
+    output = capsys.readouterr()
+    assert output.err == f"transcript {transcript.pk}: failed (UnprintableError)\n"
+    assert f"transcript {second.pk}: applied" in output.out
+
+
+@pytest.mark.parametrize("name", ["Error\nforged line", "E" * 81, "Érror"])
+def test_command_omits_unsafe_failure_category(name):
+    from cast.management.commands.apply_transcript_glossary import _failure_status
+
+    assert _failure_status(type(name, (RuntimeError,), {})()) == "failed"
+
+
+def test_command_does_not_consult_exception_metaclass():
+    from cast.management.commands.apply_transcript_glossary import _failure_status
+
+    class ErrorType(type):
+        def __getattribute__(cls, name):
+            pytest.fail("Exception metaclass was consulted")
+
+    class CustomError(RuntimeError, metaclass=ErrorType):
+        pass
+
+    assert _failure_status(CustomError()) == "failed"
 
 
 # --- privacy ---------------------------------------------------------------------------------
