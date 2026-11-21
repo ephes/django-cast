@@ -398,3 +398,46 @@ def test_gps_report_separates_budget_exhaustion_without_writes(mocker, monkeypat
         assert stored.read() == before_bytes
     save.assert_not_called()
     delete.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_gps_report_bounds_original_reads_despite_small_reported_size(mocker):
+    from cast.management.commands import report_image_gps
+
+    model = get_image_model()
+    oversized, gps = model.objects.bulk_create(
+        [
+            model(title="Oversized", width=1, height=1, file="oversized.jpg"),
+            model(title="GPS", width=16, height=24, file="gps.jpg"),
+        ]
+    )
+    storage = gps.file.storage
+    data = image_bytes()
+    storage.save(gps.file.name, ContentFile(data))
+    mocker.patch.object(report_image_gps, "MAX_ORIGINAL_BYTES", len(data), create=True)
+    mocker.patch.object(storage, "size", return_value=1)
+    real_open = storage.open
+    requested = []
+
+    class GrowingOriginal(BytesIO):
+        def read(self, size=-1):
+            assert 0 < size <= len(data) + 1
+            requested.append(size)
+            assert sum(requested) <= len(data) + 1
+            return b"x" * size
+
+    original = GrowingOriginal()
+
+    def open_original(name, mode):
+        return original if name == oversized.file.name else real_open(name, mode)
+
+    mocker.patch.object(storage, "open", side_effect=open_original)
+    output, errors = StringIO(), StringIO()
+    with pytest.raises(CommandError, match="incomplete"):
+        call_command("report_image_gps", stdout=output, stderr=errors)
+
+    assert original.closed
+    assert sum(requested) == len(data) + 1
+    assert f"{gps.pk}\t{gps.file.name}" in output.getvalue()
+    assert "GPS images: 1; unreadable images: 0; budget-exceeded images: 1" in output.getvalue()
+    assert f"Inspection budget exceeded for image {oversized.pk}" in errors.getvalue()

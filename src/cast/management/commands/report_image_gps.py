@@ -1,5 +1,7 @@
 """Read-only inventory of GPS-bearing Wagtail originals."""
 
+from contextlib import closing
+from tempfile import SpooledTemporaryFile
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
@@ -8,6 +10,10 @@ from wagtail.images import get_image_model
 from willow.image import Image as WillowImage, UnrecognisedImageFormatError
 
 from cast.image_metadata import GPSInspectionBudgetExceeded, has_gps
+
+from .storage_backend import CONTENT_CHUNK_SIZE, MediaReadBudget, MediaReadBudgetExceeded, bounded_media_chunks
+
+MAX_ORIGINAL_BYTES = 64 * 1024**2
 
 
 class Command(BaseCommand):
@@ -19,14 +25,20 @@ class Command(BaseCommand):
         budget_exceeded = 0
         for image in get_image_model().objects.order_by("pk").iterator():
             try:
-                with image.file.storage.open(image.file.name, "rb") as original:
+                storage, name = image.file.storage, image.file.name
+                budget = MediaReadBudget(remaining=MAX_ORIGINAL_BYTES)
+                with SpooledTemporaryFile(max_size=CONTENT_CHUNK_SIZE) as original:
+                    with closing(bounded_media_chunks(storage, name, budget)) as chunks:
+                        for chunk in chunks:
+                            original.write(chunk)
+                    original.seek(0)
                     if WillowImage.open(original).format_name == "svg":
                         continue
                     with Image.open(original) as raster:
                         if has_gps(raster):
                             self.stdout.write(f"{image.pk}\t{image.file.name}")
                             found += 1
-            except GPSInspectionBudgetExceeded as exc:
+            except (GPSInspectionBudgetExceeded, MediaReadBudgetExceeded) as exc:
                 budget_exceeded += 1
                 self.stderr.write(f"Inspection budget exceeded for image {image.pk} ({image.file.name}): {exc}")
             except (

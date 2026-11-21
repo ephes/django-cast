@@ -414,6 +414,12 @@ JPEG or a 101-frame animation. They are stricter than Wagtail's single-image
 pixel limit and apply in addition to its upload-size checks.
 
 The read-only ``report_image_gps`` command uses the same bounded inspection.
+Before identifying the format or reading raster metadata, it copies each original
+into a seekable temporary snapshot with a read budget of 64 MiB and 300 seconds
+per original.
+The snapshot spills to temporary disk above 1 MiB. The byte limit is enforced
+on the stream even if the reported size is inaccurate. The deadline is checked
+around reads, so configure storage backend timeouts for stalled calls.
 Existing originals over the budget are reported separately as
 ``budget-exceeded images``, with their IDs and storage names, rather than as
 unreadable. It leaves every original untouched and exits nonzero because GPS

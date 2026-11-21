@@ -6,7 +6,7 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,6 +27,10 @@ MAX_MEDIA_READ_SECONDS = 300
 # Large objects on remote storage get more time: the per-read deadline never
 # assumes a link faster than this.
 MIN_MEDIA_READ_BYTES_PER_SECOND = 4 * 1024**2
+
+
+class MediaReadBudgetExceeded(RuntimeError):
+    """A storage stream exceeded the allotted bytes or time."""
 
 
 @dataclass
@@ -50,13 +54,13 @@ class MediaReadBudget:
 
     def check_time(self) -> None:
         if monotonic() >= self.deadline:
-            raise RuntimeError("media comparison exceeded time budget")
+            raise MediaReadBudgetExceeded("media read exceeded time budget")
 
     def consume(self, size: int) -> None:
         self.check_time()
         self.remaining -= size
         if self.remaining < 0:
-            raise RuntimeError("media comparison exceeded byte budget")
+            raise MediaReadBudgetExceeded("media read exceeded byte budget")
 
 
 @dataclass
@@ -78,9 +82,7 @@ def is_media_staging_key(path: str) -> bool:
     return re.search(r"\.django-cast-(?:refresh|replace)-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
 
 
-def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
-    budget = budget or MediaReadBudget.for_object(storage, path)
-    digest = hashlib.sha256()
+def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -> Generator[bytes, None, None]:
     budget.check_time()
     with storage.open(path, "rb") as in_f:
         while True:
@@ -88,8 +90,15 @@ def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | Non
             chunk = in_f.read(min(CONTENT_CHUNK_SIZE, budget.remaining + 1))
             budget.consume(len(chunk))
             if not chunk:
-                break
-            digest.update(chunk)
+                return
+            yield chunk
+
+
+def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
+    budget = budget or MediaReadBudget.for_object(storage, path)
+    digest = hashlib.sha256()
+    for chunk in bounded_media_chunks(storage, path, budget):
+        digest.update(chunk)
     return digest.digest()
 
 
