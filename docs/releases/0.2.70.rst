@@ -39,6 +39,9 @@ Fixes
   try a fresh script.
 - Restore the Podlove retry button and clear partial player markup when the
   initializer throws, including when the embed script is already loaded.
+- Bundle the media fixtures used to seed the styleguide in installed projects.
+- Validate podcast seed counts before creating pages or media, and skip
+  the MP4 fixture when no videos are requested.
 
 - Use an available audio variant in Twitter Player embeds and display an
   unavailable message when no source can be played.

@@ -1,6 +1,7 @@
 import json
 import random
 from copy import deepcopy
+from importlib.resources import files
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -165,15 +166,13 @@ def add_gallery_to_body(*, body: Body, gallery: Gallery = Auto) -> Body:
     return body
 
 
-def get_tests_fixture_dir() -> Path:
-    return Path(__file__).parent.parent.parent / "tests" / "fixtures"
+def _read_media_fixture(filename: str, fixture_dir: Path) -> bytes:
+    directory = fixture_dir or files("cast").joinpath("devdata_fixtures")
+    return directory.joinpath(filename).read_bytes()
 
 
 def create_mp4_file(*, fixture_dir: Path = Auto, fixture_name: str = "test.mp4") -> SimpleUploadedFile:
-    if not fixture_dir:  # pragma: no cover
-        fixture_dir = get_tests_fixture_dir()
-    with (fixture_dir / fixture_name).open("rb") as f:
-        mp4 = f.read()
+    mp4 = _read_media_fixture(fixture_name, fixture_dir)
     simple_mp4 = SimpleUploadedFile(name="test.mp4", content=mp4, content_type="video/mp4")
     return simple_mp4
 
@@ -214,10 +213,7 @@ def create_mp3_file(*, unique_name: bool = False) -> SimpleUploadedFile:
 
 
 def create_m4a_file(*, fixture_dir: Path = Auto, unique_name: bool = False) -> SimpleUploadedFile:
-    if not fixture_dir:  # pragma: no cover
-        fixture_dir = get_tests_fixture_dir()
-    with (fixture_dir / "test.m4a").open("rb") as f:
-        m4a = f.read()
+    m4a = _read_media_fixture("test.m4a", fixture_dir)
     filename = f"styleguide-{uuid4().hex}.m4a" if unique_name else "test.m4a"
     simple_m4a = SimpleUploadedFile(name=filename, content=m4a, content_type="audio/mp4")
     return simple_m4a
@@ -272,28 +268,37 @@ def generate_blog_with_media(
 ) -> Blog:
     if not media_numbers:  # pragma: no cover
         media_numbers = {k: 1 for k in ["images", "videos", "audios", "galleries"]}
+    defaults = {"images": 0, "images_in_galleries": 1, "galleries": 0, "videos": 0, "audios": 0}
+    counts = {name: media_numbers.get(name, default) for name, default in defaults.items()}
+    for name, count in {"number_of_posts": number_of_posts, **counts}.items():
+        if type(count) is not int or count < 0:
+            raise ValueError(f"{name} must be a nonnegative integer")
+    if podcast and number_of_posts and not counts["audios"]:
+        raise ValueError("Podcast episodes require at least one audio enclosure")
+
     blog = create_podcast() if podcast else create_blog()
     body = deepcopy(create_python_body())
 
     # images
-    images = [create_image() for _ in range(media_numbers.get("images", 0))]
+    images = [create_image() for _ in range(counts["images"])]
     for image in images:
         body = add_image_to_body(body=body, image=image)
 
     # galleries
-    images = [create_image() for _ in range(media_numbers.get("images_in_galleries", 1))]
-    galleries = [create_gallery(images=images) for _ in range(media_numbers.get("galleries", 0))]
+    images = [create_image() for _ in range(counts["images_in_galleries"])]
+    galleries = [create_gallery(images=images) for _ in range(counts["galleries"])]
     for gallery in galleries:
         body = add_gallery_to_body(body=body, gallery=gallery)
 
     # videos
-    mp4_file = create_mp4_file()
-    videos = [create_video(mp4_file=mp4_file, user=blog.owner) for _ in range(media_numbers.get("videos", 0))]
-    for video in videos:
-        body = add_video_to_body(body=body, video=video)
+    if counts["videos"]:
+        mp4_file = create_mp4_file()
+        for _ in range(counts["videos"]):
+            video = create_video(mp4_file=mp4_file, user=blog.owner)
+            body = add_video_to_body(body=body, video=video)
 
     # audios
-    audios = [create_audio(user=blog.owner, unique_filenames=True) for _ in range(media_numbers.get("audios", 0))]
+    audios = [create_audio(user=blog.owner, unique_filenames=True) for _ in range(counts["audios"])]
     for audio in audios:
         body = add_audio_to_body(body=body, audio=audio)
 

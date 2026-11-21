@@ -430,6 +430,7 @@ Code Organization
     ├── management/                 # Django commands
     ├── quickstart.py               # django-cast-quickstart command
     ├── quickstart_templates/       # Project templates for quickstart
+    ├── devdata_fixtures/           # Bundled development media samples
     └── devdata.py                  # Test and styleguide data builders
 
 ``tests/docs_paths_test.py`` fails when this tree misses a top-level module or

@@ -208,7 +208,11 @@ the route seeds pages and media and is limited to staff):
 
 This renders seeded preview components for the active theme (cards, media blocks,
 comments, galleries, podcast snippets). It is the fastest way to inspect visual
-regressions in isolated sections.
+regressions in isolated sections. Installed django-cast packages include the
+audio and video fixtures for local styleguide seeding, using a generated
+440 Hz tone and a test-pattern video. Callers of
+``cast.devdata.create_m4a_file`` and ``create_mp4_file`` can supply a
+``fixture_dir`` to use their own files.
 
 Real list-page behavior route:
 
@@ -351,6 +355,11 @@ This creates a podcast at ``/show/`` with multiple episodes and transcript
 payloads to profile list and detail pages. Increase ``--transcripts`` to mimic
 heavier payloads. If the slug already exists, delete the data or pick a
 different ``--slug`` value.
+
+When using ``cast.devdata.generate_blog_with_media`` directly, pass nonnegative
+integer counts for posts and media. Podcast seeds with episodes require at
+least one audio enclosure. Invalid counts are rejected before any pages or
+media are created. A zero video count leaves the MP4 fixture unopened.
 
 .. note::
 
