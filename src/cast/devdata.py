@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, User
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -31,9 +32,12 @@ Auto: Any = _Auto()
 
 
 def create_user(*, name: str = "testuser", password: str = "password") -> User:
-    user = User.objects.filter(username=name).first()
+    user_model = get_user_model()
+    users = user_model._default_manager
+    login = {user_model.USERNAME_FIELD: name}
+    user = users.filter(**login).first()
     if user is None:
-        user = User.objects.create_user(name, password=password)
+        user = users.create_user(**login, password=password)
         user._password = password  # type: ignore
         group, _created = Group.objects.get_or_create(name="Moderators")
         group.user_set.add(user)  # type: ignore

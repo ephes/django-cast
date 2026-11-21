@@ -120,7 +120,7 @@ class PostDetailContext:
         blog = post.blog
         owner_username = "unknown"
         if post.owner is not None:
-            owner_username = post.owner.username
+            owner_username = str(post.owner.get_username())
         from ..pages import Episode
 
         if preview:

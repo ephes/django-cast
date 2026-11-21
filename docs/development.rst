@@ -212,7 +212,9 @@ regressions in isolated sections. Installed django-cast packages include the
 audio and video fixtures for local styleguide seeding, using a generated
 440 Hz tone and a test-pattern video. Callers of
 ``cast.devdata.create_m4a_file`` and ``create_mp4_file`` can supply a
-``fixture_dir`` to use their own files.
+``fixture_dir`` to use their own files. The styleguide seed account uses the
+configured Django user model and its ``USERNAME_FIELD``. The account is
+inactive and has an unusable password.
 
 Real list-page behavior route:
 
