@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 
 // podlove-player.test.js
 import '@testing-library/jest-dom';
@@ -53,7 +53,7 @@ globalThis.podlovePlayer = podlovePlayerMock;
 function intersectionEntry(target: Element, isIntersecting: boolean): IntersectionObserverEntry {
   const rect = target.getBoundingClientRect();
   return { target, isIntersecting, boundingClientRect: rect, intersectionRect: rect,
-    intersectionRatio: isIntersecting ? 1 : 0, rootBounds: null, time: 0 };
+    intersectionRatio: isIntersecting ? 1 : 0, rootBounds: null, time: performance.now() };
 }
 
 describe('PodlovePlayerElement', () => {
@@ -79,6 +79,11 @@ describe('PodlovePlayerElement', () => {
       return 1;
     });
     globalThis.cancelIdleCallback = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   const setupAndTrigger = (configUrl?: string) => {
@@ -411,6 +416,82 @@ describe('PodlovePlayerElement', () => {
     );
 
     observeSpy.mockRestore();
+  });
+
+  it.each(['intersection', 'click'])('reschedules canceled %s initialization on reconnect', (mode) => {
+    const callbacks = new Map<number, IdleRequestCallback>();
+    vi.stubGlobal('requestIdleCallback', vi.fn((callback: IdleRequestCallback) => {
+      const handle = callbacks.size + 1;
+      callbacks.set(handle, callback);
+      return handle;
+    }));
+    vi.stubGlobal('cancelIdleCallback', vi.fn((handle: number) => callbacks.delete(handle)));
+
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    element.setAttribute('data-load-mode', mode);
+    const trigger = () => {
+      if (mode === 'click') {
+        element.loadButton?.click();
+      } else {
+        (element.observer as IntersectionObserverMock).trigger([intersectionEntry(element, true)]);
+      }
+    };
+
+    document.body.appendChild(element);
+    trigger();
+    expect(callbacks.size).toBe(1);
+    element.remove();
+    expect(callbacks.size).toBe(0);
+    document.body.appendChild(element);
+    if (mode === 'click') {
+      expect(element.loadButton).toBeEnabled();
+      expect(element.loadButton).toHaveTextContent('Load player');
+    }
+    trigger();
+    expect(callbacks.size).toBe(1);
+    for (const callback of callbacks.values()) {
+      callback({ didTimeout: false, timeRemaining: () => 50 });
+    }
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('observes only the current connection after window load', async () => {
+    const readyState = vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
+    const observe = vi.spyOn(IntersectionObserver.prototype, 'observe');
+    const detached = document.createElement('podlove-player');
+    document.body.appendChild(detached);
+    detached.remove();
+
+    const reconnected = document.createElement('podlove-player');
+    document.body.appendChild(reconnected);
+    reconnected.remove();
+    document.body.appendChild(reconnected);
+
+    readyState.mockReturnValue('complete');
+    window.dispatchEvent(new Event('load'));
+    await Promise.resolve();
+
+    expect(observe.mock.calls).toEqual([[reconnected]]);
+  });
+
+  it('ignores queued intersections from a previous connection', () => {
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    document.body.appendChild(element);
+    const observer = element.observer as IntersectionObserverMock;
+    const stale = intersectionEntry(element, true);
+
+    element.remove();
+    observer.callback([stale], observer);
+    expect(podlovePlayerMock).not.toHaveBeenCalled();
+
+    document.body.appendChild(element);
+    observer.callback([stale], observer);
+    expect(podlovePlayerMock).not.toHaveBeenCalled();
+
+    observer.trigger([intersectionEntry(element, true)]);
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
   });
 
   it('should unobserve the element when it is removed', () => {

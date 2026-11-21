@@ -31,6 +31,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Let reinserted Podlove players reschedule canceled idle work and restore the
+  load button when a pending click was canceled.
+- Ignore delayed page-load and intersection callbacks from prior Podlove
+  element connections.
+
 - Use an available audio variant in Twitter Player embeds and display an
   unavailable message when no source can be played.
 

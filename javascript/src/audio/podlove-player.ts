@@ -55,11 +55,11 @@ function getSharedObserver(): IntersectionObserver {
           }
 
           const target = entry.target;
-          if (target instanceof PodlovePlayerElement) {
+          if (target instanceof PodlovePlayerElement && target.isCurrentObservation(entry, observer)) {
+            observer.unobserve(target);
+            target.observer = null;
             target.scheduleInitialize();
           }
-
-          observer.unobserve(target);
         });
       },
       { rootMargin: OBSERVER_ROOT_MARGIN }
@@ -196,6 +196,8 @@ function appendDarkColorScheme(configUrl: string): string {
 
 export class PodlovePlayerElement extends HTMLElement {
   observer: IntersectionObserver | null;
+  private connectionGeneration = 0;
+  private observationStartedAt = 0;
   isInitialized: boolean;
   isScheduled: boolean;
   idleHandle: number | null;
@@ -217,6 +219,7 @@ export class PodlovePlayerElement extends HTMLElement {
   }
 
   connectedCallback() {
+    const generation = ++this.connectionGeneration;
     const clickToLoad = this.shouldClickToLoad();
     this.renderPlaceholder(clickToLoad);
     if (clickToLoad) {
@@ -228,12 +231,17 @@ export class PodlovePlayerElement extends HTMLElement {
       return;
     }
 
-    waitForPageLoad().then(() => this.observeElement());
+    waitForPageLoad().then(() => {
+      if (this.isConnected && this.connectionGeneration === generation) {
+        this.observeElement();
+      }
+    });
   }
 
   disconnectedCallback() {
     if (this.observer) {
       this.observer.unobserve(this);
+      this.observer = null;
     }
 
     if (this.loadButton && this.clickHandler) {
@@ -243,6 +251,11 @@ export class PodlovePlayerElement extends HTMLElement {
     if (this.idleHandle !== null) {
       cancelIdle(this.idleHandle);
       this.idleHandle = null;
+      this.isScheduled = false;
+      if (this.loadButton) {
+        this.loadButton.disabled = false;
+        this.loadButton.textContent = LOAD_BUTTON_TEXT;
+      }
     }
   }
 
@@ -381,7 +394,13 @@ export class PodlovePlayerElement extends HTMLElement {
 
   observeElement() {
     this.observer = getSharedObserver();
+    this.observationStartedAt = performance.now();
     this.observer.observe(this);
+  }
+
+  isCurrentObservation(entry: IntersectionObserverEntry, observer: IntersectionObserver): boolean {
+    // Entries queued before unobserve can arrive after the element reconnects.
+    return this.isConnected && this.observer === observer && entry.time >= this.observationStartedAt;
   }
 
   setupClickToLoad() {
