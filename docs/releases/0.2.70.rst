@@ -4,6 +4,15 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Editor API Markdown fields now reject fenced or indented code nested in a list
+  or block quote with ``400 validation_error`` code ``nested_code`` and its
+  source lines. Such code used to pass through rich-text conversion inside the
+  paragraph block, which could collapse its whitespace. Clients sending nested
+  code must move it out of the list or quote into a standalone code block.
+- The editor contributor list now returns ``400 validation_error`` at ``slug``
+  for more than 100 distinct ``slug`` filters (``too_many``) or a slug longer
+  than 50 characters (``max_length``).
+
 Features
 ~~~~~~~~
 
@@ -19,8 +28,6 @@ Security and hardening
 Fixes
 ~~~~~
 
-- Report the source lines of nested Markdown code blocks so authors can move
-  them to standalone blocks and keep their formatting.
 - Bound original reads in the GPS inventory before opening images for inspection.
 - Verify final media sync bytes before retiring the recovery stage.
 - Skip glossary import entries containing lone surrogates or NUL without rolling back valid entries.
