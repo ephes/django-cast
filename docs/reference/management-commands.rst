@@ -105,6 +105,8 @@ Options:
 In-place input changes visible in the file's size or modification/change time are
 refused before writes, including in dry runs (best effort on coarse filesystem clocks).
 Symlinks and atomic pathname replacements retain the coherent opened generation.
+Entries containing lone Unicode surrogates or NUL in a term, variant or note
+are skipped before row validation and reported by entry number and field.
 
 The command prints a summary in the form
 ``<podcast>: created=<n> updated=<n> unchanged=<n> skipped=<n>``.
@@ -134,7 +136,8 @@ Options (one of the first three is required):
     Incompatible read/write routing is refused before artifact access.
 
 ``--all``
-    All transcripts.
+    Read transcripts in batches of up to 100, through the highest ID visible
+    when the command starts. Higher IDs are picked up on a later run.
 
 ``--dry-run``
     Compute and report without writing.
@@ -334,11 +337,12 @@ Options:
     ``file_overwrite = False``), the previous backup copy is kept, the generated
     copy is removed, and the path is reported as an error. A staged copy is
     verified against the source SHA-256 digest before the final write. Failed
-    or incomplete staging is removed. When the final overwrite itself
-    fails, the verified complete stage is retained and its exact recovery key is
-    reported; a save under a generated name never touched the target and keeps
-    no stage.
-    Successful publication removes its stage. Cleanup attempts every other
+    or incomplete staging is removed. A same-name save is followed by a
+    SHA-256 read of the final key. If this read fails or the digest differs,
+    the path is reported as an error and the verified stage is retained for
+    recovery. A final overwrite that raises also retains the stage. A save
+    under a generated name keeps no stage.
+    Verified publication removes its stage. Cleanup attempts every other
     requested and returned staging name even if another deletion fails. Leftover
     names and deletion failures are logged and reported on command stderr when publication has
     already failed, preserving the original publication exception; cleanup failure
@@ -356,8 +360,10 @@ Options:
     destination with an overwrite-capable backend. Verify the destination
     digest before deleting the recovery key with ``Storage.delete(key)``.
     Retried commands do not automatically consume or delete older recovery keys.
-    Missing-copy writes are also staged and their partial final keys are
-    cleaned on exceptions under the same-host publisher lock. A run that is
+    Missing-copy writes are also staged. When a write raises or final
+    verification fails, their final keys and stages are cleaned under the
+    same-host publisher lock; no recovery stage is kept because an ordinary
+    retry copies the file again. A run that is
     killed can leave a staged ``.tmp`` key on storage. Backup and restore skip and
     report reserved media staging keys. Inspect and remove abandoned objects
     manually.

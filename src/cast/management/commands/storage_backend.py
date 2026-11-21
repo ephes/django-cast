@@ -6,7 +6,7 @@ import os
 import re
 import stat
 import tempfile
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,6 +27,10 @@ MAX_MEDIA_READ_SECONDS = 300
 # Large objects on remote storage get more time: the per-read deadline never
 # assumes a link faster than this.
 MIN_MEDIA_READ_BYTES_PER_SECOND = 4 * 1024**2
+
+
+class MediaReadBudgetExceeded(RuntimeError):
+    """A storage stream exceeded the allotted bytes or time."""
 
 
 @dataclass
@@ -50,13 +54,13 @@ class MediaReadBudget:
 
     def check_time(self) -> None:
         if monotonic() >= self.deadline:
-            raise RuntimeError("media comparison exceeded time budget")
+            raise MediaReadBudgetExceeded("media read exceeded time budget")
 
     def consume(self, size: int) -> None:
         self.check_time()
         self.remaining -= size
         if self.remaining < 0:
-            raise RuntimeError("media comparison exceeded byte budget")
+            raise MediaReadBudgetExceeded("media read exceeded byte budget")
 
 
 @dataclass
@@ -78,9 +82,7 @@ def is_media_staging_key(path: str) -> bool:
     return re.search(r"\.django-cast-(?:refresh|replace)-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
 
 
-def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
-    budget = budget or MediaReadBudget.for_object(storage, path)
-    digest = hashlib.sha256()
+def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -> Generator[bytes, None, None]:
     budget.check_time()
     with storage.open(path, "rb") as in_f:
         while True:
@@ -88,8 +90,15 @@ def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | Non
             chunk = in_f.read(min(CONTENT_CHUNK_SIZE, budget.remaining + 1))
             budget.consume(len(chunk))
             if not chunk:
-                break
-            digest.update(chunk)
+                return
+            yield chunk
+
+
+def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
+    budget = budget or MediaReadBudget.for_object(storage, path)
+    digest = hashlib.sha256()
+    for chunk in bounded_media_chunks(storage, path, budget):
+        digest.update(chunk)
     return digest.digest()
 
 
@@ -206,9 +215,9 @@ def publish_staged_file(
 
     Writers outside this same-host lock require backend conditional operations;
     they must be quiesced. Generic Storage has no compare-and-swap primitive.
-    A digest-verified stage is retained only when a refresh's final overwrite
-    ``save()`` raises, as a reserved recovery key excluded from restore
-    enumeration; verification failures, conflicts and renamed saves remove it.
+    Keep the verified stage if a refresh's final overwrite raises or its
+    same-name save cannot be verified. A missing copy keeps no stage. Reserved
+    recovery keys are excluded from sync enumeration.
     """
     target_exists = target_storage.exists(path)
     if target_exists == missing:
@@ -253,6 +262,13 @@ def publish_staged_file(
                     # copy. A renamed save never touched the target and needs none.
                     recovery_name = staged_name
                 raise
+            if saved_name == path:
+                if missing:
+                    # The source is intact, so an ordinary retry repairs an
+                    # unverified copy: drop its final key and the stage.
+                    staged_names.add(path)
+                else:
+                    recovery_name = staged_name
         if saved_name != path:
             if missing:
                 message = (
@@ -272,6 +288,9 @@ def publish_staged_file(
                     f"{message}; could not remove generated copy {saved_name}: {cleanup_error}"
                 ) from cleanup_error
             raise RuntimeError(message)
+        if content_digest(target_storage, path) != source_before:
+            raise RuntimeError(f"published copy {path} failed content verification")
+        staged_names.discard(path)
     except BaseException as primary_error:
         if recovery_name is not None:
             staged_names.discard(recovery_name)

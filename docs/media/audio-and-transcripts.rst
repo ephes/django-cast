@@ -759,7 +759,9 @@ replacement may retain the complete opened old generation; an unlink-only
 change to its link count/change time does not invalidate that generation. Duplicate JSON
 object members, including escaped spellings and nested objects, reject the whole
 document before writes; this differs from duplicate glossary terms in separate
-entries, which are skipped individually.
+entries, which are skipped individually. Lone Unicode surrogates and NUL
+characters in a term, variant or note skip that entry before persistence. The
+diagnostic identifies the entry number and field without echoing its contents.
 
 Podcast IDs and explicit transcript IDs must use canonical positive ASCII decimal
 notation within the selected backend's primary-key field range. Zero, signs,
@@ -887,6 +889,9 @@ write database, including when other databases contain identical IDs and tree
 paths. Read/write routing for selection, glossary validation and corrections must
 agree on that alias. Split routing is refused before opening transcript artifacts;
 ``--dry-run`` performs the same preflight and writes no artifacts.
+The ``--all`` run reads batches of up to 100 transcripts in primary-key order.
+It captures the highest primary key at startup and leaves later higher IDs for
+the next run.
 
 .. _transcript_glossary_review:
 

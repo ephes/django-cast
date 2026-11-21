@@ -132,3 +132,26 @@ def test_unknown_selection_does_not_process_its_valid_transcripts(audio, mocker)
     with pytest.raises(CommandError, match="Unknown transcript"):
         call_command("apply_transcript_glossary", "--transcript", str(transcript.pk), "--transcript", "999999")
     refresh.assert_not_called()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("field", "invalid"),
+    [("term", "\ud800"), ("notes", "\udfff"), ("variants", ["alias", "\ud800"]), ("variants", "\x00")],
+)
+def test_import_skips_invalid_database_text_and_keeps_valid_entries(podcast, tmp_path, field, invalid):
+    from tests.import_transcript_glossary_command_helpers import run, write_json
+
+    malformed = {"term": "Synthetic two", field: invalid}
+    path = write_json(
+        tmp_path,
+        [{"term": "Synthetic one", "notes": "Valid non-BMP text: 🐍"}, malformed, {"term": "Synthetic two"}],
+    )
+
+    summary, errors = run(podcast.slug, path)
+
+    assert "created=2 updated=0 unchanged=0 skipped=1" in summary
+    assert errors.splitlines() == [f'skipped entry 2: "{field}" contains invalid Unicode text']
+    assert list(
+        TranscriptGlossaryTerm.objects.filter(podcast=podcast).order_by("term").values_list("term", "notes")
+    ) == [("Synthetic one", "Valid non-BMP text: 🐍"), ("Synthetic two", "")]

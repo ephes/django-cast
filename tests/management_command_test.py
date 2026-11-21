@@ -227,8 +227,8 @@ def test_media_backup_refresh_changed_checks_target_generation_when_sizes_differ
     call_command("media_backup", refresh_changed=True, stdout=StringIO())
 
     assert backup._files == {"video.mp4": b"longer than before"}
-    # Publication revalidates the old target even when the comparison used size.
-    assert backup.opened.count("video.mp4") == 2
+    # Publication checks the old target twice and verifies the final bytes.
+    assert backup.opened.count("video.mp4") == 3
 
 
 def test_media_backup_refresh_changed_compares_content_without_size_support(mocker):

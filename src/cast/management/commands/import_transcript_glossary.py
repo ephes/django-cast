@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import stat
 from copy import copy
 from typing import Any
@@ -20,6 +21,8 @@ from ._selectors import is_id_selector, positive_id
 
 MAX_INPUT_BYTES = 8 * 1024 * 1024
 MAX_ENTRIES = 10_000
+# JSON escapes can decode to lone surrogates, and PostgreSQL text forbids NUL.
+_INVALID_DATABASE_TEXT = re.compile(r"[\x00\ud800-\udfff]")
 
 
 def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -182,6 +185,8 @@ class Command(BaseCommand):
         term = entry.get("term")
         if not isinstance(term, str) or not term.strip():
             return "skipped", '"term" must be a non-empty string'
+        if _INVALID_DATABASE_TEXT.search(term):
+            return "skipped", '"term" contains invalid Unicode text'
         label = f'"{term.strip()}"'
         notes = entry.get("notes", None)
         if notes is not None and not isinstance(notes, str):
@@ -190,6 +195,9 @@ class Command(BaseCommand):
             variants = _variants_text(entry["variants"]) if "variants" in entry else None
         except ValueError as exc:
             return "skipped", f"{label}: {exc}"
+        for field, value in (("variants", variants), ("notes", notes)):
+            if value is not None and _INVALID_DATABASE_TEXT.search(value):
+                return "skipped", f'"{field}" contains invalid Unicode text'
         key = normalize_phrase(term)
         if key in seen:
             return "skipped", f"{label}: duplicate of entry {seen[key]}"

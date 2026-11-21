@@ -288,3 +288,46 @@ def test_renamed_missing_copy_reports_that_nothing_was_published():
     assert "could not remove generated copy media.jpg_renamed" in reported
     assert "synthetic delete refusal" in reported
     assert "was removed" not in reported
+
+
+@pytest.mark.parametrize("missing", [False, True])
+@pytest.mark.parametrize("failure", ["short", "unreadable"])
+def test_same_name_save_must_verify_final_bytes_before_removing_stage(mocker, missing, failure):
+    name = "media.jpg"
+    data = b"complete synthetic bytes"
+    source = StubOverwriteStorage({name: data})
+    target = StubOverwriteStorage({} if missing else {name: b"old"})
+    original_save, original_open = target.save, target.open
+
+    def save(path, content):
+        saved = original_save(path, content)
+        if path == name and failure == "short":
+            target._files[path] = target._files[path][:3]
+        return saved
+
+    def open_file(path, mode):
+        if path == name and path in target.saved and failure == "unreadable":
+            raise OSError("synthetic final read failure")
+        return original_open(path, mode)
+
+    mocker.patch.object(target, "save", side_effect=save)
+    mocker.patch.object(target, "open", side_effect=open_file)
+    mocker.patch(
+        "cast.management.commands.media_backup.get_production_and_backup_storage", return_value=(source, target)
+    )
+    output, errors = StringIO(), StringIO()
+    with pytest.raises(CommandError):
+        call_command("media_backup", refresh_changed=not missing, stdout=output, stderr=errors)
+    assert "copied=0 refreshed=0 unchanged=0 errors=1" in output.getvalue()
+    assert target.exists(name) is not missing
+    if missing:
+        # The source is intact: an ordinary retry repairs it, so no stage is kept.
+        assert target.staged() == []
+        assert "recovery copy" not in errors.getvalue()
+    else:
+        [stage] = target.staged()
+        assert target._files[stage] == data
+        assert f"complete recovery copy retained at {stage}" in errors.getvalue()
+    assert (
+        "failed content verification" if failure == "short" else "synthetic final read failure"
+    ) in errors.getvalue()
