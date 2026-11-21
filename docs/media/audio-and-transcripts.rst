@@ -899,7 +899,18 @@ transcript can use it:
   the current glossary (as ``apply_transcript_glossary`` does).
 - When the audio is used by several episodes, or the stored episode no longer
   uses it, the section asks for the episode instead and applies the glossary
-  once one is chosen.
+  once one is chosen. A saved correction file with a missing or invalid episode
+  reference also needs its context repaired. Re-apply the glossary if only one
+  episode uses the audio, or choose an episode if the audio is shared. The repair
+  keeps the raw text and decisions.
+- A manual passage override takes precedence over automatic spelling changes
+  when the corrected text is rendered, including an empty override already
+  stored in the correction file.
+- Re-applying the glossary removes occurrence decisions whose raw segment is
+  missing and keeps decisions for segments that are still present. Each saved
+  segment must have a unique nonnegative integer start in milliseconds.
+  Invalid or duplicate starts need repair in the saved correction file before
+  glossary refresh or manual edits can write again.
 - Proposals are grouped by correct spelling. Each group lists its originals
   with their counts and the first occurrences in context, with the matched
   phrase highlighted. *Approve all* and *Reject all* decide every original of

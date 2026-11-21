@@ -148,9 +148,17 @@ def _uses_audio(episode: Episode | None, transcript: Transcript) -> bool:
     return episode is not None and episode.podcast_audio_id == transcript.audio_id
 
 
+def _valid_episode_id(value: object) -> bool:
+    return type(value) is int and value > 0
+
+
+def _valid_episode_reference(data: dict[str, Any]) -> bool:
+    return "episode_id" in data and (data["episode_id"] is None or _valid_episode_id(data["episode_id"]))
+
+
 def _stored_episode(transcript: Transcript, data: dict[str, Any]) -> Episode | None:
     episode_id = data.get("episode_id")
-    if not isinstance(episode_id, int):
+    if not _valid_episode_id(episode_id):
         return None
     return (
         Episode.objects.using(transcript._state.db).filter(pk=episode_id, podcast_audio_id=transcript.audio_id).first()
@@ -273,23 +281,41 @@ def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
 # --- sidecar ---------------------------------------------------------------------------------
 
 
-def _is_current(data: dict[str, Any], fingerprint: str) -> bool:
+def _valid_segment_starts(segments: list[Any]) -> bool:
+    seen: set[int] = set()
+    for segment in segments:
+        start_ms = podlove.parse_start_ms(segment.get("start_ms")) if isinstance(segment, dict) else None
+        if start_ms is None or start_ms in seen:
+            return False
+        seen.add(start_ms)
+    return True
+
+
+def _has_current_correction_data(data: dict[str, Any], fingerprint: str, *, for_edit: bool = False) -> bool:
     segments = data.get("segments")
+    if (
+        data.get("version") != SIDECAR_VERSION
+        or data.get("source_fingerprint") != fingerprint
+        or not isinstance(segments, list)
+    ):
+        return False
+    if not _valid_segment_starts(segments):
+        if for_edit:
+            raise ValidationError(_("Saved corrections have invalid or duplicate segment start times."))
+        return False
     return (
-        data.get("version") == SIDECAR_VERSION
-        and data.get("source_fingerprint") == fingerprint
-        and isinstance(segments, list)
-        and all(
-            isinstance(segment, dict)
-            and isinstance(segment.get("start_ms"), int)
-            and isinstance(segment.get("raw_text"), str)
-            and isinstance(segment.get("replacements"), list)
+        all(
+            isinstance(segment.get("raw_text"), str) and isinstance(segment.get("replacements"), list)
             for segment in segments
         )
         and isinstance(data.get("proposals"), list)
         and isinstance(data.get("decisions"), list)
         and isinstance(data.get("occurrence_decisions"), list)
     )
+
+
+def _is_current(data: dict[str, Any], fingerprint: str, *, for_edit: bool = False) -> bool:
+    return _has_current_correction_data(data, fingerprint, for_edit=for_edit) and _valid_episode_reference(data)
 
 
 def corrections_are_current(transcript: Transcript) -> bool:
@@ -321,9 +347,14 @@ def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _S
     podlove_data = transcript._load_transcript_json("podlove")
     podlove.validate_edit_times(podlove_data)
     data = transcript.corrections_data
-    if _is_current(data, transcript.mapping_fingerprint()):
+    if _has_current_correction_data(data, transcript.mapping_fingerprint(), for_edit=True):
         previously = {segment["start_ms"] for segment in data["segments"] if segment["replacements"]}
-        return _State(data, _stored_episode(transcript, data), previously)
+        context = (
+            _stored_episode(transcript, data)
+            if _valid_episode_reference(data)
+            else _initial_episode(transcript, episode)
+        )
+        return _State(data, context, previously)
     texts = podlove.get_texts(podlove_data)
     if not texts:
         return CorrectionsResult(STATUS_NO_SEGMENTS)
@@ -359,7 +390,10 @@ def _build(data: dict[str, Any], episode: Episode) -> dict[str, Any]:
     glossary, glossary_fingerprint = effective_glossary(episode)
     segments = [TextSegment(segment["start_ms"], segment["raw_text"]) for segment in data["segments"]]
     raw = {segment.start_ms: segment.text for segment in segments}
-    occurrences = {_occurrence_key(item): item for item in data["occurrence_decisions"]}
+    occurrence_decisions = [
+        item for item in data["occurrence_decisions"] if podlove.parse_start_ms(item["start_ms"]) in raw
+    ]
+    occurrences = {_occurrence_key(item): item for item in occurrence_decisions}
     decisions = {(normalize_phrase(item["original"]), item["to"]): item for item in data["decisions"]}
     candidates: dict[tuple[Any, ...], dict[str, Any]] = {}
     applied: dict[int, list[tuple[int, int]]] = {start_ms: [] for start_ms in raw}
@@ -437,6 +471,7 @@ def _build(data: dict[str, Any], episode: Episode) -> dict[str, Any]:
         **data,
         "episode_id": episode.pk,
         "glossary_fingerprint": glossary_fingerprint,
+        "occurrence_decisions": occurrence_decisions,
         "segments": [
             {"start_ms": segment.start_ms, "raw_text": segment.text, "replacements": by_start[segment.start_ms]}
             for segment in segments
@@ -446,23 +481,27 @@ def _build(data: dict[str, Any], episode: Episode) -> dict[str, Any]:
 
 
 def corrected_texts(data: dict[str, Any], start_milliseconds: Iterable[int] | None = None) -> dict[int, str]:
-    """Corrected text per ``start_ms``: raw text plus the replacements that are not rejected.
+    """Corrected text per ``start_ms``: manual text or raw text with non-rejected edits.
 
     Pure function of the sidecar data. Limited to ``start_milliseconds`` when given.
     """
     wanted = None if start_milliseconds is None else set(start_milliseconds)
+    manual_texts = data.get("manual_texts", {})
     texts: dict[int, str] = {}
     for segment in data.get("segments", []):
-        if wanted is not None and segment["start_ms"] not in wanted:
+        start_ms = segment["start_ms"]
+        if wanted is not None and start_ms not in wanted:
+            continue
+        manual_key = str(start_ms)
+        if manual_key in manual_texts:
+            texts[start_ms] = manual_texts[manual_key]
             continue
         edits = [
-            Replacement(segment["start_ms"], item["start"], item["end"], item["from"], item["to"], item["source"])
+            Replacement(start_ms, item["start"], item["end"], item["from"], item["to"], item["source"])
             for item in segment["replacements"]
             if item["state"] != STATE_REJECTED
         ]
-        texts[segment["start_ms"]] = data.get("manual_texts", {}).get(
-            str(segment["start_ms"]), apply_replacements(segment["raw_text"], edits)
-        )
+        texts[start_ms] = apply_replacements(segment["raw_text"], edits)
     return texts
 
 
@@ -489,7 +528,7 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
     replacements = StagedFileReplacementGroup()
 
     def save_with_current_glossary(instance: Transcript, **kwargs: Any) -> None:
-        if data.get("episode_id") is not None:
+        if _valid_episode_id(data.get("episode_id")):
             episode = _stored_episode(instance, data)
             if episode is None or effective_glossary(episode)[1] != data["glossary_fingerprint"]:
                 raise services.TranscriptEditConflict("Reload the transcript; its glossary changed while editing.")
@@ -601,9 +640,9 @@ def apply_transcript_corrections(transcript: Transcript) -> int:
     Rewrites the text of every segment that has replacements; returns the number
     of Podlove segments whose text changed. Running it twice changes nothing.
     """
-    if not corrections_are_current(transcript):
-        return 0
     data = transcript.corrections_data
+    if not _is_current(data, transcript.source_fingerprint):
+        return 0
     corrected = [segment["start_ms"] for segment in data["segments"] if segment["replacements"]]
     return _write(transcript, data, corrected_texts(data, corrected))
 

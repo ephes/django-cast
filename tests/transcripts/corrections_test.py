@@ -1535,3 +1535,84 @@ def test_stale_episode_instance_is_not_a_glossary_change(transcript, glossary_ep
 @pytest.fixture
 def transcript(glossary_episode, audio):
     return make_transcript(audio)
+
+
+@pytest.mark.parametrize("manual_text", ["Editor text", ""])
+def test_manual_text_skips_automatic_renderer(monkeypatch, manual_text):
+    def fail(raw_text, edits):
+        pytest.fail("Automatic rendering must not run for a manual override")
+
+    monkeypatch.setattr(corrections, "apply_replacements", fail)
+    data = {
+        "segments": [{"start_ms": 1000, "raw_text": "Raw text", "replacements": []}],
+        "manual_texts": {"1000": manual_text},
+    }
+
+    assert corrections.corrected_texts(data) == {1000: manual_text}
+
+
+@pytest.mark.django_db
+def test_refresh_retires_orphan_occurrence_and_keeps_valid_decisions(transcript):
+    refresh_transcript_corrections(transcript)
+    decide_correction_occurrence(transcript, **buttondown_position(transcript), action=STATE_APPROVED)
+    data = transcript.corrections_data
+    valid_decisions = data["occurrence_decisions"]
+    data["occurrence_decisions"] = [*valid_decisions, {**valid_decisions[0], "start_ms": 999}]
+    transcript._write_corrections_data(data)
+    transcript.save(update_fields=["corrections"])
+    before = file_bytes(transcript)
+
+    assert refresh_transcript_corrections(transcript, dry_run=True).changed == 0
+    assert file_bytes(transcript) == before
+    assert refresh_transcript_corrections(transcript).changed == 0
+    assert transcript.corrections_data["occurrence_decisions"] == valid_decisions
+    assert transcript.corrections_data["segments"] == data["segments"]
+    after = file_bytes(transcript)
+    assert all(after[name] == before[name] for name in ("podlove", "dote", "vtt"))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("start_ms", [10000, True, -1])
+def test_invalid_sidecar_segment_starts_preserve_artifacts(transcript, start_ms):
+    from cast.transcripts.passages import correct_text
+
+    refresh_transcript_corrections(transcript)
+    data = transcript.corrections_data
+    data["segments"].append({"start_ms": start_ms, "raw_text": "Conflicting raw text.", "replacements": []})
+    transcript._write_corrections_data(data)
+    transcript.save(update_fields=["corrections"])
+    before = file_bytes(transcript)
+
+    assert apply_transcript_corrections(transcript) == 0
+    assert file_bytes(transcript) == before
+    assert not corrections.corrections_are_current(transcript)
+    with pytest.raises(ValidationError, match="invalid or duplicate segment start times"):
+        refresh_transcript_corrections(transcript)
+    with pytest.raises(ValidationError, match="invalid or duplicate segment start times"):
+        correct_text(transcript, 10000, "Editor text")
+
+    assert file_bytes(transcript) == before
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("episode_id", ["missing", True, 0])
+def test_manual_edit_keeps_decisions_with_invalid_episode_reference(transcript, episode_id):
+    from cast.transcripts.passages import correct_text
+
+    refresh_transcript_corrections(transcript)
+    decide_correction_occurrence(transcript, **buttondown_position(transcript), action=STATE_APPROVED)
+    data = transcript.corrections_data
+    if episode_id == "missing":
+        del data["episode_id"]
+    else:
+        data["episode_id"] = episode_id
+    transcript._write_corrections_data(data)
+    transcript.save(update_fields=["corrections"])
+
+    correct_text(transcript, 10000, "Editor text")
+
+    stored = transcript.corrections_data
+    assert stored["occurrence_decisions"] == data["occurrence_decisions"]
+    assert stored["decisions"] == data["decisions"]
+    assert stored["segments"] == data["segments"]
+    assert stored["manual_texts"] == {"10000": "Editor text"}

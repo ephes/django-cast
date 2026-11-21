@@ -141,6 +141,35 @@ def test_not_yet_applied_offers_reapply(admin_client, transcript):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("episode_id", ["missing", True, False, 0, -1, "1"])
+def test_invalid_episode_reference_offers_repair(admin_client, applied, episode, episode_id):
+    EpisodeFactory(
+        owner=episode.owner, parent=episode.get_parent(), podcast_audio=applied.audio, title="Other", slug="other"
+    )
+    data = applied.corrections_data
+    if episode_id == "missing":
+        del data["episode_id"]
+    else:
+        data["episode_id"] = episode_id
+    applied._write_corrections_data(data)
+    applied.save(update_fields=["corrections"])
+
+    response = admin_client.get(edit_url(applied))
+
+    assert response.status_code == 200
+    review = response.context["glossary_review"]
+    assert (review.current, review.episode, review.needs_episode) == (False, None, True)
+    assert 'value="glossary-episode"' in response.content.decode()
+
+    response = post(admin_client, applied, action="glossary-episode", episode=episode.pk)
+
+    assert response.context["glossary_review"].episode == episode
+    applied.refresh_from_db()
+    assert applied.corrections_data["episode_id"] == episode.pk
+    assert applied.corrections_data["segments"] == data["segments"]
+
+
+@pytest.mark.django_db
 def test_groups_and_replacements_render_with_context(admin_client, applied, episode):
     response = admin_client.get(edit_url(applied))
     content = response.content.decode()
