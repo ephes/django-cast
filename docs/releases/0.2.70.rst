@@ -17,6 +17,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Report the source lines of nested Markdown code blocks so authors can move
+  them to standalone blocks and keep their formatting.
 - Bound original reads in the GPS inventory before opening images for inspection.
 - Verify final media sync bytes before retiring the recovery stage.
 - Skip glossary import entries containing lone surrogates or NUL without rolling back valid entries.

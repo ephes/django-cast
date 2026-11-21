@@ -717,7 +717,10 @@ Conversion policy:
 - Markdown is parsed as CommonMark. Consecutive top-level prose becomes one
   ``paragraph`` block; each top-level fenced or indented code block becomes a
   ``code`` block. The first word of the fence info string is the language, or
-  ``text`` when absent. Code nested in lists or quotes stays in the paragraph.
+  ``text`` when absent. Fenced or indented code nested in a list or block quote
+  returns ``400 validation_error`` with code ``nested_code`` at the Markdown
+  field and the source line or line range. Move the code out of its list or
+  quote to keep its formatting in a standalone ``code`` block.
 - Raw HTML in the Markdown source is escaped and kept as text, never passed
   through as markup. The parser leaves ``javascript:``, ``vbscript:``,
   ``file:`` and most ``data:`` links as literal text; any link that does become

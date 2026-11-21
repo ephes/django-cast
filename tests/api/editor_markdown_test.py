@@ -171,6 +171,28 @@ def test_markdown_images_are_rejected(api_client, admin_user, blog):
     assert not Post.objects.filter(title="Markdown").exists()
 
 
+@pytest.mark.parametrize(
+    ("markdown", "location"),
+    [
+        ("- item\n\n  ```\n    first\n\n  second\n  ```\n", "lines 3-7"),
+        ("> Quoted\n>\n> ```\n>   first\n>\n> second\n> ```\n", "lines 3-7"),
+        (">     indented\n", "line 1"),
+    ],
+)
+def test_nested_markdown_code_is_rejected(api_client, admin_user, blog, markdown, location):
+    api_client.force_authenticate(user=admin_user)
+
+    response = create(api_client, "post", blog, overview_markdown=markdown)
+
+    assert response.status_code == 400, response.content
+    assert response.json()["errors"] == {
+        "overview_markdown": [
+            {"code": "nested_code", "message": f"Nested Markdown code is not supported ({location}); unnest it."}
+        ]
+    }
+    assert not Post.objects.filter(title="Markdown").exists()
+
+
 def test_generated_block_errors_are_reported_under_the_markdown_field(api_client, admin_user, blog):
     api_client.force_authenticate(user=admin_user)
 
