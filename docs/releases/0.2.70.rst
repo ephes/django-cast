@@ -71,6 +71,7 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Reuse the signed evidence hash for legacy speaker mappings across voice-reference candidates.
 - Reuse the PodcastIndex contributor role allowlist across RSS and Atom items.
 - Use the admitted feed cache generation immediately after a successful cache add.
 - Merge transcript-wide correction decisions in one pass for group actions.

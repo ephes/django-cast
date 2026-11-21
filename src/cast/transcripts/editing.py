@@ -60,6 +60,8 @@ def resolve_voice_reference_contributor(
     speaker_label: str,
     contributor_assignments: list[EpisodeContributor],
     speaker_mappings: list[TranscriptSpeakerMapping] | tuple[()] = (),
+    *,
+    mapping_fingerprint: str | None = None,
 ) -> Contributor | None:
     mapped_ids = {
         mapping.contributor_id
@@ -67,7 +69,8 @@ def resolve_voice_reference_contributor(
         if mapping.speaker_label == speaker_label
         and mapping.active
         and mapping.review_state == TranscriptSpeakerMapping.ReviewState.APPROVED
-        and mapping.source_artifact_fingerprint == mapping.transcript.mapping_fingerprint()
+        and mapping.source_artifact_fingerprint
+        == (mapping.transcript.mapping_fingerprint() if mapping_fingerprint is None else mapping_fingerprint)
         and mapping.contributor_id is not None
     }
     contributors: dict[int, Contributor] = {}
