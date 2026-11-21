@@ -935,13 +935,14 @@ def _ensure_styleguide_comments(post: Post, *, site: Site, user: User) -> None:
                 reply.save(update_fields=reply_updates)
         return
 
+    username = str(user.get_username())
     base_kwargs = {
         "content_type": ctype,
         "object_pk": str(post.pk),
         "site": django_site,
         "user": user,
-        "user_name": user.username,
-        "user_email": f"{user.username}@example.com",
+        "user_name": username,
+        "user_email": f"{username}@example.com",
         "comment": parent_text,
         "submit_date": timezone.now(),
     }

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 
 // podlove-player.test.js
 import '@testing-library/jest-dom';
@@ -53,12 +53,13 @@ globalThis.podlovePlayer = podlovePlayerMock;
 function intersectionEntry(target: Element, isIntersecting: boolean): IntersectionObserverEntry {
   const rect = target.getBoundingClientRect();
   return { target, isIntersecting, boundingClientRect: rect, intersectionRect: rect,
-    intersectionRatio: isIntersecting ? 1 : 0, rootBounds: null, time: 0 };
+    intersectionRatio: isIntersecting ? 1 : 0, rootBounds: null, time: performance.now() };
 }
 
 describe('PodlovePlayerElement', () => {
   beforeEach(() => {
     document.body.innerHTML = '';
+    globalThis.podlovePlayer = podlovePlayerMock;
     document.documentElement.removeAttribute('data-bs-theme');
     document.documentElement.removeAttribute('data-theme');
     document.body.removeAttribute('data-bs-theme');
@@ -79,6 +80,12 @@ describe('PodlovePlayerElement', () => {
       return 1;
     });
     globalThis.cancelIdleCallback = vi.fn();
+  });
+
+  afterEach(() => {
+    document.querySelectorAll("script[data-podlove-embed]").forEach((script) => script.remove());
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   const setupAndTrigger = (configUrl?: string) => {
@@ -413,6 +420,116 @@ describe('PodlovePlayerElement', () => {
     observeSpy.mockRestore();
   });
 
+  it.each(['intersection', 'click'])('reschedules canceled %s initialization on reconnect', (mode) => {
+    const callbacks = new Map<number, IdleRequestCallback>();
+    vi.stubGlobal('requestIdleCallback', vi.fn((callback: IdleRequestCallback) => {
+      const handle = callbacks.size + 1;
+      callbacks.set(handle, callback);
+      return handle;
+    }));
+    vi.stubGlobal('cancelIdleCallback', vi.fn((handle: number) => callbacks.delete(handle)));
+
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    element.setAttribute('data-load-mode', mode);
+    const trigger = () => {
+      if (mode === 'click') {
+        element.loadButton?.click();
+      } else {
+        (element.observer as IntersectionObserverMock).trigger([intersectionEntry(element, true)]);
+      }
+    };
+
+    document.body.appendChild(element);
+    trigger();
+    expect(callbacks.size).toBe(1);
+    element.remove();
+    expect(callbacks.size).toBe(0);
+    document.body.appendChild(element);
+    if (mode === 'click') {
+      expect(element.loadButton).toBeEnabled();
+      expect(element.loadButton).toHaveTextContent('Load player');
+    }
+    trigger();
+    expect(callbacks.size).toBe(1);
+    for (const callback of callbacks.values()) {
+      callback({ didTimeout: false, timeRemaining: () => 50 });
+    }
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('observes only the current connection after window load', async () => {
+    const readyState = vi.spyOn(document, 'readyState', 'get').mockReturnValue('loading');
+    const observe = vi.spyOn(IntersectionObserver.prototype, 'observe');
+    const detached = document.createElement('podlove-player');
+    document.body.appendChild(detached);
+    detached.remove();
+
+    const reconnected = document.createElement('podlove-player');
+    document.body.appendChild(reconnected);
+    reconnected.remove();
+    document.body.appendChild(reconnected);
+
+    readyState.mockReturnValue('complete');
+    window.dispatchEvent(new Event('load'));
+    await Promise.resolve();
+
+    expect(observe.mock.calls).toEqual([[reconnected]]);
+  });
+
+  it('ignores queued intersections from a previous connection', () => {
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    document.body.appendChild(element);
+    const observer = element.observer as IntersectionObserverMock;
+    const stale = intersectionEntry(element, true);
+
+    element.remove();
+    observer.callback([stale], observer);
+    expect(podlovePlayerMock).not.toHaveBeenCalled();
+
+    document.body.appendChild(element);
+    const current = element.observer as IntersectionObserverMock;
+    expect(current).not.toBe(observer);
+    observer.callback([stale], observer);
+    expect(podlovePlayerMock).not.toHaveBeenCalled();
+
+    current.trigger([intersectionEntry(element, true)]);
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps players on a retired shared observer working', () => {
+    const staying = document.createElement('podlove-player');
+    staying.setAttribute('data-url', '/audio/');
+    const leaving = document.createElement('podlove-player');
+    leaving.setAttribute('data-url', '/audio/');
+    document.body.append(staying, leaving);
+    const retired = staying.observer as IntersectionObserverMock;
+    expect(leaving.observer).toBe(retired);
+
+    leaving.remove();
+    document.body.appendChild(leaving);
+    expect(leaving.observer).not.toBe(retired);
+    expect(staying.observer).toBe(retired);
+
+    retired.trigger([intersectionEntry(staying, true)]);
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('initializes from an entry stamped before observe() in the same frame', async () => {
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    document.body.appendChild(element);
+    await Promise.resolve();
+    const observer = element.observer as IntersectionObserverMock;
+    expect(observer).not.toBeNull();
+
+    // Browsers stamp entries with the rendering update's frame time, which can
+    // precede an observe() call made from a requestAnimationFrame callback.
+    observer.callback([{ ...intersectionEntry(element, true), time: 0 }], observer);
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+  });
+
   it('should unobserve the element when it is removed', () => {
     const unobserveSpy = vi.spyOn(IntersectionObserver.prototype, 'unobserve');
 
@@ -454,6 +571,79 @@ describe('PodlovePlayerElement', () => {
 
     appendSpy.mockRestore();
     global.podlovePlayer = originalPodlovePlayer;
+  });
+
+  it.each(['new', 'pending', 'loaded'])('retries a %s script without an entrypoint', async (state) => {
+    globalThis.podlovePlayer = undefined;
+    let failedScript: HTMLScriptElement | null = null;
+    if (state !== 'new') {
+      failedScript = document.createElement('script');
+      failedScript.setAttribute('data-podlove-embed', 'true');
+      if (state === 'loaded') {
+        failedScript.setAttribute('data-podlove-embed-loaded', 'true');
+      }
+      document.head.appendChild(failedScript);
+    }
+
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    element.setAttribute('data-embed', '/embed.js');
+    element.setAttribute('data-load-mode', 'click');
+    document.body.appendChild(element);
+
+    const button = element.loadButton!;
+    button.click();
+    failedScript ??= document.querySelector('script[data-podlove-embed]');
+    expect(failedScript).not.toBeNull();
+    if (state !== 'loaded') {
+      failedScript?.dispatchEvent(new Event('load'));
+    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(failedScript?.isConnected).toBe(false);
+    expect(button).toBeEnabled();
+    expect(button).toHaveTextContent('Try again');
+
+    button.click();
+    const retryScript = document.querySelector('script[data-podlove-embed]');
+    expect(retryScript).not.toBeNull();
+    expect(retryScript).not.toBe(failedScript);
+    globalThis.podlovePlayer = podlovePlayerMock;
+    retryScript?.dispatchEvent(new Event('load'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+    expect(button.isConnected).toBe(false);
+  });
+
+  it('cleans up after a preloaded initializer throws and allows a retry', () => {
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    element.setAttribute('data-load-mode', 'click');
+    document.body.appendChild(element);
+
+    podlovePlayerMock.mockImplementation((host) => {
+      if (typeof host === 'string') throw new Error('Expected a player host');
+      host.append(document.createElement('iframe'));
+    });
+    podlovePlayerMock.mockImplementationOnce((host) => {
+      if (typeof host === 'string') throw new Error('Expected a player host');
+      host.append(document.createElement('iframe'));
+      host.after(document.createElement('iframe'));
+      throw new Error('Synthetic initializer failure');
+    });
+
+    const button = element.loadButton!;
+    button.click();
+    expect(element.querySelectorAll('iframe')).toHaveLength(0);
+    expect(element.errorMessage?.hidden).toBe(false);
+    expect(button).toBeEnabled();
+    expect(button).toHaveTextContent('Try again');
+
+    button.click();
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(2);
+    expect(element.querySelectorAll('iframe')).toHaveLength(1);
+    expect(element.errorMessage?.hidden).toBe(true);
+    expect(button.isConnected).toBe(false);
   });
 
   it('should fail closed when no embed script is configured', async () => {

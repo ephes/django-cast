@@ -102,6 +102,13 @@ Data Attributes
     values fail closed and do not load a third-party fallback script. Django
     Cast ships a local copy at ``cast/js/web-player/embed.5.js``.
 
+    If a script response does not expose the Podlove initializer, the failed
+    script is removed so a later attempt can request it again. In click mode,
+    a script load failure, or an initializer that throws synchronously (such
+    as a custom embed script), restores the retry button. The bundled Podlove
+    Web Player 5 initializer is asynchronous and logs its own failures to the
+    console, so they do not restore the button.
+
 ``data-template``
     Optional Podlove template name passed through to the player initialization.
 

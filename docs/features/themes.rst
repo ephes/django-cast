@@ -468,7 +468,9 @@ component, gallery thumbnails need ``data-modal-*``, ``data-prev``, and
 **Podlove player** — the ``<podlove-player>`` web component requires
 ``data-url``, ``data-embed``, and ``data-config`` attributes. See
 :ref:`podlove_player_component` for details. Missing ``data-embed`` values fail
-closed instead of loading a third-party fallback script.
+closed instead of loading a third-party fallback script. Removing an element
+cancels pending idle work. On reinsertion, an unstarted player can load from a
+fresh intersection or a new click, depending on its loading mode.
 
 Theme Discovery
 ---------------

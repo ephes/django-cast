@@ -12,6 +12,8 @@ import pytest
 
 from cast import quickstart
 
+DEVDATA_FIXTURE_FILES = {"test.m4a", "test.mp4", "test_video.mp4"}
+
 QUICKSTART_TEMPLATE_FILES = {
     "base.html.template",
     "manage.py.template",
@@ -58,6 +60,9 @@ def test_quickstart_templates_are_in_built_distributions(tmp_path):
             if name.startswith("cast/quickstart_templates/") and Path(name).name in QUICKSTART_TEMPLATE_FILES
         }
     assert wheel_templates == QUICKSTART_TEMPLATE_FILES
+    with zipfile.ZipFile(wheel) as archive:
+        wheel_fixtures = {Path(name).name for name in archive.namelist() if name.startswith("cast/devdata_fixtures/")}
+    assert DEVDATA_FIXTURE_FILES <= wheel_fixtures
 
     sdist = next(dist_dir.glob("*.tar.gz"))
     with tarfile.open(sdist) as archive:

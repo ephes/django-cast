@@ -31,6 +31,23 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Let reinserted Podlove players reschedule canceled idle work and restore the
+  load button when a pending click was canceled.
+- Ignore delayed page-load and intersection callbacks from prior Podlove
+  element connections.
+- Retire Podlove embed scripts that load without an initializer so the user can
+  try a fresh script.
+- Restore the Podlove retry button and clear partial player markup when the
+  initializer throws synchronously, including when the embed script is
+  already loaded. The bundled asynchronous Podlove 5 initializer logs its own
+  failures instead.
+- Bundle the media fixtures used to seed the styleguide in installed projects.
+- Validate podcast seed counts before creating pages or media, and skip
+  the MP4 fixture when no videos are requested.
+- Create and reuse the styleguide seed account through the configured Django
+  user model and its login field, and admit ``ensure_reference_site --reset``
+  roots by that login field. Public author names still use ``username``.
+
 - Use an available audio variant in Twitter Player embeds and display an
   unavailable message when no source can be played.
 
