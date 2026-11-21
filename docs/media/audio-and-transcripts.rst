@@ -906,6 +906,11 @@ transcript can use it:
 - A manual passage override takes precedence over automatic spelling changes
   when the corrected text is rendered, including an empty override already
   stored in the correction file.
+- Re-applying the glossary removes occurrence decisions whose raw segment is
+  missing and keeps decisions for segments that are still present. Each saved
+  segment must have a unique nonnegative integer start in milliseconds.
+  Invalid or duplicate starts need repair in the saved correction file before
+  glossary refresh or manual edits can write again.
 - Proposals are grouped by correct spelling. Each group lists its originals
   with their counts and the first occurrences in context, with the matched
   phrase highlighted. *Approve all* and *Reject all* decide every original of
