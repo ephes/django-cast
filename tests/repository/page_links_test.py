@@ -168,6 +168,31 @@ def test_cached_page_link_is_absolute_only_inside_absolute_urls_block():
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("batch", [False, True])
+def test_relative_refresh_evicts_stale_absolute_page_link(blog, batch, mocker):
+    handler = PageLinkHandlerWithCache
+    handler.clear_cache()
+    handler.cache_url(blog.pk, "/old/", "https://old.example/old/")
+    unaffected_id = blog.pk + 1
+    handler.cache_url(unaffected_id, "/kept/", "https://kept.example/kept/")
+    lookup = mocker.spy(handler, "get_many")
+
+    if batch:
+        handler.cache_urls({blog.pk: "/refreshed/"}, {unaffected_id: "https://ignored.example/kept/"})
+    else:
+        handler.cache_url(blog.pk, "/refreshed/")
+
+    assert handler.expand_db_attributes({"id": blog.pk}) == '<a href="/refreshed/">'
+    with handler.absolute_urls():
+        assert handler.expand_db_attributes_many([{"id": blog.pk}, {"id": unaffected_id}]) == [
+            f'<a href="{blog.full_url}">',
+            '<a href="https://kept.example/kept/">',
+        ]
+    lookup.assert_called_once_with([{"id": blog.pk}])
+    assert handler.expand_db_attributes({"id": blog.pk}) == '<a href="/refreshed/">'
+
+
+@pytest.mark.django_db
 def test_uncached_page_link_falls_back_to_full_url_inside_absolute_urls_block(blog):
     post = PostFactory(owner=blog.owner, parent=blog, title="linked", slug="linked")
     PageLinkHandlerWithCache.clear_cache()

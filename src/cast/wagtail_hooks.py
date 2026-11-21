@@ -6,7 +6,7 @@ registers a Tags snippet viewset for CRUD operations on ``taggit.Tag``
 from the Wagtail admin sidebar.
 """
 
-from collections.abc import Iterator, Mapping, MutableMapping
+from collections.abc import Iterable, Iterator, Mapping, MutableMapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from typing import Any, TypeVar, overload
@@ -362,9 +362,11 @@ class PageLinkHandlerWithCache(PageLinkHandler):
         def clear(self) -> None:
             self._storage.set((get_language(), {}))
 
-        def publish_many(self, entries: Mapping[int, str | None]) -> None:
+        def publish_many(self, entries: Mapping[int, str | None], *, remove: Iterable[int] = ()) -> None:
             """Copy once for a batch so filling a feed's cache stays linear."""
             cache = self._get_cache().copy()
+            for key in remove:
+                cache.pop(key, None)
             cache.update(entries)
             self._storage.set((get_language(), cache))
 
@@ -389,16 +391,15 @@ class PageLinkHandlerWithCache(PageLinkHandler):
 
     @classmethod
     def cache_url(cls, page_id: int, url: str, absolute_url: str | None = None) -> None:
-        cls.cache[page_id] = url
-        if absolute_url is not None:
-            cls.absolute_cache[page_id] = absolute_url
+        cls.cache_urls({page_id: url}, {page_id: absolute_url} if absolute_url is not None else {})
 
     @classmethod
     def cache_urls(cls, urls: Mapping[int, str], absolute_urls: Mapping[int, str]) -> None:
         """Cache many page URLs with one copy per context-local cache."""
         cls.cache.publish_many(urls)
         cls.absolute_cache.publish_many(
-            {page_id: absolute_urls[page_id] for page_id in urls if page_id in absolute_urls}
+            {page_id: absolute_urls[page_id] for page_id in urls if page_id in absolute_urls},
+            remove=(page_id for page_id in urls if page_id not in absolute_urls),
         )
 
     @classmethod

@@ -297,4 +297,6 @@ Page-link caches belong to the current context and language. Writes publish a
 new cache dictionary so an async task or ``copy_context()`` child inherits a
 snapshot and cannot mutate its parent's entries. Relative page links and
 absolute feed links use separate caches; nested feed rendering restores the
-previous URL mode.
+previous URL mode. Refreshing a relative URL without an absolute URL clears
+that page's cached absolute entry. Feed rendering then resolves the current URL
+on demand, while cached links for other pages stay available.
