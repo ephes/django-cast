@@ -92,21 +92,25 @@ ceiling of 16 GiB of bytes and a deadline of 300 seconds, extended for large
 objects to their reported size at 4 MiB/s (at most the time 16 GiB takes at that
 rate, about 68 minutes). Missing copies are subject to the same
 per-read ceilings, since they are staged and verified like refreshes. Reads
-request at most 1 MiB (or the remaining budget plus one overflow byte). Oversized, growing or delayed streams cause an explicit
-path error before publication. A refused comparison never counts as unchanged.
+request at most 1 MiB (or the remaining budget plus one overflow byte).
+Oversized, growing or delayed streams cause an explicit path error during
+comparison or verification. A refused comparison never counts as unchanged.
 The deadline is checked around synchronous reads; configure backend I/O timeouts
 as well, since Python cannot interrupt an individual blocked storage call.
 These ceilings cover hashing; backend-managed ``save`` I/O (the staging upload
 and the final save) is not charged to any of them.
 
-A failed final refresh can leave partial destination bytes. The command retains
-a SHA-256-verified complete recovery copy and reports its exact reserved
+Before dropping the stage, backup and restore hash the final key after a
+same-name save. A failed final refresh can leave partial destination bytes.
+If a final overwrite raises, or if a saved object is unreadable or differs
+from its stage, the command reports an error and retains a SHA-256-verified
+complete recovery copy at its exact reserved
 ``.django-cast-refresh-<random>.tmp`` key. Backup and restore skip
 these keys. Retry with the original source when available; otherwise inspect
 and explicitly recover from the reported key, verify the destination, and
 delete the key manually. See :doc:`/reference/management-commands` for details.
-A failed missing copy keeps no recovery key: its partial final key is removed
-and an ordinary retry copies the file again.
+For a missing copy, the command removes the unverified final key so an
+ordinary retry can copy it again. If the save raised, the stage is removed too.
 
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.

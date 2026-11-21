@@ -215,9 +215,8 @@ def publish_staged_file(
 
     Writers outside this same-host lock require backend conditional operations;
     they must be quiesced. Generic Storage has no compare-and-swap primitive.
-    A digest-verified stage is retained only when a refresh's final overwrite
-    ``save()`` raises, as a reserved recovery key excluded from restore
-    enumeration; verification failures, conflicts and renamed saves remove it.
+    Keep the verified stage if a final overwrite raises or if a same-name save
+    cannot be verified. Reserved recovery keys are excluded from sync enumeration.
     """
     target_exists = target_storage.exists(path)
     if target_exists == missing:
@@ -262,6 +261,10 @@ def publish_staged_file(
                     # copy. A renamed save never touched the target and needs none.
                     recovery_name = staged_name
                 raise
+            if saved_name == path:
+                recovery_name = staged_name
+                if missing:
+                    staged_names.add(path)
         if saved_name != path:
             if missing:
                 message = (
@@ -281,6 +284,9 @@ def publish_staged_file(
                     f"{message}; could not remove generated copy {saved_name}: {cleanup_error}"
                 ) from cleanup_error
             raise RuntimeError(message)
+        if content_digest(target_storage, path) != source_before:
+            raise RuntimeError(f"published copy {path} failed content verification")
+        staged_names.discard(path)
     except BaseException as primary_error:
         if recovery_name is not None:
             staged_names.discard(recovery_name)

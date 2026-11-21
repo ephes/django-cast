@@ -334,11 +334,12 @@ Options:
     ``file_overwrite = False``), the previous backup copy is kept, the generated
     copy is removed, and the path is reported as an error. A staged copy is
     verified against the source SHA-256 digest before the final write. Failed
-    or incomplete staging is removed. When the final overwrite itself
-    fails, the verified complete stage is retained and its exact recovery key is
-    reported; a save under a generated name never touched the target and keeps
-    no stage.
-    Successful publication removes its stage. Cleanup attempts every other
+    or incomplete staging is removed. A same-name save is followed by a
+    SHA-256 read of the final key. If this read fails or the digest differs,
+    the path is reported as an error and the verified stage is retained for
+    recovery. A final overwrite that raises also retains the stage. A save
+    under a generated name keeps no stage.
+    Verified publication removes its stage. Cleanup attempts every other
     requested and returned staging name even if another deletion fails. Leftover
     names and deletion failures are logged and reported on command stderr when publication has
     already failed, preserving the original publication exception; cleanup failure
@@ -356,8 +357,9 @@ Options:
     destination with an overwrite-capable backend. Verify the destination
     digest before deleting the recovery key with ``Storage.delete(key)``.
     Retried commands do not automatically consume or delete older recovery keys.
-    Missing-copy writes are also staged and their partial final keys are
-    cleaned on exceptions under the same-host publisher lock. A run that is
+    Missing-copy writes are also staged. Their final keys are cleaned when
+    a write raises or final verification fails, under the same-host publisher
+    lock. Failed final verification still retains the verified recovery stage. A run that is
     killed can leave a staged ``.tmp`` key on storage. Backup and restore skip and
     report reserved media staging keys. Inspect and remove abandoned objects
     manually.
