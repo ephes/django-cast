@@ -221,6 +221,10 @@ Performance Features
 Host and Site Configuration
 ---------------------------
 
+Feed slug lookup requires a Wagtail site. Wagtail selects the site for the
+request or falls back to its configured default site. If neither resolves, the
+feed detail and XML endpoints return 404.
+
 Feed self URLs and relative channel links use the request host validated by
 Django's ``ALLOWED_HOSTS``, which supports sites served from more than one
 configured hostname. Cached feed responses are scoped to that host. Item URLs

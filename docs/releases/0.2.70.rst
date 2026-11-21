@@ -19,6 +19,9 @@ Features
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
 
+- Return 404 on slug-based feed and episode routes when Wagtail cannot resolve
+  a site root for the request. Wagtail's configured default site still applies.
+
 - Mark restricted Twitter Player responses private and uncacheable.
 - Load the Twitter Player bootstrap as a static script so the card page needs no
   inline script. The Podlove embed still loads resources from ``cdn.podlove.org``.

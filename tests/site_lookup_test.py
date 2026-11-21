@@ -6,13 +6,15 @@ from cast.site_lookup import get_site_specific_page_or_404, site_specific_querys
 
 
 @pytest.mark.django_db
-def test_site_specific_queryset_without_site_returns_global_queryset(rf, blog, mocker):
+@pytest.mark.parametrize("site_exists", [False, True])
+def test_site_specific_queryset_without_site_root_returns_empty_queryset(rf, blog, mocker, site_exists):
     request = rf.get("/")
-    mocker.patch("cast.site_lookup.Site.find_for_request", return_value=None)
+    site = mocker.Mock(root_page_id=None) if site_exists else None
+    mocker.patch("cast.site_lookup.Site.find_for_request", return_value=site)
 
     queryset = site_specific_queryset(type(blog), request)
 
-    assert blog in queryset
+    assert not queryset.exists()
 
 
 @pytest.mark.django_db

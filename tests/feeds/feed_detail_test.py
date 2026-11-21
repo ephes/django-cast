@@ -1,5 +1,6 @@
 from django.test import override_settings
 from django.urls import reverse
+from wagtail.models import Site
 
 from cast import appsettings
 from cast.models import Audio
@@ -114,6 +115,20 @@ class TestFeedDetail404:
         url = reverse("cast:feed_detail", kwargs={"slug": "nonexistent"})
         response = client.get(url)
         assert response.status_code == 404
+
+    def test_feed_slug_requires_a_matching_or_default_wagtail_site(self, client, blog, site, settings):
+        hostname = "feed-host.example"
+        settings.ALLOWED_HOSTS = [hostname]
+        url = reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug})
+
+        assert client.get(url, HTTP_HOST=hostname).status_code == 200
+
+        site.is_default_site = False
+        site.save(update_fields=["is_default_site"])
+        assert client.get(url, HTTP_HOST=hostname).status_code == 404
+
+        Site.objects.create(hostname=hostname, root_page=site.root_page)
+        assert client.get(url, HTTP_HOST=hostname).status_code == 200
 
 
 class TestFeedDetailRoutingNonConflict:

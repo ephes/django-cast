@@ -15,16 +15,19 @@ ModelT = TypeVar("ModelT", bound=Model)
 def site_specific_queryset(model: type[ModelT], request: HttpRequest, *, live: bool = True) -> QuerySet[ModelT]:
     """Return a site-scoped queryset for Wagtail page models.
 
+    Page querysets are empty without a resolved Wagtail site root.
     Non-page querysets are tolerated and simply skip the Wagtail-specific
     `live()` / `descendant_of()` narrowing when those methods are absent.
     """
     queryset = cast(QuerySet[ModelT], cast(Any, model).objects.all())
     if live and hasattr(queryset, "live"):
         queryset = cast(QuerySet[ModelT], queryset.live())
+    if not hasattr(queryset, "descendant_of"):
+        return queryset
     site = Site.find_for_request(request)
-    if site is not None and site.root_page_id is not None and hasattr(queryset, "descendant_of"):
-        queryset = cast(QuerySet[ModelT], queryset.descendant_of(site.root_page))
-    return queryset
+    if site is None or site.root_page_id is None:
+        return queryset.none()
+    return cast(QuerySet[ModelT], queryset.descendant_of(site.root_page))
 
 
 def get_site_specific_page_or_404(
