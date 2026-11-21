@@ -158,6 +158,9 @@ Chaptered episodes also include a Podcasting 2.0 external chapters reference::
     <podcast:chapters type="application/json+chapters" url="https://example.com/chapters/<audio pk>/?episode_id=<episode pk>"/>
 
 The stable endpoint path is ``chapters/<audio pk>/?episode_id=<episode pk>``.
+It accepts ``GET`` and ``HEAD``. Other methods return ``405 Method Not Allowed``
+before audio lookup. Authorized responses for restricted pages use
+``Cache-Control: private, no-store``.
 ``application/json+chapters`` is the Podcasting 2.0 specification's literal media-type
 string, not ``application/chapters+json``.
 It returns ``application/json+chapters`` with this body shape::

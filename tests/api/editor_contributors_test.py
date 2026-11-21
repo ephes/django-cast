@@ -85,6 +85,30 @@ class TestContributorList:
         assert response.json()["errors"]["slug"][0]["code"] == code
         assert not any('FROM "cast_contributor"' in query["sql"] for query in queries)
 
+    def test_overlong_search_is_rejected_before_sql(self, api_client, admin_user):
+        api_client.force_authenticate(user=admin_user)
+
+        with CaptureQueriesContext(connection) as queries:
+            response = api_client.get(reverse("cast:api:editor_contributors"), {"q": "é" * 129})
+
+        assert response.status_code == 400, response.content
+        assert response.json()["errors"]["q"][0]["code"] == "max_length"
+        assert not any('FROM "cast_contributor"' in query["sql"] for query in queries)
+
+    @pytest.mark.parametrize("term", ["écho", "é" * 128, ""])
+    def test_normalized_search_with_slug_filter(self, api_client, admin_user, term):
+        api_client.force_authenticate(user=admin_user)
+        name = term or "Synthetic"
+        Contributor.objects.create(display_name=name, slug="fixture-match")
+        Contributor.objects.create(display_name=name, slug="fixture-other")
+
+        response = api_client.get(
+            reverse("cast:api:editor_contributors"), {"q": f"  {term}  ", "slug": "fixture-match"}
+        )
+
+        assert response.status_code == 200
+        assert [item["slug"] for item in response.json()["results"]] == ["fixture-match"]
+
     def test_requires_wagtail_admin_access(self, api_client):
         user = UserFactory(is_staff=True)
         api_client.force_authenticate(user=user)

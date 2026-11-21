@@ -58,6 +58,46 @@ class TestNumberHelpers:
 
 
 @pytest.mark.django_db
+def test_chapters_and_transcript_cues_validate_clock_components(episode, mocker):
+    audio = episode.podcast_audio
+    rows = [
+        {"start": "00:01:-0.5", "text": "Negative seconds"},
+        {"start": "01:60.25", "text": "Overflowed seconds"},
+        {"start": "01:-01:30", "text": "Negative interior minutes"},
+        {"start": "01:60:15", "text": "Overflowed interior minutes"},
+        {"start": "-1:59:59", "text": "Negative hours"},
+        {"start": "-1:05", "text": "Negative leading minutes"},
+        {"start": "01:nan", "text": "Nonfinite seconds"},
+        {"start": "1.25", "end": "01:60:12", "text": "Numeric seconds"},
+        {"start": "00:00:59.5", "end": "01:00.25", "text": "Fractional seconds"},
+        {"start": "125:02.25", "end": "02:05:03.5", "text": "Unbounded leading minutes"},
+    ]
+    mocker.patch.object(
+        Audio,
+        "chapters",
+        new_callable=PropertyMock,
+        return_value=[{"start": row["start"], "title": row["text"]} for row in rows],
+    )
+    create_transcript(audio=audio, podlove={"transcripts": rows})
+
+    chapters = build_chapters(audio)
+    cues = build_cues(audio, episode=episode, duration=None)
+
+    assert (chapters, cues) == (
+        [
+            {"start": 1.25, "title": "Numeric seconds"},
+            {"start": 59.5, "title": "Fractional seconds"},
+            {"start": 7502.25, "title": "Unbounded leading minutes"},
+        ],
+        [
+            {"start": 1.25, "end": 59.5, "speaker": "", "text": "Numeric seconds"},
+            {"start": 59.5, "end": 60.25, "speaker": "", "text": "Fractional seconds"},
+            {"start": 7502.25, "end": 7503.5, "speaker": "", "text": "Unbounded leading minutes"},
+        ],
+    )
+
+
+@pytest.mark.django_db
 class TestBuildSources:
     def test_single_format_absolute_url(self, audio, rf_request):
         sources = build_sources(audio, rf_request)

@@ -2,7 +2,9 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Permission
 from django.contrib.contenttypes.models import ContentType
+from django.db import connection
 from django.test import RequestFactory
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from cast.admin import (
@@ -138,6 +140,8 @@ def test_contributor_link_options(admin_client):
         display_name="Guest",
         slug="guest",
         default_role=EpisodeContributor.ROLE_HOST,
+        short_bio="bio" * 10_000,
+        transcript_variants="private" * 10_000,
     )
     other_contributor = Contributor.objects.create(display_name="Other Guest", slug="other-guest")
     unordered_link = ContributorLink.objects.create(
@@ -163,7 +167,8 @@ def test_contributor_link_options(admin_client):
         url="https://example.com/other",
     )
 
-    response = admin_client.get(reverse("cast-contributors:links"), {"contributor_id": contributor.pk})
+    with CaptureQueriesContext(connection) as queries:
+        response = admin_client.get(reverse("cast-contributors:links"), {"contributor_id": contributor.pk})
 
     assert response.status_code == 200
     assert response.json() == {
@@ -188,10 +193,19 @@ def test_contributor_link_options(admin_client):
         ],
     }
 
+    selects = [query["sql"] for query in queries if 'FROM "cast_contributor' in query["sql"]]
+    assert len(selects) == 2
+    contributor_sql, link_sql = selects
+    assert '"display_name"' in contributor_sql and '"default_role"' in contributor_sql
+    assert '"service"' in link_sql
+    assert '"cast_contributor".' not in link_sql and '"url"' not in link_sql
+    assert all('"short_bio"' not in sql and '"transcript_variants"' not in sql for sql in selects)
+
 
 @pytest.mark.django_db
-def test_contributor_link_options_with_invalid_contributor_id(admin_client):
-    response = admin_client.get(reverse("cast-contributors:links"), {"contributor_id": "invalid"})
+@pytest.mark.parametrize("contributor_id", ["invalid", -1])
+def test_contributor_link_options_with_invalid_or_missing_contributor_id(admin_client, contributor_id):
+    response = admin_client.get(reverse("cast-contributors:links"), {"contributor_id": contributor_id})
 
     assert response.status_code == 200
     assert response.json() == {"defaultLinkId": "", "defaultRole": "", "links": []}

@@ -2,12 +2,14 @@ from __future__ import annotations
 
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404
+from django.views.decorators.http import require_safe
 
 from cast.audio_access import authorize_audio_access, prevent_private_media_caching
 from cast.models import Audio
 from cast.player import build_chapters
 
 
+@require_safe
 def chapters_json(request: HttpRequest, pk: int) -> HttpResponse:
     """Return Podcasting 2.0 chapters JSON for an audio object."""
     audio = get_object_or_404(Audio, pk=pk)
