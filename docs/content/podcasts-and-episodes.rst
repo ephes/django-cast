@@ -93,6 +93,11 @@ The `podcast_audio` field may be empty while an episode is a draft, but it is
 required when publishing through Wagtail or the editor API. It supplies the
 enclosure for the episode in the podcast feed.
 
+The Twitter Player embed prefers M4A and tries MP3, OGA, and Opus in that
+order when needed. The embed uses the selected file's MIME type. If no
+variant has a usable URL, the embed displays an audio-unavailable message
+and leaves out the player.
+
 Editor API clients can bind publication to the exact reviewed episode revision
 with the optional ``If-Match`` header described in
 :ref:`the editor publish API <editor_api_publish>`.

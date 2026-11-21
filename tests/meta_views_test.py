@@ -142,27 +142,48 @@ def test_twitter_player_config_is_json_not_interpolated_javascript(client, episo
 
 
 @pytest.mark.django_db
-def test_twitter_player_config_without_m4a_has_empty_audio_url(client, episode):
-    audio = episode.podcast_audio
-    audio.m4a = None
-    audio.save()
-    url = reverse("cast:twitter-player", kwargs={"episode_slug": episode.slug, "blog_slug": episode.blog.slug})
+@pytest.mark.parametrize(
+    ("audio_format", "mime_type"), [("mp3", "audio/mpeg"), ("oga", "audio/ogg"), ("opus", "audio/opus")]
+)
+def test_twitter_player_config_falls_back_to_available_audio(client, episode, audio, audio_format, mime_type):
+    type(audio).objects.filter(pk=audio.pk).update(m4a=None, **{audio_format: f"cast_audio/episode.{audio_format}"})
+    audio.refresh_from_db()
+    url = reverse("cast:twitter-player", args=[episode.blog.slug, episode.slug])
 
     response = client.get(url)
 
     assert response.status_code == 200
-    config = _twitter_player_config(response.content.decode("utf-8"))
-    assert config["audio"] == [{"url": "", "mimeType": "audio/mp4"}]
+    config = _twitter_player_config(response.content.decode())
+    assert config["audio"] == [{"url": getattr(audio, audio_format).url, "mimeType": mime_type}]
 
 
 @pytest.mark.django_db
-def test_twitter_player_config_without_audio_is_empty(episode):
-    from cast.views.meta import twitter_player_config
+@pytest.mark.parametrize("has_audio", [False, True])
+def test_twitter_player_without_playable_audio_shows_unavailable(client, episode, audio, has_audio):
+    if has_audio:
+        type(audio).objects.filter(pk=audio.pk).update(m4a=None)
+    else:
+        type(episode).objects.filter(pk=episode.pk).update(podcast_audio=None)
+    url = reverse("cast:twitter-player", args=[episode.blog.slug, episode.slug])
 
-    episode.podcast_audio = None
+    response = client.get(url)
 
-    config = twitter_player_config(episode)
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert "Audio unavailable." in content
+    assert "twitter-player-config" not in content
+    assert "data-twitter-player" not in content
+    assert "embed.5.js" not in content
 
-    assert config["duration"] == ""
-    assert config["audio"] == [{"url": "", "mimeType": "audio/mp4"}]
-    assert config["show"]["title"] == episode.blog.title
+
+@pytest.mark.django_db
+def test_twitter_player_skips_empty_storage_url(client, episode, audio, mocker):
+    type(audio).objects.filter(pk=audio.pk).update(mp3="cast_audio/fallback.mp3")
+    mocker.patch.object(audio.m4a.storage, "url", side_effect=lambda name: "" if name.endswith(".m4a") else f"/{name}")
+    url = reverse("cast:twitter-player", args=[episode.blog.slug, episode.slug])
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    config = _twitter_player_config(response.content.decode())
+    assert config["audio"] == [{"url": "/cast_audio/fallback.mp3", "mimeType": "audio/mpeg"}]

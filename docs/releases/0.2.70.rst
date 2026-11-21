@@ -31,6 +31,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Use an available audio variant in Twitter Player embeds and display an
+  unavailable message when no source can be played.
+
 - Return 404 for ambiguous live episode slugs in Twitter Player and transcript URLs.
 
 - Resolve feed and episode URLs when the blog or podcast is the Wagtail site root.
