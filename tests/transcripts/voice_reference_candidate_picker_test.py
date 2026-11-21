@@ -2,11 +2,19 @@ from decimal import Decimal
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from cast.devdata import create_transcript
 from cast.forms import VoiceReferenceCandidateCreateForm
-from cast.models import Contributor, EpisodeContributor, TranscriptVoiceReferenceCandidate
+from cast.models import (
+    Contributor,
+    EpisodeContributor,
+    Transcript,
+    TranscriptSpeakerMapping,
+    TranscriptVoiceReferenceCandidate,
+)
 from cast.models.contributors import ContributorVoiceReference
 from cast.transcripts import parsing, voice_references
 from cast.views.transcript import (
@@ -468,6 +476,44 @@ class TestVoiceReferenceCandidateHelpers:
         assert sum(len(group["rows"]) for group in groups) >= 3
         artifacts = [field.name for field in (transcript.podlove, transcript.dote, transcript.vtt) if field]
         assert sorted(opened) == sorted(artifacts)
+
+    def test_group_context_reuses_legacy_mapping_fingerprint(self, episode, mocker):
+        contributor = Contributor.objects.create(display_name="Synthetic Host", slug="synthetic-host")
+        EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
+        transcript = create_transcript(
+            audio=episode.podcast_audio,
+            podlove={
+                "transcripts": [
+                    podlove_segment("Speaker 1", "0", "12"),
+                    podlove_segment("Speaker 2", "20", "32"),
+                    podlove_segment("Speaker 1", "40", "52"),
+                    podlove_segment("Speaker 2", "60", "72"),
+                    podlove_segment("Speaker 1", "80", "92"),
+                ]
+            },
+        )
+        Transcript.objects.filter(pk=transcript.pk).update(source_fingerprint="")
+        transcript.refresh_from_db()
+        context = get_speaker_mapping_context(transcript)
+        transcript.speaker_mappings.update(
+            contributor=contributor, review_state=TranscriptSpeakerMapping.ReviewState.APPROVED
+        )
+        transcript.speaker_mappings.filter(speaker_label="Speaker 2").update(source_artifact_fingerprint="stale")
+        context["speaker_mappings"] = list(TranscriptSpeakerMapping.objects.filter(transcript=transcript))
+        candidates = transcript.get_voice_reference_candidates()
+        mocker.patch.object(transcript, "get_voice_reference_candidates", return_value=candidates)
+        mocker.patch("cast.transcripts.editing.get_duplicate_voice_reference", return_value=None)
+        storage_open = mocker.spy(transcript.podlove.storage, "open")
+
+        with CaptureQueriesContext(connection) as queries:
+            groups = get_voice_reference_candidate_groups(transcript, context)
+
+        assert {group["speaker_label"]: (group["contributor"], len(group["rows"])) for group in groups} == {
+            "Speaker 1": (contributor, 3),
+            "Speaker 2": (None, 2),
+        }
+        storage_open.assert_called_once_with(transcript.podlove.name, "rb")
+        assert len(queries) == 0
 
     def test_create_helper_surfaces_model_validation_errors(self, episode):
         contributor = Contributor.objects.create(display_name="Alice", slug="helper-validation-alice")

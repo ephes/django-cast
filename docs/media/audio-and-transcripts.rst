@@ -1258,6 +1258,10 @@ At most one excess byte is read to detect an exhausted budget, including short
 or continuously growing streams. Exceeding either ceiling raises
 ``TranscriptArtifactError``: the editor returns HTTP 400 with replacement
 guidance and signs no partial evidence. Accepted artifacts retain the same hash.
+All candidate rows on the review page share the transcript's mapping fingerprint.
+For older transcripts without a stored source fingerprint, candidate mapping
+checks reuse the artifact hash computed for the signed choices. Reference
+creation verifies freshness again under the write lock.
 
 Candidate creation takes a write lock on the shared audio before looking for
 an existing contributor/source/range reference. Concurrent identical submissions

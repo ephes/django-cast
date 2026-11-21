@@ -327,9 +327,9 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         except (FileNotFoundError, OSError, ValueError, RecursionError):
             return None
 
-    def sync_speaker_mappings(self) -> None:
+    def sync_speaker_mappings(self, *, using: str | None = None) -> None:
         """Synchronize durable anonymous-speaker mapping rows with raw artifacts."""
-        services.sync_speaker_mappings(self)
+        services.sync_speaker_mappings(self, using=using)
 
     def get_speaker_suggestions(self) -> list[dict]:
         """Per-segment known-speaker suggestions for editor review."""

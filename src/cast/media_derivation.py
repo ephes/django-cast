@@ -197,4 +197,4 @@ def save_transcript_with_derivations(
             **save_kwargs,
         )
         if should_sync_transcript_speaker_mappings(update_fields):
-            transcript.sync_speaker_mappings()
+            transcript.sync_speaker_mappings(using=using)

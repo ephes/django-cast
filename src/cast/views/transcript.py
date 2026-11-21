@@ -267,13 +267,17 @@ def get_voice_reference_candidate_groups(
 ) -> list[VoiceReferenceCandidateGroup]:
     groups: dict[str, VoiceReferenceCandidateGroup] = {}
     candidates = transcript.get_voice_reference_candidates()
+    if not candidates:
+        return []
     # Hash the transcript artifacts once per render, not once per candidate row.
-    transcript_part = editing.transcript_evidence(transcript) if candidates else {}
+    transcript_part = editing.transcript_evidence(transcript)
+    mapping_fingerprint = transcript.source_fingerprint or transcript_part["fingerprint"]
     for index, candidate in enumerate(candidates):
         contributor = resolve_voice_reference_contributor(
             candidate.speaker_label,
             speaker_mapping_context["contributor_assignments"],
             speaker_mapping_context["speaker_mappings"],
+            mapping_fingerprint=mapping_fingerprint,
         )
         group_key = (
             f"contributor:{contributor.pk}" if contributor is not None else f"speaker:{candidate.speaker_label}"

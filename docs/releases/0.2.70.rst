@@ -17,6 +17,7 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Synchronize speaker mappings on the database where the transcript was saved.
 - Fetch only uncached gallery image IDs, preserving the order and captions of surviving entries.
 - Resolve the original storage URL once for all image slots that fall back to it.
 - Build inline transcript rows when the panel first opens.
@@ -70,6 +71,7 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Reuse the signed evidence hash for legacy speaker mappings across voice-reference candidates.
 - Reuse the PodcastIndex contributor role allowlist across RSS and Atom items.
 - Use the admitted feed cache generation immediately after a successful cache add.
 - Merge transcript-wide correction decisions in one pass for group actions.

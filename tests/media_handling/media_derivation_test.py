@@ -1,6 +1,9 @@
 import warnings
 
 import pytest
+from django.contrib.auth import get_user_model
+from django.core.files.base import ContentFile
+from wagtail.models import Collection
 
 from cast.api.serializers import AudioSerializer, VideoSerializer
 from cast.media_derivation import (
@@ -9,7 +12,7 @@ from cast.media_derivation import (
     save_video_with_derivations,
     should_sync_transcript_speaker_mappings,
 )
-from cast.models import Transcript
+from cast.models import Audio, Transcript
 
 
 @pytest.mark.django_db()
@@ -338,6 +341,55 @@ def test_transcript_derivation_service_rolls_back_persistence_when_sync_fails(au
         save_transcript_with_derivations(transcript)
 
     assert not Transcript.objects.filter(audio=audio).exists()
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_transcript_derivation_uses_explicit_alias_for_mapping_reads_and_writes(settings):
+    class DefaultRouter:
+        def db_for_read(self, model, **hints):
+            return "default"
+
+        def db_for_write(self, model, **hints):
+            return "default"
+
+    alias = "migration_other"
+    collection_ids = {}
+    for database in ("default", alias):
+        user = get_user_model().objects.using(database).create(username="synthetic-speaker-editor")
+        collection, _ = Collection.objects.using(database).get_or_create(
+            path="0001", defaults={"depth": 1, "numchild": 0, "name": "Synthetic"}
+        )
+        collection_ids[database] = collection.pk
+        Audio.objects.using(database).create(
+            pk=101, user_id=user.pk, collection_id=collection.pk, title="Synthetic audio"
+        )
+    Transcript.objects.using("default").create(pk=101, audio_id=101, collection_id=collection_ids["default"])
+    transcript = Transcript(pk=101, audio_id=101, collection_id=collection_ids[alias])
+    settings.DATABASE_ROUTERS = [DefaultRouter()]
+    transcript.podlove.save(
+        "synthetic-speakers.json",
+        ContentFile(b'{"transcripts": [{"speaker": "Speaker 1"}]}'),
+        save=False,
+    )
+    save_transcript_with_derivations(transcript, using=alias)
+
+    mapping_model = transcript.speaker_mappings.model
+    mapping = mapping_model.objects.using(alias).get(transcript_id=101, speaker_label="Speaker 1")
+    assert mapping.active
+    assert mapping.source_artifact_fingerprint == transcript.source_fingerprint
+    assert not mapping_model.objects.using("default").exists()
+
+    transcript.podlove.save(
+        "synthetic-replacement.json",
+        ContentFile(b'{"transcripts": [{"speaker": "Speaker 2"}]}'),
+        save=False,
+    )
+    save_transcript_with_derivations(transcript, using=alias, update_fields=["podlove"])
+
+    mapping.refresh_from_db(using=alias)
+    assert not mapping.active
+    assert mapping_model.objects.using(alias).get(transcript_id=101, speaker_label="Speaker 2").active
+    assert not mapping_model.objects.using("default").exists()
 
 
 @pytest.mark.parametrize(

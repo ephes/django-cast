@@ -419,6 +419,10 @@ Multi-format transcripts for audio accessibility.
 
 Use ``cast.media_derivation.save_transcript_with_derivations()`` after changing
 transcript artifacts when durable speaker mappings must be synchronized.
+The helper reads and writes mappings on the same database alias as the
+transcript save, including when the caller supplies ``using`` explicitly.
+Standalone ``transcript.sync_speaker_mappings()`` calls use the write router
+unless given an alias.
 ``Transcript.save()`` itself only persists fields.
 
 PostCategory
