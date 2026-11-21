@@ -194,17 +194,17 @@ def install_publication_policy() -> None:
             with transaction.atomic(using=using):
                 try:
                     check_publishable(object_to_publish, revision=revision)
+                    if isinstance(object_to_publish, Episode):
+                        assign_episode_number_for_publish(
+                            object_to_publish,
+                            revision,
+                            previous_revision=previous_revision,
+                        )
                 except PublicationRejected as rejection:
                     if arguments.get("log_action") != "wagtail.publish.scheduled":
                         raise
                     _reject_scheduled_publication(revision, object_to_publish, rejection)
                     return None
-                if isinstance(object_to_publish, Episode):
-                    assign_episode_number_for_publish(
-                        object_to_publish,
-                        revision,
-                        previous_revision=previous_revision,
-                    )
                 return original(self, *args, **kwargs)
         return original(self, *args, **kwargs)
 

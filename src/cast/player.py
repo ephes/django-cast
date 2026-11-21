@@ -426,9 +426,9 @@ def build_player_payload(
     """
     episode = getattr(post, "specific", post)
 
-    duration: int | None = None
-    if audio.duration is not None:
-        duration = int(audio.duration.total_seconds())
+    stored_duration = audio.duration
+    seconds = stored_duration.total_seconds() if stored_duration is not None else 0
+    duration = int(seconds) if seconds > 0 else None
 
     blog = None
     if post is not None:

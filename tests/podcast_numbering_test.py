@@ -20,8 +20,10 @@ from cast.podcast_numbering import (
     _is_first_publish_candidate,
     _next_available_episode_number,
     assign_episode_number_for_publish,
+    automatic_numbering_violation,
     episode_type_consumes_number,
 )
+from cast.publication import PublicationRejected
 from tests.factories import EpisodeFactory
 
 
@@ -153,6 +155,69 @@ def test_enabled_podcast_assigns_first_blank_full_episode_and_persists_revision(
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("next_number", "numbering_enabled", "expected"),
+    [
+        (2**31 - 2, True, None),
+        (2**31 - 1, False, None),
+        (2**31 - 1, True, "numbering_exhausted"),
+    ],
+)
+def test_automatic_numbering_violation_predicts_publish(
+    podcast, audio, body, next_number, numbering_enabled, expected
+):
+    enable_numbering(podcast, next_number=next_number)
+    podcast.automatic_episode_numbering_enabled = numbering_enabled
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="pre-check")
+
+    violation = automatic_numbering_violation(episode, podcast)
+
+    assert (violation.code if violation is not None else None) == expected
+
+
+@pytest.mark.django_db
+def test_automatic_numbering_violation_ignores_a_stored_publication(podcast, audio, body):
+    enable_numbering(podcast, next_number=2**31 - 1)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="published-elsewhere")
+    Episode.objects.filter(pk=episode.pk).update(live=True, first_published_at=timezone.now())
+
+    assert automatic_numbering_violation(episode, podcast) is None
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("occupied", [False, True])
+def test_publish_refuses_numbering_at_portable_ceiling(podcast, audio, body, occupied):
+    ceiling = 2**31 - 1
+    start = ceiling - 1 if occupied else ceiling
+    enable_numbering(podcast, next_number=start)
+    if occupied:
+        make_draft_episode(podcast=podcast, audio=audio, body=body, slug="last-assignable", episode_number=start)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="needs-number")
+    revision = episode.save_revision()
+    revision.refresh_from_db()
+    original_content = revision.content.copy()
+
+    with pytest.raises(PublicationRejected) as error:
+        revision.publish()
+
+    assert error.value.as_error_map()["episode_number"][0]["code"] == "numbering_exhausted"
+    assert revision.content == original_content
+    revision.refresh_from_db()
+    assert revision.content == original_content
+    episode.refresh_from_db()
+    assert episode.episode_number is None
+    assert not episode.live
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == start
+
+    enable_numbering(podcast, next_number=start - 1)
+    revision.publish()
+    episode.refresh_from_db()
+    assert episode.live
+    assert episode.episode_number == start - 1
+
+
+@pytest.mark.django_db
 def test_automatic_numbering_does_not_change_feed_guid(client, podcast, audio, body, use_dummy_cache_backend):
     enable_numbering(podcast)
     episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="numbered-feed-guid")
@@ -242,6 +307,28 @@ def test_scheduled_publish_assigns_when_episode_goes_live(podcast, audio, body):
     assert revision.content["episode_number"] == 1
     podcast.refresh_from_db()
     assert podcast.next_episode_number == 2
+
+
+@pytest.mark.django_db
+def test_scheduled_publish_rejects_exhausted_numbering_without_raising(podcast, audio, body):
+    ceiling = 2**31 - 1
+    enable_numbering(podcast, next_number=ceiling)
+    due = timezone.now() - timedelta(minutes=1)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="due-exhausted", go_live_at=due)
+    revision = episode.save_revision(approved_go_live_at=due)
+    revision.refresh_from_db()
+    original_content = revision.content.copy()
+
+    call_command("publish_scheduled", verbosity=0)
+
+    episode.refresh_from_db()
+    revision.refresh_from_db()
+    assert episode.live is False
+    assert episode.episode_number is None
+    assert revision.approved_go_live_at is None
+    assert revision.content == original_content
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == ceiling
 
 
 @pytest.mark.django_db

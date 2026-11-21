@@ -304,6 +304,24 @@ class TestBuildPlayerPayload:
         payload = build_player_payload(audio, post=episode, request=rf_request)
         assert payload["duration"] is None
 
+    @pytest.mark.parametrize(
+        "seconds, expected_duration, expected_end",
+        [(-30, None, 6.0), (-0.5, None, 6.0), (0, None, 6.0), (30.5, 30, 30.0)],
+    )
+    def test_stored_duration_and_transcript_cue_fallback(
+        self, audio, episode, rf_request, seconds, expected_duration, expected_end
+    ):
+        Audio.objects.filter(pk=audio.pk).update(duration=timedelta(seconds=seconds))
+        audio.refresh_from_db()
+        create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 1000, "text": "hi"}]})
+
+        payload = build_player_payload(audio, post=episode, request=rf_request, inline_transcript=False)
+
+        assert payload["duration"] == expected_duration
+        assert payload["transcript"] == {
+            "cues": [{"start": 1.0, "end": expected_end, "speaker": "", "text": "hi"}],
+        }
+
     def test_poster_present_with_cover(self, episode_with_podcast_with_cover_image, rf_request):
         episode = episode_with_podcast_with_cover_image
         payload = build_player_payload(episode.podcast_audio, post=episode, request=rf_request)
