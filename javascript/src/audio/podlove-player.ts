@@ -55,7 +55,7 @@ function getSharedObserver(): IntersectionObserver {
           }
 
           const target = entry.target;
-          if (target instanceof PodlovePlayerElement && target.isCurrentObservation(entry, observer)) {
+          if (target instanceof PodlovePlayerElement && target.isCurrentObservation(observer)) {
             observer.unobserve(target);
             target.observer = null;
             target.scheduleInitialize();
@@ -188,7 +188,6 @@ function appendDarkColorScheme(configUrl: string): string {
 export class PodlovePlayerElement extends HTMLElement {
   observer: IntersectionObserver | null;
   private connectionGeneration = 0;
-  private observationStartedAt = 0;
   isInitialized: boolean;
   isScheduled: boolean;
   idleHandle: number | null;
@@ -232,6 +231,11 @@ export class PodlovePlayerElement extends HTMLElement {
   disconnectedCallback() {
     if (this.observer) {
       this.observer.unobserve(this);
+      if (this.observer === sharedObserver) {
+        // Entries already queued for this element still reach the old instance;
+        // a later observe() uses a fresh one so they cannot match the new connection.
+        sharedObserver = null;
+      }
       this.observer = null;
     }
 
@@ -385,13 +389,14 @@ export class PodlovePlayerElement extends HTMLElement {
 
   observeElement() {
     this.observer = getSharedObserver();
-    this.observationStartedAt = performance.now();
     this.observer.observe(this);
   }
 
-  isCurrentObservation(entry: IntersectionObserverEntry, observer: IntersectionObserver): boolean {
-    // Entries queued before unobserve can arrive after the element reconnects.
-    return this.isConnected && this.observer === observer && entry.time >= this.observationStartedAt;
+  isCurrentObservation(observer: IntersectionObserver): boolean {
+    // A disconnect retires the shared observer, so entries queued for an earlier
+    // connection arrive through an observer this element no longer uses. Entry
+    // timestamps are frame times, not observe() times, and cannot tell them apart.
+    return this.isConnected && this.observer === observer;
   }
 
   setupClickToLoad() {

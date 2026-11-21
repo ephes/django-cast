@@ -489,10 +489,44 @@ describe('PodlovePlayerElement', () => {
     expect(podlovePlayerMock).not.toHaveBeenCalled();
 
     document.body.appendChild(element);
+    const current = element.observer as IntersectionObserverMock;
+    expect(current).not.toBe(observer);
     observer.callback([stale], observer);
     expect(podlovePlayerMock).not.toHaveBeenCalled();
 
-    observer.trigger([intersectionEntry(element, true)]);
+    current.trigger([intersectionEntry(element, true)]);
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps players on a retired shared observer working', () => {
+    const staying = document.createElement('podlove-player');
+    staying.setAttribute('data-url', '/audio/');
+    const leaving = document.createElement('podlove-player');
+    leaving.setAttribute('data-url', '/audio/');
+    document.body.append(staying, leaving);
+    const retired = staying.observer as IntersectionObserverMock;
+    expect(leaving.observer).toBe(retired);
+
+    leaving.remove();
+    document.body.appendChild(leaving);
+    expect(leaving.observer).not.toBe(retired);
+    expect(staying.observer).toBe(retired);
+
+    retired.trigger([intersectionEntry(staying, true)]);
+    expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('initializes from an entry stamped before observe() in the same frame', async () => {
+    const element = document.createElement('podlove-player');
+    element.setAttribute('data-url', '/audio/');
+    document.body.appendChild(element);
+    await Promise.resolve();
+    const observer = element.observer as IntersectionObserverMock;
+    expect(observer).not.toBeNull();
+
+    // Browsers stamp entries with the rendering update's frame time, which can
+    // precede an observe() call made from a requestAnimationFrame callback.
+    observer.callback([{ ...intersectionEntry(element, true), time: 0 }], observer);
     expect(podlovePlayerMock).toHaveBeenCalledTimes(1);
   });
 
