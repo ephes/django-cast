@@ -17,6 +17,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Use manual transcript overrides directly, including empty stored overrides.
+- Let editors repair missing or invalid glossary episode references while keeping saved decisions.
 - Preflight database routing for all explicitly selected transcripts before applying the glossary.
 - Continue applying the glossary after an individual refresh fails, using a bounded failure diagnostic.
 - Synchronize speaker mappings on the database where the transcript was saved.

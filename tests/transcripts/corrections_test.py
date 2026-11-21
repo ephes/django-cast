@@ -1535,3 +1535,17 @@ def test_stale_episode_instance_is_not_a_glossary_change(transcript, glossary_ep
 @pytest.fixture
 def transcript(glossary_episode, audio):
     return make_transcript(audio)
+
+
+@pytest.mark.parametrize("manual_text", ["Editor text", ""])
+def test_manual_text_skips_automatic_renderer(monkeypatch, manual_text):
+    def fail(raw_text, edits):
+        pytest.fail("Automatic rendering must not run for a manual override")
+
+    monkeypatch.setattr(corrections, "apply_replacements", fail)
+    data = {
+        "segments": [{"start_ms": 1000, "raw_text": "Raw text", "replacements": []}],
+        "manual_texts": {"1000": manual_text},
+    }
+
+    assert corrections.corrected_texts(data) == {1000: manual_text}

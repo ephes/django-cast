@@ -148,9 +148,17 @@ def _uses_audio(episode: Episode | None, transcript: Transcript) -> bool:
     return episode is not None and episode.podcast_audio_id == transcript.audio_id
 
 
+def _valid_episode_id(value: object) -> bool:
+    return type(value) is int and value > 0
+
+
+def _valid_episode_reference(data: dict[str, Any]) -> bool:
+    return "episode_id" in data and (data["episode_id"] is None or _valid_episode_id(data["episode_id"]))
+
+
 def _stored_episode(transcript: Transcript, data: dict[str, Any]) -> Episode | None:
     episode_id = data.get("episode_id")
-    if not isinstance(episode_id, int):
+    if not _valid_episode_id(episode_id):
         return None
     return (
         Episode.objects.using(transcript._state.db).filter(pk=episode_id, podcast_audio_id=transcript.audio_id).first()
@@ -273,7 +281,7 @@ def effective_glossary(episode: Episode) -> tuple[EffectiveGlossary, str]:
 # --- sidecar ---------------------------------------------------------------------------------
 
 
-def _is_current(data: dict[str, Any], fingerprint: str) -> bool:
+def _has_current_correction_data(data: dict[str, Any], fingerprint: str) -> bool:
     segments = data.get("segments")
     return (
         data.get("version") == SIDECAR_VERSION
@@ -294,7 +302,8 @@ def _is_current(data: dict[str, Any], fingerprint: str) -> bool:
 
 def corrections_are_current(transcript: Transcript) -> bool:
     """Whether the stored corrections belong to the transcript's current artifacts."""
-    return _is_current(transcript.corrections_data, transcript.source_fingerprint)
+    data = transcript.corrections_data
+    return _has_current_correction_data(data, transcript.source_fingerprint) and _valid_episode_reference(data)
 
 
 def _fresh_data(transcript: Transcript, texts: Iterable[tuple[int, str]]) -> dict[str, Any]:
@@ -321,9 +330,14 @@ def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _S
     podlove_data = transcript._load_transcript_json("podlove")
     podlove.validate_edit_times(podlove_data)
     data = transcript.corrections_data
-    if _is_current(data, transcript.mapping_fingerprint()):
+    if _has_current_correction_data(data, transcript.mapping_fingerprint()):
         previously = {segment["start_ms"] for segment in data["segments"] if segment["replacements"]}
-        return _State(data, _stored_episode(transcript, data), previously)
+        context = (
+            _stored_episode(transcript, data)
+            if _valid_episode_reference(data)
+            else _initial_episode(transcript, episode)
+        )
+        return _State(data, context, previously)
     texts = podlove.get_texts(podlove_data)
     if not texts:
         return CorrectionsResult(STATUS_NO_SEGMENTS)
@@ -446,23 +460,27 @@ def _build(data: dict[str, Any], episode: Episode) -> dict[str, Any]:
 
 
 def corrected_texts(data: dict[str, Any], start_milliseconds: Iterable[int] | None = None) -> dict[int, str]:
-    """Corrected text per ``start_ms``: raw text plus the replacements that are not rejected.
+    """Corrected text per ``start_ms``: manual text or raw text with non-rejected edits.
 
     Pure function of the sidecar data. Limited to ``start_milliseconds`` when given.
     """
     wanted = None if start_milliseconds is None else set(start_milliseconds)
+    manual_texts = data.get("manual_texts", {})
     texts: dict[int, str] = {}
     for segment in data.get("segments", []):
-        if wanted is not None and segment["start_ms"] not in wanted:
+        start_ms = segment["start_ms"]
+        if wanted is not None and start_ms not in wanted:
+            continue
+        manual_key = str(start_ms)
+        if manual_key in manual_texts:
+            texts[start_ms] = manual_texts[manual_key]
             continue
         edits = [
-            Replacement(segment["start_ms"], item["start"], item["end"], item["from"], item["to"], item["source"])
+            Replacement(start_ms, item["start"], item["end"], item["from"], item["to"], item["source"])
             for item in segment["replacements"]
             if item["state"] != STATE_REJECTED
         ]
-        texts[segment["start_ms"]] = data.get("manual_texts", {}).get(
-            str(segment["start_ms"]), apply_replacements(segment["raw_text"], edits)
-        )
+        texts[start_ms] = apply_replacements(segment["raw_text"], edits)
     return texts
 
 
