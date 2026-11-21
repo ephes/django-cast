@@ -9,6 +9,8 @@ from django.http import Http404, HttpRequest
 from django.shortcuts import get_object_or_404
 from wagtail.models import Site
 
+from .models import Blog, Episode
+
 ModelT = TypeVar("ModelT", bound=Model)
 
 
@@ -33,12 +35,22 @@ def site_specific_queryset(model: type[ModelT], request: HttpRequest, *, live: b
 def get_site_specific_page_or_404(
     model: type[ModelT], request: HttpRequest, *, slug: str, live: bool = True
 ) -> ModelT:
-    queryset = site_specific_queryset(model, request, live=live)
+    return _get_unique_slug_or_404(site_specific_queryset(model, request, live=live), slug=slug)
+
+
+def get_site_specific_episode_or_404(request: HttpRequest, *, blog_slug: str, episode_slug: str) -> Episode:
+    """Resolve a unique live episode below the requested site's live blog."""
+    blog = get_site_specific_page_or_404(Blog, request, slug=blog_slug)
+    return _get_unique_slug_or_404(Episode.objects.live().descendant_of(blog), slug=episode_slug)
+
+
+def _get_unique_slug_or_404(queryset: QuerySet[ModelT], *, slug: str) -> ModelT:
+    model = queryset.model
     multiple_objects_returned = cast(Any, model).MultipleObjectsReturned
     try:
         return cast(ModelT, get_object_or_404(queryset, slug=slug))
     except multiple_objects_returned as exc:
-        raise Http404(f"Multiple {model.__name__} pages found for slug {slug!r} on this site.") from exc
+        raise Http404(f"Multiple {model.__name__} pages found for slug {slug!r}.") from exc
 
 
 def require_unrestricted_public_page(page: ModelT) -> ModelT:

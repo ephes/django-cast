@@ -1,12 +1,12 @@
 from typing import Any
 
 from django.http import Http404, HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
 from ..audio_access import prevent_private_media_caching, request_may_view_page
-from ..models import Blog, Episode
-from ..site_lookup import get_site_specific_page_or_404
+from ..models import Episode
+from ..site_lookup import get_site_specific_episode_or_404
 
 
 def twitter_player_config(episode: Episode) -> dict[str, Any]:
@@ -39,8 +39,7 @@ def twitter_player(request: HttpRequest, blog_slug: str, episode_slug: str) -> H
     podlove player consisting of just the play button. But it needs
     the episode data from the server.
     """
-    blog = get_site_specific_page_or_404(Blog, request, slug=blog_slug)
-    episode = get_object_or_404(Episode.objects.live().descendant_of(blog), slug=episode_slug)
+    episode = get_site_specific_episode_or_404(request, blog_slug=blog_slug, episode_slug=episode_slug)
     if not request_may_view_page(episode, request):
         raise Http404("Episode not found")
     context = {"episode": episode, "player_config": twitter_player_config(episode)}

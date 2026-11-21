@@ -5,7 +5,9 @@ from django.test import override_settings
 from django.urls import reverse
 from wagtail.models import PageViewRestriction
 
-from .factories import BlogFactory, EpisodeFactory
+from cast.devdata import create_transcript
+
+from .factories import BlogFactory, EpisodeFactory, PodcastFactory
 from .multisite_helpers import create_site_root
 
 
@@ -77,6 +79,31 @@ def test_twitter_player_uses_current_site_for_duplicate_blog_slug(client, user, 
     assert response.status_code == 200
     content = response.content.decode("utf-8")
     assert str(episode1.uuid) in content
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("route", ["cast:twitter-player", "cast:episode-transcript"])
+def test_episode_slug_must_be_unique_within_blog(client, podcast, audio, route):
+    first_branch = PodcastFactory(owner=podcast.owner, parent=podcast)
+    second_branch = PodcastFactory(owner=podcast.owner, parent=podcast)
+    first_episode = EpisodeFactory(
+        owner=podcast.owner, title="First episode", slug="shared-episode", parent=first_branch, podcast_audio=audio
+    )
+    second_episode = EpisodeFactory(
+        owner=podcast.owner, title="Second episode", slug=first_episode.slug, parent=second_branch, podcast_audio=audio
+    )
+    create_transcript(
+        audio=audio,
+        podlove={"transcripts": [{"start": "00:00:00.000", "end": "00:00:01.000", "text": "Synthetic transcript."}]},
+    )
+    url = reverse(route, args=[podcast.slug, first_episode.slug])
+
+    assert client.get(url).status_code == 404
+
+    second_episode.unpublish()
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.context["episode"].pk == first_episode.pk
 
 
 def _twitter_player_config(content: str) -> dict:

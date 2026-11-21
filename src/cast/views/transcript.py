@@ -38,7 +38,6 @@ from ..forms import (
 from ..media_ingest import TRANSCRIPT_POLICY, ingest_upload
 from ..media_permissions import transcript_permission_policy
 from ..models import (
-    Blog,
     Contributor,
     Episode,
     Post,
@@ -49,7 +48,7 @@ from ..models import (
     get_template_base_dir,
 )
 from ..models.contributors import ContributorVoiceReference
-from ..site_lookup import get_site_specific_page_or_404
+from ..site_lookup import get_site_specific_episode_or_404
 from ..transcripts import editing, parsing, podlove, services
 from ..transcripts.dote import (
     convert_dote_to_podcastindex_transcript,
@@ -963,8 +962,7 @@ def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
 
 
 def episode_transcript(request: HtmxHttpRequest, blog_slug: str, episode_slug: str) -> HttpResponse:
-    blog = get_site_specific_page_or_404(Blog, request, slug=blog_slug)
-    episode = get_object_or_404(Episode.objects.descendant_of(blog), slug=episode_slug, live=True)
+    episode = get_site_specific_episode_or_404(request, blog_slug=blog_slug, episode_slug=episode_slug)
     if not request_may_view_page(episode, request):
         raise Http404("Transcript not found")
     transcript = episode.get_transcript_or_none()

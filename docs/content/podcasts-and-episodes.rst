@@ -63,6 +63,16 @@ Podcast episodes are Wagtail pages that have a :ref:`podcast <podcast_overview>`
 page as a parent. They have the same features as blog :ref:`posts <post_overview>`,
 but with some additional fields for better podcast support.
 
+Slug-based Episode URLs
+-----------------------
+
+The Twitter Player embed and episode transcript URLs use the blog slug and
+episode slug. The blog must be live and within the Wagtail site selected for
+the request, including a blog used as the site root. Wagtail can fall back to
+its configured default site. Both URLs return 404 if multiple live episodes
+below that blog share the requested slug. Use distinct slugs across branches
+under the same blog when publishing episodes addressed by these URLs.
+
 Cover Image
 -----------
 
