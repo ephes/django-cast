@@ -140,6 +140,10 @@ time the reader opens the Transcript panel. A collapsed transcript triggers no
 fetch, and the detail-page render never builds or sanitizes the transcript at
 all — keeping the page small and the render cheap.
 
+A missing, zero, or negative stored duration is reported as unknown (``null``).
+Transcript cues keep their own timing and use the normal cue-end fallback when
+there is no known playback duration.
+
 The transcript endpoint is ``cast:api:audio_player_transcript`` at
 ``/api/audios/<pk>/player-transcript/``. It takes a ``post_id`` query parameter
 (to establish the episode/contributor context for sanitization), is public-read,
