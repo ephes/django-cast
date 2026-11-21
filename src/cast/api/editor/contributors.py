@@ -13,6 +13,7 @@ from .media import _reject_unsupported_query_params
 from .views import EditorAPIView
 
 MAX_CONTRIBUTOR_SLUG_FILTERS = 100
+MAX_CONTRIBUTOR_SEARCH_LENGTH = 128
 
 
 def serialize_contributor(contributor: Contributor) -> dict[str, Any]:
@@ -55,8 +56,13 @@ class ContributorListView(EditorAPIView):
                 {"slug": [{"code": "max_length", "message": f"Each slug must be at most {max_length} characters."}]}
             )
 
+        q = request.query_params.get("q", "").strip()
+        if len(q) > MAX_CONTRIBUTOR_SEARCH_LENGTH:
+            raise EditorValidationError(
+                {"q": [{"code": "max_length", "message": f"Use at most {MAX_CONTRIBUTOR_SEARCH_LENGTH} characters."}]}
+            )
+
         queryset = Contributor.objects.only("id", "slug", "display_name", "default_role", "visible")
-        q = request.query_params.get("q")
         if q:
             queryset = queryset.filter(Q(display_name__icontains=q) | Q(slug__icontains=q))
         if slugs:

@@ -7,7 +7,7 @@ from django.http import HttpRequest, JsonResponse
 from django.views.decorators.http import require_GET
 from wagtail.snippets.permissions import user_can_access_snippets
 
-from ..models import Contributor, ContributorLink
+from ..models import Contributor
 
 
 @require_GET
@@ -24,16 +24,18 @@ def link_options(request: HttpRequest) -> JsonResponse:
     try:
         contributor_id = int(request.GET.get("contributor_id", ""))
     except (TypeError, ValueError):
-        contributor = None
-        links = ContributorLink.objects.none()
-    else:
-        contributor = Contributor.objects.filter(pk=contributor_id).first()
-        links = ContributorLink.objects.filter(contributor_id=contributor_id).select_related("contributor")
+        return JsonResponse(empty_data)
 
-    ordered_links = list(links.order_by(F("sort_order").asc(nulls_last=True), "pk"))
+    contributor = Contributor.objects.only("display_name", "default_role").filter(pk=contributor_id).first()
+    if contributor is None:
+        return JsonResponse(empty_data)
+
+    ordered_links = list(
+        contributor.links.only("id", "contributor", "service").order_by(F("sort_order").asc(nulls_last=True), "pk")
+    )
 
     data: dict[str, str | list[dict[str, Any]]] = {
-        "defaultRole": contributor.default_role if contributor is not None else "",
+        "defaultRole": contributor.default_role,
         "defaultLinkId": str(ordered_links[0].pk) if ordered_links else "",
         "links": [
             {

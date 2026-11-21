@@ -27,6 +27,8 @@ Security and hardening
   inline script. The Podlove embed still loads resources from ``cdn.podlove.org``.
 - Bound the number and length of editor contributor slug filters before querying
   the database.
+- Trim editor contributor search terms and reject terms longer than 128
+  characters with ``400 validation_error`` at ``q`` before querying contributors.
 
 Fixes
 ~~~~~
@@ -123,6 +125,9 @@ Fixes
 
 Internal
 ~~~~~~~~
+
+- Fetch only the contributor and link fields needed for Wagtail's link selector,
+  without joining the contributor into each link row.
 
 - Reuse the signed evidence hash for legacy speaker mappings across voice-reference candidates.
 - Reuse the PodcastIndex contributor role allowlist across RSS and Atom items.

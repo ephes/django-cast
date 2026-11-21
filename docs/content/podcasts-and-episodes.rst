@@ -177,6 +177,8 @@ contributors. Each assignment chooses a contributor, a role of **Host** or
 After a contributor is selected, the link field only offers that contributor's
 profile links. New assignments use the contributor's default role and first
 ordered profile link, but editors can still change both fields per episode.
+Link labels show the contributor's name and service, for example
+``Guest: Website``.
 The same contributor may appear on an episode under more than one role (for
 example as both **Host** and **Guest**), but a given (contributor, role) pair
 can only be assigned once per episode. Episode assignments may reference one of
