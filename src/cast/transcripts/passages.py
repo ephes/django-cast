@@ -147,7 +147,7 @@ def correct_text(transcript: Transcript, start_ms: int, text: str) -> str:
         raise ValidationError("This passage no longer exists. Reload the transcript.")
     validate_text_destination(transcript, start_ms, text)
     data = transcript.corrections_data
-    if not corrections._is_current(data, transcript.mapping_fingerprint(), for_edit=True):
+    if not corrections._has_current_correction_data(data, transcript.mapping_fingerprint(), for_edit=True):
         data = corrections._fresh_data(transcript, [(row["start_ms"], row["text"]) for row in rows])
     data.setdefault("manual_texts", {})[str(start_ms)] = text
     corrections._write(transcript, data, {start_ms: text})

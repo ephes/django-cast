@@ -1592,3 +1592,27 @@ def test_invalid_sidecar_segment_starts_preserve_artifacts(transcript, start_ms)
         correct_text(transcript, 10000, "Editor text")
 
     assert file_bytes(transcript) == before
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("episode_id", ["missing", True, 0])
+def test_manual_edit_keeps_decisions_with_invalid_episode_reference(transcript, episode_id):
+    from cast.transcripts.passages import correct_text
+
+    refresh_transcript_corrections(transcript)
+    decide_correction_occurrence(transcript, **buttondown_position(transcript), action=STATE_APPROVED)
+    data = transcript.corrections_data
+    if episode_id == "missing":
+        del data["episode_id"]
+    else:
+        data["episode_id"] = episode_id
+    transcript._write_corrections_data(data)
+    transcript.save(update_fields=["corrections"])
+
+    correct_text(transcript, 10000, "Editor text")
+
+    stored = transcript.corrections_data
+    assert stored["occurrence_decisions"] == data["occurrence_decisions"]
+    assert stored["decisions"] == data["decisions"]
+    assert stored["segments"] == data["segments"]
+    assert stored["manual_texts"] == {"10000": "Editor text"}

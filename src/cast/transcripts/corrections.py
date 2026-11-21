@@ -528,7 +528,7 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
     replacements = StagedFileReplacementGroup()
 
     def save_with_current_glossary(instance: Transcript, **kwargs: Any) -> None:
-        if data.get("episode_id") is not None:
+        if _valid_episode_id(data.get("episode_id")):
             episode = _stored_episode(instance, data)
             if episode is None or effective_glossary(episode)[1] != data["glossary_fingerprint"]:
                 raise services.TranscriptEditConflict("Reload the transcript; its glossary changed while editing.")
