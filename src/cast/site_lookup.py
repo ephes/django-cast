@@ -27,7 +27,7 @@ def site_specific_queryset(model: type[ModelT], request: HttpRequest, *, live: b
     site = Site.find_for_request(request)
     if site is None or site.root_page_id is None:
         return queryset.none()
-    return cast(QuerySet[ModelT], queryset.descendant_of(site.root_page))
+    return cast(QuerySet[ModelT], queryset.descendant_of(site.root_page, inclusive=True))
 
 
 def get_site_specific_page_or_404(

@@ -165,6 +165,37 @@ class TestFeedDetailRoutingNonConflict:
         assert "Site 1 Blog" in content
         assert "Site 2 Blog" not in content
 
+    def test_site_root_blog_resolves_feed_and_episode(self, client, user, audio, settings):
+        site1, site1_root = create_site_root(
+            owner=user, hostname="blog-root.example", slug="first-root", title="First Site"
+        )
+        _site2, site2_root = create_site_root(
+            owner=user, hostname="adjacent.example", slug="second-root", title="Second Site"
+        )
+        blog1 = BlogFactory(owner=user, title="Root Blog", slug="shared-blog", parent=site1_root)
+        blog2 = BlogFactory(owner=user, title="Adjacent Blog", slug=blog1.slug, parent=site2_root)
+        episode1 = EpisodeFactory(
+            owner=user, title="Local Episode", slug="shared-episode", parent=blog1, podcast_audio=audio
+        )
+        episode2 = EpisodeFactory(
+            owner=user, title="Adjacent Episode", slug=episode1.slug, parent=blog2, podcast_audio=audio
+        )
+        site1.root_page = blog1
+        site1.save(update_fields=["root_page"])
+        settings.ALLOWED_HOSTS = [site1.hostname]
+
+        response = client.get(reverse("cast:feed_detail", args=[blog1.slug]), HTTP_HOST=site1.hostname)
+        assert response.status_code == 200
+        assert b"Root Blog" in response.content
+        assert b"Adjacent Blog" not in response.content
+
+        response = client.get(
+            reverse("cast:twitter-player", args=[blog1.slug, episode1.slug]), HTTP_HOST=site1.hostname
+        )
+        assert response.status_code == 200
+        assert str(episode1.uuid).encode() in response.content
+        assert str(episode2.uuid).encode() not in response.content
+
     def test_feed_xml_uses_current_site_for_duplicate_blog_slug(self, client, user, body):
         site1, site1_root = create_site_root(
             owner=user, hostname="feed-xml1.local", slug="feed-xml1-root", title="Feed XML 1"

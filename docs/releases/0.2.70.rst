@@ -31,6 +31,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Resolve feed and episode URLs when the blog or podcast is the Wagtail site root.
+
 - Bound original reads in the GPS inventory before opening images for inspection.
 - Verify final media sync bytes before retiring the recovery stage.
 - Skip glossary import entries containing lone surrogates or NUL without rolling back valid entries.
