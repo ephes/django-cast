@@ -4,6 +4,15 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Editor API Markdown fields now reject fenced or indented code nested in a list
+  or block quote with ``400 validation_error`` code ``nested_code`` and its
+  source lines. Such code used to pass through rich-text conversion inside the
+  paragraph block, which could collapse its whitespace. Clients sending nested
+  code must move it out of the list or quote into a standalone code block.
+- The editor contributor list now returns ``400 validation_error`` at ``slug``
+  for more than 100 distinct ``slug`` filters (``too_many``) or a slug longer
+  than 50 characters (``max_length``).
+
 Features
 ~~~~~~~~
 
@@ -13,6 +22,8 @@ Security and hardening
 - Mark restricted Twitter Player responses private and uncacheable.
 - Load the Twitter Player bootstrap as a static script so the card page needs no
   inline script. The Podlove embed still loads resources from ``cdn.podlove.org``.
+- Bound the number and length of editor contributor slug filters before querying
+  the database.
 
 Fixes
 ~~~~~

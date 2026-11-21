@@ -31,14 +31,6 @@ def test_empty_markdown_is_an_empty_block_list():
     assert convert("  \n\n") == ([], {})
 
 
-def test_nested_code_stays_in_the_paragraph():
-    blocks, errors = convert("- item\n\n  ```\n  nested\n  ```\n")
-
-    assert errors == {}
-    assert [block["type"] for block in blocks] == ["paragraph"]
-    assert "<pre><code>nested\n</code></pre>" in blocks[0]["value"]
-
-
 def test_raw_html_is_escaped_not_passed_through():
     blocks, errors = convert('<script>alert(1)</script>\n\nText <img src=x onerror="alert(1)">')
 
@@ -76,6 +68,18 @@ def test_inline_images_are_rejected_with_line_numbers():
 
     assert blocks == []
     assert errors == image_errors("line 3", "line 5")
+
+
+def test_nested_code_and_image_errors_are_reported_together():
+    blocks, errors = convert("> ```\n> code\n> ```\n\n![alt](url)")
+
+    assert blocks == []
+    assert errors == {
+        "overview_markdown": [
+            {"code": "nested_code", "message": "Nested Markdown code is not supported (lines 1-3); unnest it."},
+            *image_errors("line 5")["overview_markdown"],
+        ]
+    }
 
 
 @pytest.mark.parametrize(

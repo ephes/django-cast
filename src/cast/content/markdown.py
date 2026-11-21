@@ -36,16 +36,10 @@ def _code_block(token: Any) -> dict[str, Any]:
     return {"type": "code", "value": {"language": language, "source": token.content.removesuffix("\n")}}
 
 
-def _image_locations(tokens: list[Any]) -> list[str]:
-    """Return the source line span of each text block that contains an image."""
-    locations = []
-    for token in tokens:
-        if token.type == "inline" and any(child.type == "image" for child in token.children or []):
-            # ``map`` is the block's [start, end) line range. Inline tokens carry no
-            # reliable per-image line, so report the whole span rather than guess.
-            first, last = token.map[0] + 1, token.map[1]
-            locations.append(f"line {first}" if first == last else f"lines {first}-{last}")
-    return locations
+def _line_span(line_map: list[int]) -> str:
+    # The parser gives a zero-based, half-open line range for the containing block.
+    first, last = line_map[0] + 1, line_map[1]
+    return f"line {first}" if first == last else f"lines {first}-{last}"
 
 
 def markdown_to_author_blocks(source: str, *, path: str, errors: ErrorCollector) -> list[dict[str, Any]]:
@@ -53,9 +47,8 @@ def markdown_to_author_blocks(source: str, *, path: str, errors: ErrorCollector)
 
     Consecutive top-level prose becomes one ``paragraph`` block. Top-level fenced
     and indented code blocks become ``code`` blocks; the fence info string's
-    first word is the language, ``text`` when absent. Inline images are rejected
-    because media must use the structured, permission-checked blocks; the error
-    names the source line span of each paragraph or heading containing images.
+    first word is the language, ``text`` when absent. Nested code and inline
+    images are rejected with source locations.
     """
     parser = _markdown_parser()
     if parser is None:
@@ -68,10 +61,16 @@ def markdown_to_author_blocks(source: str, *, path: str, errors: ErrorCollector)
 
     env: dict[str, Any] = {}
     tokens = parser.parse(source, env)
-    image_locations = _image_locations(tokens)
-    for location in image_locations:
-        errors.add(path, "inline_image", f"Markdown images are not supported ({location}); use image blocks.")
-    if image_locations:
+    previous_error_count = len(errors)
+    for token in tokens:
+        if token.type == "inline" and any(child.type == "image" for child in token.children or []):
+            location = _line_span(token.map)
+            errors.add(path, "inline_image", f"Markdown images are not supported ({location}); use image blocks.")
+        elif token.type in _CODE_TOKENS and token.level > 0:
+            # Wagtail's rich-text conversion can collapse whitespace in <pre><code>.
+            location = _line_span(token.map)
+            errors.add(path, "nested_code", f"Nested Markdown code is not supported ({location}); unnest it.")
+    if len(errors) != previous_error_count:
         return []
 
     blocks: list[dict[str, Any]] = []

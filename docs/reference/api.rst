@@ -717,7 +717,10 @@ Conversion policy:
 - Markdown is parsed as CommonMark. Consecutive top-level prose becomes one
   ``paragraph`` block; each top-level fenced or indented code block becomes a
   ``code`` block. The first word of the fence info string is the language, or
-  ``text`` when absent. Code nested in lists or quotes stays in the paragraph.
+  ``text`` when absent. Fenced or indented code nested in a list or block quote
+  returns ``400 validation_error`` with code ``nested_code`` at the Markdown
+  field and the source line or line range. Move the code out of its list or
+  quote to keep its formatting in a standalone ``code`` block.
 - Raw HTML in the Markdown source is escaped and kept as text, never passed
   through as markup. The parser leaves ``javascript:``, ``vbscript:``,
   ``file:`` and most ``data:`` links as literal text; any link that does become
@@ -1416,12 +1419,15 @@ Fields:
 
 Lists the ``cast.Contributor`` snippets that can be assigned to episodes, ordered
 by display name, in the shared pagination envelope. ``q`` filters display name
-or slug with ``icontains``; repeatable ``slug`` filters exact slugs. Other query
-parameters return ``unsupported_parameter``. Items carry ``id``, ``slug``,
-``display_name``, ``default_role``, and ``visible``; private voice-reference data
-is never included. Like the contributor select in the Wagtail episode form, the
-list is available to every user with Wagtail admin access and requires no token
-scope.
+or slug with ``icontains``; repeatable ``slug`` filters exact slugs. Up to 100
+distinct slugs are accepted, with duplicates counted once. Requests exceeding
+that limit or containing a slug longer than 50 characters return ``400
+validation_error`` at ``slug`` with code ``too_many`` or ``max_length``,
+respectively. Other query parameters return ``unsupported_parameter``. Items
+carry ``id``, ``slug``, ``display_name``, ``default_role``, and ``visible``;
+private voice-reference data is never included. Like the contributor select in
+the Wagtail episode form, the list is available to every user with Wagtail
+admin access and requires no token scope.
 
 **Error envelopes**
 
