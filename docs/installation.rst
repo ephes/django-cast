@@ -153,6 +153,12 @@ Console messages from quickstart and its non-interactive ``manage.py`` steps
 (``migrate``, ``collectstatic``, default superuser creation and ``runserver``)
 escape characters the terminal encoding cannot show instead of failing.
 
+Quickstart's ``manage.py`` steps explicitly use the generated settings and
+import from the generated project and the active Python installation.
+Caller overrides through ``DJANGO_SETTINGS_MODULE`` and ``PYTHONPATH`` do not
+apply. Interactive superuser creation reads from the terminal with strict
+encoding error handling.
+
 The interactive and no-superuser options cannot be combined. An existing project
 directory is refused before setup begins. If setup fails after quickstart creates
 the project, its generated directory is removed; unrelated sibling files remain.

@@ -108,7 +108,7 @@ def run_migrations(project_dir: Path) -> None:
     manage_py = project_dir / "manage.py"
 
     # Run makemigrations for sites app first (if needed)
-    subprocess.run([sys.executable, str(manage_py), "migrate"], check=True, env=manage_py_environment())
+    subprocess.run([sys.executable, str(manage_py), "migrate"], check=True, env=manage_py_environment(project_dir))
 
 
 def collect_static_files(project_dir: Path) -> None:
@@ -118,7 +118,9 @@ def collect_static_files(project_dir: Path) -> None:
 
     # Run collectstatic with --noinput to avoid prompts
     subprocess.run(
-        [sys.executable, str(manage_py), "collectstatic", "--noinput"], check=True, env=manage_py_environment()
+        [sys.executable, str(manage_py), "collectstatic", "--noinput"],
+        check=True,
+        env=manage_py_environment(project_dir),
     )
 
 
@@ -157,14 +159,20 @@ else:
     print('Superuser already exists.')
 """
         subprocess.run(
-            [sys.executable, str(manage_py), "shell", "-c", create_user_cmd], check=True, env=manage_py_environment()
+            [sys.executable, str(manage_py), "shell", "-c", create_user_cmd],
+            check=True,
+            env=manage_py_environment(project_dir),
         )
     else:
         print("\nCreating superuser account...")
         print("You'll need this to access the Wagtail admin at /cms/")
         # Interactive input keeps the strict console handler: escaping would
         # silently change typed credentials instead of reporting them.
-        subprocess.run([sys.executable, str(manage_py), "createsuperuser"], check=True)
+        subprocess.run(
+            [sys.executable, str(manage_py), "createsuperuser"],
+            check=True,
+            env=manage_py_environment(project_dir, interactive=True),
+        )
 
 
 def escape_unencodable_console_output() -> None:
@@ -178,15 +186,16 @@ def escape_unencodable_console_output() -> None:
             stream.reconfigure(errors="backslashreplace")
 
 
-def manage_py_environment() -> dict[str, str]:
-    """Return the environment for manage.py children, escaping unencodable console output.
-
-    Children print paths that contain the project name (e.g. collectstatic), so
-    they keep the console encoding but use the backslashreplace error handler.
-    """
+def manage_py_environment(project_dir: Path, *, interactive: bool = False) -> dict[str, str]:
+    """Select the generated project's settings and console error handling."""
     environment = os.environ.copy()
+    environment["DJANGO_SETTINGS_MODULE"] = f"{project_dir.resolve().name}.settings"
+    environment.pop("PYTHONPATH", None)
+    # Python must include the generated manage.py script directory on sys.path.
+    environment.pop("PYTHONSAFEPATH", None)
     encoding = environment.get("PYTHONIOENCODING", "").partition(":")[0]
-    environment["PYTHONIOENCODING"] = f"{encoding}:backslashreplace"
+    errors = "strict" if interactive else "backslashreplace"
+    environment["PYTHONIOENCODING"] = f"{encoding}:{errors}"
     return environment
 
 
@@ -306,7 +315,9 @@ def main() -> None:
         print("\nThe browser will open automatically in a few seconds...")
         open_browser_delayed("http://localhost:8000/cms/", delay=5.0)
         subprocess.run(
-            [sys.executable, str(project_path / "manage.py"), "runserver"], check=True, env=manage_py_environment()
+            [sys.executable, str(project_path / "manage.py"), "runserver"],
+            check=True,
+            env=manage_py_environment(project_path),
         )
     except KeyboardInterrupt:
         print("\nDevelopment server stopped.")
