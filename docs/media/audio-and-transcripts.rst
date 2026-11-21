@@ -144,6 +144,13 @@ A missing, zero, or negative stored duration is reported as unknown (``null``).
 Transcript cues keep their own timing and use the normal cue-end fallback when
 there is no known playback duration.
 
+Chapter starts and transcript cue times accept numeric seconds and clock
+strings of the form ``MM:SS`` or ``HH:MM:SS``. Clock seconds must be in
+the range [0, 60) and may include a fractional part. Hours and minutes must be
+nonnegative integers. In the three-part form, minutes must be below 60. The
+two-part form also accepts total minutes, such as ``125:02.25``. Invalid
+chapter or cue starts are omitted. Invalid cue ends use the cue-end fallback.
+
 The transcript endpoint is ``cast:api:audio_player_transcript`` at
 ``/api/audios/<pk>/player-transcript/``. It takes a ``post_id`` query parameter
 (to establish the episode/contributor context for sanitization), is public-read,

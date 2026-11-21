@@ -29,9 +29,13 @@ Security and hardening
   the database.
 - Trim editor contributor search terms and reject terms longer than 128
   characters with ``400 validation_error`` at ``q`` before querying contributors.
+- Limit the chapters JSON endpoint to GET and HEAD before looking up audio.
 
 Fixes
 ~~~~~
+
+- Validate clock components before converting chapter and transcript times to
+  seconds. Two-part clocks still accept total leading minutes.
 
 - Let reinserted Podlove players reschedule canceled idle work and restore the
   load button when a pending click was canceled.

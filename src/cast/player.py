@@ -109,10 +109,13 @@ def _clock_seconds(value: Any) -> float | None:
         seconds = float(parts[-1])
         minutes = int(parts[-2])
         hours = int(parts[-3]) if len(parts) == 3 else 0
-        total = hours * 3600 + minutes * 60 + seconds
+        if not 0 <= seconds < 60 or minutes < 0 or hours < 0:
+            return None
+        if len(parts) == 3 and minutes >= 60:
+            return None
+        return hours * 3600 + minutes * 60 + seconds
     except (ValueError, OverflowError):
         return None
-    return total if math.isfinite(total) else None
 
 
 def _timestamp_seconds(value: Any) -> float | None:
