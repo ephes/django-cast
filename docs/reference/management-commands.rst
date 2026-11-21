@@ -360,9 +360,10 @@ Options:
     destination with an overwrite-capable backend. Verify the destination
     digest before deleting the recovery key with ``Storage.delete(key)``.
     Retried commands do not automatically consume or delete older recovery keys.
-    Missing-copy writes are also staged. Their final keys are cleaned when
-    a write raises or final verification fails, under the same-host publisher
-    lock. Failed final verification still retains the verified recovery stage. A run that is
+    Missing-copy writes are also staged. When a write raises or final
+    verification fails, their final keys and stages are cleaned under the
+    same-host publisher lock; no recovery stage is kept because an ordinary
+    retry copies the file again. A run that is
     killed can leave a staged ``.tmp`` key on storage. Backup and restore skip and
     report reserved media staging keys. Inspect and remove abandoned objects
     manually.

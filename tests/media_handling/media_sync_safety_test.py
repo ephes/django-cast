@@ -319,10 +319,15 @@ def test_same_name_save_must_verify_final_bytes_before_removing_stage(mocker, mi
     with pytest.raises(CommandError):
         call_command("media_backup", refresh_changed=not missing, stdout=output, stderr=errors)
     assert "copied=0 refreshed=0 unchanged=0 errors=1" in output.getvalue()
-    [stage] = target.staged()
-    assert target._files[stage] == data
     assert target.exists(name) is not missing
-    assert f"complete recovery copy retained at {stage}" in errors.getvalue()
+    if missing:
+        # The source is intact: an ordinary retry repairs it, so no stage is kept.
+        assert target.staged() == []
+        assert "recovery copy" not in errors.getvalue()
+    else:
+        [stage] = target.staged()
+        assert target._files[stage] == data
+        assert f"complete recovery copy retained at {stage}" in errors.getvalue()
     assert (
         "failed content verification" if failure == "short" else "synthetic final read failure"
     ) in errors.getvalue()

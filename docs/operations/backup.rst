@@ -102,15 +102,15 @@ and the final save) is not charged to any of them.
 
 Before dropping the stage, backup and restore hash the final key after a
 same-name save. A failed final refresh can leave partial destination bytes.
-If a final overwrite raises, or if a saved object is unreadable or differs
-from its stage, the command reports an error and retains a SHA-256-verified
-complete recovery copy at its exact reserved
+If a refresh's final overwrite raises, or if its saved object is unreadable
+or differs from its stage, the command reports an error and retains a
+SHA-256-verified complete recovery copy at its exact reserved
 ``.django-cast-refresh-<random>.tmp`` key. Backup and restore skip
 these keys. Retry with the original source when available; otherwise inspect
 and explicitly recover from the reported key, verify the destination, and
 delete the key manually. See :doc:`/reference/management-commands` for details.
-For a missing copy, the command removes the unverified final key so an
-ordinary retry can copy it again. If the save raised, the stage is removed too.
+A failed missing copy keeps no recovery key: the command removes its stage
+and its unverified final key, and an ordinary retry copies the file again.
 
 Once we have a unified way to backup and restore the database, we can also
 integrate the media backup and restore into a single command.

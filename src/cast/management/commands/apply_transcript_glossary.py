@@ -20,7 +20,8 @@ def _transcripts_at_start(transcripts: QuerySet[Transcript]) -> Iterator[Transcr
     last_at_start = transcripts.order_by("-pk").values_list("pk", flat=True).first()
     if last_at_start is None:
         return
-    admitted = transcripts.filter(pk__lte=last_at_start)
+    # Keyset paging needs ascending primary keys, whatever the caller ordered by.
+    admitted = transcripts.filter(pk__lte=last_at_start).order_by("pk")
     remaining = admitted
     while batch := list(remaining[:ALL_BATCH_SIZE]):
         yield from batch

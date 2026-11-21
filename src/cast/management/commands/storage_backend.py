@@ -215,8 +215,9 @@ def publish_staged_file(
 
     Writers outside this same-host lock require backend conditional operations;
     they must be quiesced. Generic Storage has no compare-and-swap primitive.
-    Keep the verified stage if a final overwrite raises or if a same-name save
-    cannot be verified. Reserved recovery keys are excluded from sync enumeration.
+    Keep the verified stage if a refresh's final overwrite raises or its
+    same-name save cannot be verified. A missing copy keeps no stage. Reserved
+    recovery keys are excluded from sync enumeration.
     """
     target_exists = target_storage.exists(path)
     if target_exists == missing:
@@ -262,9 +263,12 @@ def publish_staged_file(
                     recovery_name = staged_name
                 raise
             if saved_name == path:
-                recovery_name = staged_name
                 if missing:
+                    # The source is intact, so an ordinary retry repairs an
+                    # unverified copy: drop its final key and the stage.
                     staged_names.add(path)
+                else:
+                    recovery_name = staged_name
         if saved_name != path:
             if missing:
                 message = (
