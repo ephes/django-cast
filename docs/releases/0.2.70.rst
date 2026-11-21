@@ -18,7 +18,7 @@ Fixes
 ~~~~~
 
 - Run every quickstart child with the generated settings and project import path.
-- Refuse automatic episode numbering when the next counter would exceed the portable field limit.
+- Refuse automatic episode numbering when the next counter would exceed the portable field limit, with a field error in the Wagtail page editor and the editor API.
 - Invalidate stale absolute rich-text page links when refreshing their relative URLs.
 - Treat zero and negative stored audio durations as unknown in the custom player.
 - Use manual transcript overrides directly, including empty stored overrides.

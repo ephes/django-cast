@@ -20,6 +20,7 @@ from cast.podcast_numbering import (
     _is_first_publish_candidate,
     _next_available_episode_number,
     assign_episode_number_for_publish,
+    automatic_numbering_violation,
     episode_type_consumes_number,
 )
 from cast.publication import PublicationRejected
@@ -151,6 +152,36 @@ def test_enabled_podcast_assigns_first_blank_full_episode_and_persists_revision(
     assert episode.live_revision.as_object().episode_number == 1
     podcast.refresh_from_db()
     assert podcast.next_episode_number == 2
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("next_number", "numbering_enabled", "expected"),
+    [
+        (2**31 - 2, True, None),
+        (2**31 - 1, False, None),
+        (2**31 - 1, True, "numbering_exhausted"),
+    ],
+)
+def test_automatic_numbering_violation_predicts_publish(
+    podcast, audio, body, next_number, numbering_enabled, expected
+):
+    enable_numbering(podcast, next_number=next_number)
+    podcast.automatic_episode_numbering_enabled = numbering_enabled
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="pre-check")
+
+    violation = automatic_numbering_violation(episode, podcast)
+
+    assert (violation.code if violation is not None else None) == expected
+
+
+@pytest.mark.django_db
+def test_automatic_numbering_violation_ignores_a_stored_publication(podcast, audio, body):
+    enable_numbering(podcast, next_number=2**31 - 1)
+    episode = make_draft_episode(podcast=podcast, audio=audio, body=body, slug="published-elsewhere")
+    Episode.objects.filter(pk=episode.pk).update(live=True, first_published_at=timezone.now())
+
+    assert automatic_numbering_violation(episode, podcast) is None
 
 
 @pytest.mark.django_db

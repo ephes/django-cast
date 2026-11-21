@@ -20,6 +20,37 @@ if TYPE_CHECKING:
 PORTABLE_NUMBER_MAX = 2**31 - 1
 
 
+def _automatic_number_fits(episode_number: int) -> bool:
+    # The assigned number and its successor both need to fit.
+    return 1 <= episode_number < PORTABLE_NUMBER_MAX
+
+
+def _numbering_exhausted_violation() -> PublicationViolation:
+    return PublicationViolation(
+        field="episode_number",
+        code="numbering_exhausted",
+        message=_(
+            "Automatic episode numbering cannot advance. "
+            "Enter an episode number manually or adjust the podcast's next episode number."
+        ),
+    )
+
+
+def automatic_numbering_violation(episode: Episode, podcast: Podcast) -> PublicationViolation | None:
+    """Return the exhausted-numbering violation an immediate publish would raise.
+
+    This is an unlocked pre-check for forms, so the admin editor can show the
+    problem as a field error. Publication repeats the check under the podcast
+    lock and still rejects a number that a concurrent publish exhausted.
+    """
+    if not _is_first_publish_candidate(episode, podcast):
+        return None
+    already_published, _current_number, _live_revision_id = _current_publish_state(episode)
+    if already_published or _automatic_number_fits(_next_available_episode_number(podcast, episode)):
+        return None
+    return _numbering_exhausted_violation()
+
+
 def episode_type_consumes_number(episode_type: str) -> bool:
     return episode_type in {"", "full"}
 
@@ -151,20 +182,8 @@ def assign_episode_number_for_publish(
                 if already_published or not _is_first_publish_candidate(episode, locked_podcast):
                     return None
                 episode_number = _next_available_episode_number(locked_podcast, episode)
-                # The assigned number and its successor both need to fit.
-                if not 1 <= episode_number < PORTABLE_NUMBER_MAX:
-                    raise PublicationRejected(
-                        (
-                            PublicationViolation(
-                                field="episode_number",
-                                code="numbering_exhausted",
-                                message=_(
-                                    "Automatic episode numbering cannot advance. "
-                                    "Enter an episode number manually or adjust the podcast's next episode number."
-                                ),
-                            ),
-                        )
-                    )
+                if not _automatic_number_fits(episode_number):
+                    raise PublicationRejected((_numbering_exhausted_violation(),))
 
             _update_revision_episode_number(revision, episode_number)
             if not preserve_current_number:

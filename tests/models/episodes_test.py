@@ -1,5 +1,6 @@
 import json
 import os
+from types import SimpleNamespace
 
 import pytest
 from django import forms
@@ -18,7 +19,7 @@ from cast.models.pages import (
     HomePage,
 )
 from cast.models.video import Video
-from tests.factories import PodcastFactory
+from tests.factories import EpisodeFactory, PodcastFactory
 
 
 class TestEpisodeModel:
@@ -301,11 +302,9 @@ def test_custom_episode_form():
     assert not form.is_valid()
 
 
-@pytest.mark.django_db
-def test_episode_edit_view_publish_action_publishes_contributor_assignments(admin_client, episode):
-    contributor = Contributor.objects.create(display_name="Published Guest", slug="published-guest")
-    edit_url = reverse("wagtailadmin_pages:edit", args=(episode.pk,))
-    post_data = {
+def episode_publish_post_data(episode):
+    """Return a Wagtail edit-view payload that publishes ``episode`` without contributors."""
+    return {
         "action-publish": "action-publish",
         "title": episode.title,
         "slug": episode.slug,
@@ -348,10 +347,20 @@ def test_episode_edit_view_publish_action_publishes_contributor_assignments(admi
         "comments-INITIAL_FORMS": "0",
         "comments-MIN_NUM_FORMS": "0",
         "comments-MAX_NUM_FORMS": "1000",
-        "contributor_assignments-TOTAL_FORMS": "1",
+        "contributor_assignments-TOTAL_FORMS": "0",
         "contributor_assignments-INITIAL_FORMS": "0",
         "contributor_assignments-MIN_NUM_FORMS": "0",
         "contributor_assignments-MAX_NUM_FORMS": "1000",
+    }
+
+
+@pytest.mark.django_db
+def test_episode_edit_view_publish_action_publishes_contributor_assignments(admin_client, episode):
+    contributor = Contributor.objects.create(display_name="Published Guest", slug="published-guest")
+    edit_url = reverse("wagtailadmin_pages:edit", args=(episode.pk,))
+    post_data = {
+        **episode_publish_post_data(episode),
+        "contributor_assignments-TOTAL_FORMS": "1",
         "contributor_assignments-0-contributor": str(contributor.pk),
         "contributor_assignments-0-role": EpisodeContributor.ROLE_GUEST,
         "contributor_assignments-0-link": "",
@@ -367,6 +376,101 @@ def test_episode_edit_view_publish_action_publishes_contributor_assignments(admi
     assert episode.contributor_assignments.get().contributor == contributor
     live_episode = episode.live_revision.as_object()
     assert [assignment.contributor for assignment in live_episode.contributor_assignments.all()] == [contributor]
+
+
+NUMBERING_CEILING = 2**31 - 1
+
+
+def exhaust_automatic_numbering(podcast):
+    podcast.automatic_episode_numbering_enabled = True
+    podcast.next_episode_number = NUMBERING_CEILING
+    podcast.save(update_fields=["automatic_episode_numbering_enabled", "next_episode_number"])
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("overrides", "published"),
+    [
+        ({}, False),
+        ({"episode_number": "5"}, True),
+        ({"episode_type": "trailer"}, True),
+    ],
+)
+def test_episode_edit_view_reports_exhausted_automatic_numbering(
+    admin_client, podcast, audio, body, overrides, published
+):
+    exhaust_automatic_numbering(podcast)
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="needs number",
+        slug="needs-number",
+        live=False,
+        first_published_at=None,
+        podcast_audio=audio,
+        body=body,
+    )
+    edit_url = reverse("wagtailadmin_pages:edit", args=(episode.pk,))
+
+    response = admin_client.post(edit_url, {**episode_publish_post_data(episode), **overrides})
+
+    episode.refresh_from_db()
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == NUMBERING_CEILING
+    if published:
+        assert response.status_code == 302
+        assert episode.live is True
+        return
+    assert response.status_code == 200
+    assert "Automatic episode numbering cannot advance." in response.content.decode()
+    assert response.context["form"].errors["episode_number"]
+    assert episode.live is False
+    assert episode.episode_number is None
+
+
+@pytest.mark.django_db
+def test_episode_add_view_reports_exhausted_automatic_numbering(admin_client, podcast, audio):
+    exhaust_automatic_numbering(podcast)
+    add_url = reverse("wagtailadmin_pages:add", args=("cast", "episode", podcast.pk))
+    new_episode = SimpleNamespace(
+        title="new episode", slug="new-episode", visible_date=timezone.now(), podcast_audio_id=audio.pk
+    )
+
+    response = admin_client.post(add_url, episode_publish_post_data(new_episode))
+
+    assert response.status_code == 200
+    assert response.context["form"].errors["episode_number"]
+    assert not Episode.objects.filter(slug="new-episode").exists()
+    podcast.refresh_from_db()
+    assert podcast.next_episode_number == NUMBERING_CEILING
+
+
+@pytest.mark.django_db
+def test_custom_episode_form_numbering_check_needs_a_podcast_parent(episode):
+    form = Episode.get_edit_handler().get_form_class()(instance=episode)
+
+    assert form._automatic_numbering_violation({}) is None
+
+
+@pytest.mark.django_db
+def test_custom_episode_form_numbering_check_falls_back_to_stored_values(podcast, audio, body):
+    exhaust_automatic_numbering(podcast)
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="stored values",
+        slug="stored-values",
+        live=False,
+        first_published_at=None,
+        podcast_audio=audio,
+        body=body,
+    )
+    form = Episode.get_edit_handler().get_form_class()(instance=episode, parent_page=podcast)
+
+    violation = form._automatic_numbering_violation({})
+
+    assert violation is not None
+    assert violation.code == "numbering_exhausted"
 
 
 @pytest.mark.django_db

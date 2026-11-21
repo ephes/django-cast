@@ -46,7 +46,7 @@ from cast.post_media import (
     synchronize_post_media,
 )
 from cast.presenters import render_post_description
-from cast.publication import PublicationRejected, episode_audio_violation
+from cast.publication import PublicationRejected, PublicationViolation, episode_audio_violation
 from cast.wagtail_panels import EpisodeTranscriptStatusPanel
 
 from .image_renditions import ImagesWithType
@@ -723,7 +723,30 @@ class CustomEpisodeForm(WagtailAdminPageForm):
         violation = episode_audio_violation(podcast_audio_id) if publish_requested else None
         if violation is not None:
             raise PublicationRejected((violation,)).as_form_error()
+        if publish_requested and not self.errors:
+            violation = self._automatic_numbering_violation(cleaned_data)
+            if violation is not None:
+                raise PublicationRejected((violation,)).as_form_error()
         return cleaned_data
+
+    def _automatic_numbering_violation(self, cleaned_data: dict[str, Any]) -> PublicationViolation | None:
+        """Show exhausted automatic numbering as a field error instead of a failed publish."""
+        from cast.podcast_numbering import automatic_numbering_violation
+
+        from .index_pages import Podcast
+
+        podcast = self.parent_page.specific if self.parent_page is not None else None
+        if not isinstance(podcast, Podcast):
+            return None
+        # Evaluate the submitted values; the instance still holds the stored ones here.
+        candidate = copy(self.instance)
+        if candidate.pk is None:
+            # Wagtail saves a new page as a draft before publishing it.
+            candidate.live = False
+        for field_name in ("episode_number", "episode_type", "go_live_at"):
+            if field_name in cleaned_data:
+                setattr(candidate, field_name, cleaned_data[field_name])
+        return automatic_numbering_violation(candidate, podcast)
 
 
 class Episode(Post):
