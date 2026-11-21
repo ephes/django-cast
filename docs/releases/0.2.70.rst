@@ -17,6 +17,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Preflight database routing for all explicitly selected transcripts before applying the glossary.
+- Continue applying the glossary after an individual refresh fails, using a bounded failure diagnostic.
 - Synchronize speaker mappings on the database where the transcript was saved.
 - Fetch only uncached gallery image IDs, preserving the order and captions of surviving entries.
 - Resolve the original storage URL once for all image slots that fall back to it.

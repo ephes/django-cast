@@ -125,7 +125,9 @@ or contributor variants. See :ref:`transcript_glossary_corrections`.
 Options (one of the first three is required):
 
 ``--transcript ID``
-    A transcript id; repeat for several.
+    A transcript id; repeat for several. Before accessing artifacts, the command
+    checks that each selected transcript's read and write routes match the
+    database it was loaded from. This also applies in dry runs.
 
 ``--podcast ID_OR_SLUG``
     The transcripts of the podcast's episodes, selected on the podcast's database.
@@ -137,13 +139,14 @@ Options (one of the first three is required):
 ``--dry-run``
     Compute and report without writing.
 
-Each transcript prints a line
+Each successful refresh prints a line
 ``transcript <id>: <status> automatic=<n> approved=<n> proposals=<n> changed=<n>``,
 where ``status`` is ``applied``, ``needs_episode`` (the audio is used by several
 episodes, or the stored episode no longer uses it; an editor must choose) or
 ``no_segments``, and ``changed`` counts Podlove segments whose text changed.
-Failures are reported on stderr, the remaining transcripts are still processed,
-and the command then exits with an error.
+For each failed refresh, the command reports the transcript ID and, when safe,
+the exception type on stderr. It processes the remaining transcripts, then
+exits with an error that includes the failure count.
 
 Image Renditions
 ================
