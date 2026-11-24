@@ -194,6 +194,12 @@ Django Cast custom filters (requires ``use_post_filter=true``):
 - ``date_before``: Filter posts before date (format: ``YYYY-MM-DD``)
 - ``o``: Ordering by visible_date (use ``-visible_date`` for descending)
 
+With ``use_post_filter=true``, Django Cast applies full-text search once per
+listing request and retains the search query through pagination. Other page
+requests use Wagtail's native search. Wagtail returns ``meta.total_count`` and
+``items``. For subsequent requests, keep the search and other filters the same
+and advance ``offset`` by ``limit``.
+
 Example requests:
 
 Standard Wagtail filtering::
@@ -1823,15 +1829,21 @@ Using the API
 JavaScript Example
 ~~~~~~~~~~~~~~~~~~
 
-Fetching posts with facets:
+Fetch posts with facets and a search term using offset pagination.
 
 .. code-block:: javascript
 
-    async function fetchPosts(categorySlug, page = 1) {
-        const response = await fetch(
-            `/api/wagtail/pages/?type=cast.Post&child_of=4&use_post_filter=true&category_facets=${categorySlug}&page=${page}`,
-            { credentials: 'include' }
-        );
+    async function fetchPosts(categorySlug, search = '', offset = 0) {
+        const params = new URLSearchParams({
+            type: 'cast.Post',
+            child_of: '4',
+            use_post_filter: 'true',
+            category_facets: categorySlug,
+            search,
+            limit: '20',
+            offset: String(offset),
+        });
+        const response = await fetch(`/api/wagtail/pages/?${params}`, { credentials: 'include' });
         return await response.json();
     }
 

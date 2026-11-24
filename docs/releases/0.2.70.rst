@@ -40,6 +40,8 @@ Fixes
   lists so pagination has a deterministic order.
 - Preserve repeated Wagtail API query values in their original order when
   removing NUL characters.
+- Keep the search query available to Wagtail page pagination and apply the
+  Django Cast search once per filtered listing request.
 
 - Validate clock components before converting chapter and transcript times to
   seconds. Two-part clocks still accept total leading minutes.

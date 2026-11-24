@@ -7,6 +7,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.request import Request
+from wagtail.api.v2.pagination import WagtailPagination
 from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.models import PageViewRestriction
 
@@ -15,6 +16,7 @@ from cast.api.views import (
     CastImagesAPIViewSet,
     FilteredPagesAPIViewSet,
 )
+from cast.filters import PostFilterset
 from cast.models import Post, PostCategory
 from cast.models.pages import PostTag
 from tests.factories import PostFactory, UserFactory
@@ -89,6 +91,54 @@ def test_wagtail_pages_api_with_post_filter_and_fulltext_search(rf, blog, post):
     viewset.request = request
     queryset = viewset.get_queryset()
     assert len(queryset) == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("term", ["Orchid", "Or\x00chid"])
+def test_wagtail_listing_passes_filtered_search_to_pagination_once_per_request(
+    api_client, blog, mocker, settings, term
+):
+    settings.WAGTAILAPI_SEARCH_ENABLED = False
+    first = PostFactory(parent=blog, owner=blog.owner, title="Orchid one", slug="orchid-one")
+    PostFactory(parent=blog, owner=blog.owner, title="Daffodil", slug="daffodil")
+    second = PostFactory(parent=blog, owner=blog.owner, title="Orchid two", slug="orchid-two")
+
+    search = mocker.spy(PostFilterset, "fulltext_search")
+    paginate_queryset = WagtailPagination.paginate_queryset
+
+    def paginate_with_search(paginator, queryset, request, view=None):
+        assert request.GET.getlist("search") == ["Daffodil", "Orchid"]
+        return paginate_queryset(paginator, queryset, request, view=view)
+
+    paginate = mocker.patch.object(
+        WagtailPagination, "paginate_queryset", autospec=True, side_effect=paginate_with_search
+    )
+    params = {
+        "type": "cast.Post",
+        "child_of": blog.pk,
+        "use_post_filter": "true",
+        "search": ["Daffodil", term],
+        "order": "id",
+        "limit": 1,
+    }
+
+    for offset, expected in enumerate((first, second)):
+        search.reset_mock()
+        paginate.reset_mock()
+        response = api_client.get(blog.wagtail_api_pages_url, {**params, "offset": offset})
+
+        page = response.json()
+        assert response.status_code == 200, page
+        assert page["meta"]["total_count"] == 2
+        assert [item["id"] for item in page["items"]] == [expected.pk]
+        paginate.assert_called_once()
+        search.assert_called_once()
+
+    # A request outside the post-filter path still uses Wagtail's native search.
+    params["use_post_filter"] = "false"
+    response = api_client.get(blog.wagtail_api_pages_url, params)
+    assert response.status_code == 400
+    assert response.json()["message"] == "search is disabled"
 
 
 @pytest.mark.django_db
