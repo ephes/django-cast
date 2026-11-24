@@ -95,6 +95,8 @@ Fixes
 - Resolve the selected blog in one query before syncing renditions.
 - Use the current focal point for rendition selection in post body image and
   gallery previews while retaining older crops in the cache.
+- Keep post previews renderable with cached variants and other images when
+  a body image's original cannot be opened.
 - Canonicalize SVG rendition specifications before detecting misses in post previews.
 - Fall back to the configured theme when a visitor's session theme has been retired.
 - Require template files during theme discovery and warn about directories at soft-required template paths.

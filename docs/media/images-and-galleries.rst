@@ -225,7 +225,9 @@ database and bypass Wagtail's shared rendition cache. When Wagtail provides
 SVG filter cleaning, previews use the cleaned specifications to identify missing
 renditions. Preview images and galleries use only cache rows that match the
 current Wagtail focal key for the row's filter, including fallback renditions.
-Older crops remain in storage.
+Older crops remain in storage. If Wagtail cannot open an original, the
+preview retains that image's cached current variants and continues preparing
+other images.
 A direct model save deliberately has no media I/O.
 When code changes a post body outside those Wagtail boundaries, prepare its
 media explicitly after persistence:

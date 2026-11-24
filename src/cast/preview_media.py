@@ -7,7 +7,7 @@ from django.db import connections, router
 from django.db.models import Model, Prefetch
 from wagtail.images import get_image_model
 from wagtail.images.exceptions import InvalidFilterSpecError
-from wagtail.images.models import Filter
+from wagtail.images.models import Filter, SourceImageIOError
 
 from .blocks import gallery_item_parts
 from .models.image_renditions import get_all_filterstrings
@@ -98,7 +98,11 @@ class PreviewMedia:
             # Keep obsolete cache rows. create_rendition uses get_or_create
             # without publishing to Wagtail's shared, alias-blind cache.
             for image_filter in missing.values():
-                rendition = image.create_rendition(image_filter)
+                try:
+                    rendition = image.create_rendition(image_filter)
+                except SourceImageIOError:
+                    # Keep cached variants and move on to the next image.
+                    break
                 renditions.setdefault(image_id, []).append(rendition)
         return cls(
             images,

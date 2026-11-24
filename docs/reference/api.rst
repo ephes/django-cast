@@ -896,7 +896,8 @@ renditions (including cover images and contributor avatars) may be generated as
 derived cache data; previews do not delete obsolete renditions. Post body image
 and gallery previews reuse prefetched renditions that match the current focal
 key for each filter and generate missing variants on the post's database.
-Publication still synchronizes
+If an original cannot be opened, the preview keeps that image's available
+variants and continues preparing other images. Publication still synchronizes
 persisted media relationships. Custom blocks, middleware, and site overrides
 must respect this policy too.
 

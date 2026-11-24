@@ -102,6 +102,34 @@ def test_preview_selects_current_focal_generation(post, mocker):
 
 
 @pytest.mark.django_db
+def test_preview_renders_available_renditions_when_an_original_is_missing(rf, post):
+    missing_original = create_image()
+    healthy = create_image()
+    cached = missing_original.create_rendition(Filter("format-jpeg"))
+    missing_original.file.storage.delete(missing_original.file.name)
+    post.body = [
+        {
+            "type": "overview",
+            "value": [
+                {"type": "image", "value": missing_original.pk},
+                {"type": "image", "value": healthy.pk},
+            ],
+        }
+    ]
+
+    response = post.serve_preview(rf.get("/"), "")
+    response.render()
+    assert response.status_code == 200
+    renditions = response.context_data["repository"].renditions_for_posts
+    assert renditions[missing_original.pk] == [cached]
+    assert {row.filter_spec for row in renditions[healthy.pk]} == {"format-jpeg", "format-avif"}
+    html = response.content.decode()
+    assert cached.url in html
+    assert all(row.url in html for row in renditions[healthy.pk])
+    assert list(Rendition.objects.filter(image=missing_original)) == [cached]
+
+
+@pytest.mark.django_db
 @pytest.mark.skipif(not hasattr(Image, "clean_filter_for_svg"), reason="Requires Wagtail SVG filter cleaning")
 def test_preview_uses_one_rendition_per_canonical_svg_spec(post, mocker):
     image = Image.objects.create(title="Synthetic SVG", file="synthetic.svg", width=20, height=20)
