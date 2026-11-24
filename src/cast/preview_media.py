@@ -1,12 +1,14 @@
 """Request-local media for previews, without synchronizing persisted relationships."""
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from django.db import connections, router
 from django.db.models import Model, Prefetch
 from wagtail.images import get_image_model
-from wagtail.images.models import Filter
+from wagtail.images.exceptions import InvalidFilterSpecError
+from wagtail.images.models import Filter, SourceImageIOError
 
 from .blocks import gallery_item_parts
 from .models.image_renditions import get_all_filterstrings
@@ -15,6 +17,8 @@ from .renditions import ImageType
 
 if TYPE_CHECKING:
     from .models import Post
+
+logger = logging.getLogger(__name__)
 
 
 def _media_id(value: Any, *, max_id: int = 2**63 - 1) -> int | None:
@@ -72,25 +76,43 @@ class PreviewMedia:
         )
         kinds: tuple[tuple[str, ImageType], ...] = (("image", "regular"), ("gallery", "gallery"))
         images_with_type = [(image_type, images[pk]) for kind, image_type in kinds for pk in ids[kind] if pk in images]
-        prefetched = [rendition for image in images.values() for rendition in image.renditions.all()]
-        available = {(rendition.image_id, rendition.filter_spec) for rendition in prefetched}
-        requested: dict[tuple[int, str], Filter] = {}
+        requested: dict[int, dict[str, Filter]] = {}
         for image_id, spec in get_all_filterstrings(images_with_type):
             image = images[image_id]
             # Wagtail 7.0 predates clean_filter_for_svg and uses the original filter.
             clean_filter = getattr(image, "clean_filter_for_svg", lambda value: value)
             image_filter = clean_filter(Filter(spec))
-            requested[image_id, image_filter.spec] = image_filter
-        missing = requested.keys() - available
-        # Renditions are derived cache data. Never delete obsolete renditions here.
-        for image_id, spec in missing:
-            # create_rendition uses get_or_create but does not publish to
-            # Wagtail's shared cache, whose keys omit the database alias.
-            images[image_id].create_rendition(requested[image_id, spec])
-        rows = rendition_model.objects.using(using).filter(image_id__in=images) if missing else prefetched
+            requested.setdefault(image_id, {})[image_filter.spec] = image_filter
+
         renditions: RenditionsForPosts = {}
-        for rendition in rows:
-            renditions.setdefault(rendition.image_id, []).append(rendition)
+        for image_id, image in images.items():
+            missing = requested.get(image_id, {})
+            for rendition in image.renditions.all():
+                spec = rendition.filter_spec
+                image_filter = missing.get(spec) or Filter(spec)
+                try:
+                    focal_key = image_filter.get_cache_key(image)
+                except InvalidFilterSpecError:
+                    # A cached fallback may use an operation that is no longer registered.
+                    continue
+                if rendition.focal_point_key == focal_key:
+                    renditions.setdefault(image_id, []).append(rendition)
+                    missing.pop(spec, None)
+            # Keep obsolete cache rows. create_rendition uses get_or_create
+            # without publishing to Wagtail's shared, alias-blind cache.
+            pending = list(missing)
+            for index, spec in enumerate(pending):
+                try:
+                    rendition = image.create_rendition(missing[spec])
+                except SourceImageIOError:
+                    # Keep cached variants and move on to the next image.
+                    logger.warning(
+                        "Preview cannot open the original of image %s; skipping missing renditions %s.",
+                        image_id,
+                        ", ".join(pending[index:]),
+                    )
+                    break
+                renditions.setdefault(image_id, []).append(rendition)
         return cls(
             images,
             Audio.objects.using(using).in_bulk(ids["audio"]),

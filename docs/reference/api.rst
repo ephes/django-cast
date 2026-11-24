@@ -894,8 +894,10 @@ Previews use the preview body's media in memory. They do not save pages,
 revisions, edit logs, media relationships, or Gallery records. Missing image
 renditions (including cover images and contributor avatars) may be generated as
 derived cache data; previews do not delete obsolete renditions. Post body image
-and gallery previews reuse prefetched renditions and reload them on the post's
-database after generating missing variants. Publication still synchronizes
+and gallery previews reuse prefetched renditions that match the current focal
+key for each filter and generate missing variants on the post's database.
+If an original cannot be opened, the preview keeps that image's available
+variants and continues preparing other images. Publication still synchronizes
 persisted media relationships. Custom blocks, middleware, and site overrides
 must respect this policy too.
 
