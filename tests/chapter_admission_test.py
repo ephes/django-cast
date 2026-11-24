@@ -1,5 +1,6 @@
 """Elapsed chapter admission and bounded linear text parsing."""
 
+import json
 from datetime import time
 from types import SimpleNamespace
 
@@ -80,3 +81,24 @@ def test_over_budget_audio_form_keeps_chapters(audio):
     assert not form.is_valid()
     assert "Chapter input exceeds" in str(form.errors["chaptermarks"])
     assert audio.chaptermarks.get().pk == old.pk
+
+
+@pytest.mark.django_db
+def test_embedded_titles_are_normalized_before_chapter_sync(audio, m4a_audio, mocker):
+    ChapterMark.objects.create(audio=audio, start=time(), title="Old")
+    form = AudioForm({}, files={"m4a": m4a_audio}, instance=audio)
+    assert form.is_valid()
+    audio.m4a = "cast_audio/previous.m4a"
+    chapters = [
+        {"start_time": "1", "tags": {"title": " \t "}},
+        {"start_time": "2", "tags": {"title": "  First  "}},
+        {"start_time": "3", "tags": {"title": "Second  chapter"}},
+    ]
+    mocker.patch(
+        "cast.models.audio.run_media_probe", return_value=SimpleNamespace(stdout=json.dumps({"chapters": chapters}))
+    )
+    form.save_chaptermarks(audio)
+    assert list(audio.chaptermarks.order_by("start").values_list("start", "title")) == [
+        (time(0, 0, 2), "First"),
+        (time(0, 0, 3), "Second  chapter"),
+    ]

@@ -149,9 +149,13 @@ The emitted shape is::
 (The feed serializer emits self-closing empty elements and sorts element
 attributes alphabetically.)
 
-Chapter ``start`` values use ``HH:MM:SS`` or ``HH:MM:SS.mmm`` when fractional
-seconds are present. Podlove Simple Chapters v1 output currently includes the
-``start`` and ``title`` attributes only.
+Chapter ``start`` values use ``HH:MM:SS`` for whole seconds, ``HH:MM:SS.mmm``
+for exact milliseconds, and ``HH:MM:SS.ffffff`` when microseconds are needed.
+The `Podlove Simple Chapters 1.2 specification
+<https://podlove.org/blog/podlove-simple-chapters-1.2/>`_ uses Normal Play Time,
+whose fractional part supports that precision. Existing starts within one
+millisecond remain distinct and ordered. The output includes the ``start``
+and ``title`` attributes.
 
 Chaptered episodes also include a Podcasting 2.0 external chapters reference::
 
@@ -173,8 +177,8 @@ It returns ``application/json+chapters`` with this body shape::
       ]
     }
 
-``startTime`` values are seconds: integers for whole seconds, with millisecond
-fractions otherwise. Access to the endpoint uses the same
+``startTime`` values are seconds: integers for whole seconds, with up to six
+fractional digits otherwise. Access to the endpoint uses the same
 audio-access checks as public audio and transcript endpoints: the supplied
 ``episode_id`` must reference the audio and be viewable by the requester.
 Denied requests raise ``Http404`` so object existence is not leaked. Authorized

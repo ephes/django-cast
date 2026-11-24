@@ -40,7 +40,7 @@ class TestPodcastChaptersJsonView:
             "version": "1.2.0",
             "chapters": [
                 {"startTime": 60, "title": "Intro"},
-                {"startTime": 120.123, "title": "Middle"},
+                {"startTime": 120.123456, "title": "Middle"},
             ],
         }
 

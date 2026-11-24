@@ -36,6 +36,9 @@ Fixes
 
 - Preserve physical WebVTT line endings and keep cue dialogue together when
   removing hidden voice tags.
+- Publish distinct chapter starts at their stored precision in RSS, Atom, the
+  player payload and Podcasting 2.0 chapters JSON.
+- Trim embedded chapter titles and skip blank titles before syncing chapters.
 
 - Honor a custom comment moderator returning ``True`` by saving the comment
   as non-public while preserving its removal flag.
