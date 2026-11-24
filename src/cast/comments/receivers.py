@@ -46,7 +46,8 @@ def on_comment_will_be_posted(sender: Any, comment: Any, request: HttpRequest | 
     content_object = comment.content_object
     if not default_moderator.allow(comment, content_object, request):
         return False
-    default_moderator.moderate(comment, content_object, request)
+    if default_moderator.moderate(comment, content_object, request) is True:
+        comment.is_public = False
     return None
 
 

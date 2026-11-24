@@ -35,14 +35,16 @@ def safe_fill_tree(comments: Any) -> Any:
     path_ids = first.tree_path.split(PATH_SEPARATOR)[:-1]
     valid_path_ids = [path_id for path_id in path_ids if path_id.isdecimal()]
     ancestors = (
-        first.__class__.objects.filter(
+        first.__class__.objects.using(first._state.db)
+        .filter(
             pk__in=valid_path_ids,
             content_type_id=first.content_type_id,
             object_pk=first.object_pk,
             site_id=first.site_id,
             is_public=True,
             is_removed=False,
-        ).order_by("tree_path")
+        )
+        .order_by("tree_path")
         if valid_path_ids
         else []
     )

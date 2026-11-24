@@ -2,10 +2,12 @@ import re
 from unittest.mock import patch
 
 import pytest
+from django.test import Client
 from django.urls import reverse
-from django_comments import get_model as get_comments_model, signals
+from django_comments import get_form, get_model as get_comments_model, signals
 from django_comments.forms import CommentForm
 
+from cast.comments.receivers import NullModerator
 from cast.models.moderation import NaiveBayes, SpamFilter
 from cast.moderation import Moderator
 from tests.factories import UserFactory
@@ -72,6 +74,36 @@ class TestPostComments:
 
         comment = get_comments_model().objects.get(pk=rdata["comment_id"])
         assert comment.comment == data["comment"]
+
+    @pytest.mark.parametrize(
+        ("route", "headers", "status"),
+        [
+            ("comments-post-comment-ajax", {"HTTP_X_REQUESTED_WITH": "XMLHttpRequest"}, 200),
+            ("comments-post-comment", {}, 302),
+        ],
+    )
+    def test_custom_moderator_can_return_pending(self, client, post, comments_enabled, route, headers, status):
+        class PendingModerator(NullModerator):
+            def moderate(self, comment, content_object, request):
+                return True
+
+        data = {
+            **get_form()(post).generate_security_data(),
+            "comment": "Synthetic comment awaiting moderation",
+            "name": "Synthetic",
+            "email": "synthetic@example.com",
+            "title": "Pending",
+        }
+        with patch("cast.comments.receivers.default_moderator", new=PendingModerator(None)):
+            response = client.post(reverse(route), data, **headers)
+        assert response.status_code == status
+
+        comment = get_comments_model().objects.get(comment=data["comment"])
+        assert comment.is_public is False
+        assert comment.is_removed is False
+        listing = Client().get(post.get_url())
+        assert listing.status_code == 200
+        assert comment not in listing.context["comment_list"]
 
     def test_add_new_comment_as_staff_includes_is_moderated(self, client, post, comments_enabled):
         staff_user = UserFactory()

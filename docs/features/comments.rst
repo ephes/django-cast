@@ -161,9 +161,10 @@ When threaded mode is active:
 - Each rendered comment shows a "reply" link that sets the ``parent`` value via
   the JavaScript layer (see :ref:`comments_ajax_posting`).
 - The comment list template fills paginated ancestor paths only with visible
-  comments from the same content object and site, then uses
+  comments from the same database, content object, and site, then uses
   ``annotate_tree`` from ``threadedcomments`` to produce nested ``<ul>`` markup.
-  Reply submission enforces the same boundary for both AJAX and regular posts.
+  Reply submission checks the target, site, and visibility for both AJAX and
+  regular posts.
   Existing custom templates that use the legacy ``fill_tree`` filter inherit
   this protection when the Cast comments app starts; new overrides can call
   ``safe_fill_tree`` explicitly before ``annotate_tree``.
@@ -473,8 +474,11 @@ When a comment is submitted:
    ``allow()`` method. If it returns ``False``, the comment is rejected
    entirely (the signal receiver returns ``False``, causing the view to
    return an error).
-2. The moderator's ``moderate()`` method is called. It can mark the comment as
-   spam by setting ``is_removed = True`` and ``is_public = False``.
+2. The moderator's ``moderate()`` method can return ``True`` to save the
+   comment as non-public pending approval. The receiver leaves ``is_removed``
+   as set by the moderator. Existing flag mutations still apply, including
+   marking spam with ``is_removed = True`` and ``is_public = False``. Returning
+   ``False`` or ``None`` leaves both flags as the moderator set them.
 
 The default ``cast.moderation.Moderator`` class:
 
