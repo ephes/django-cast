@@ -222,8 +222,10 @@ Preview hydration uses Wagtail's configured image model
 (``WAGTAILIMAGES_IMAGE_MODEL``) and its own rendition model for inventory,
 prefetching and creation. Reads and new renditions stay on the preview post's
 database and bypass Wagtail's shared rendition cache. When Wagtail provides
-SVG filter cleaning, previews compare the cleaned specifications with existing
-renditions and create each missing image and filter combination once.
+SVG filter cleaning, previews use the cleaned specifications to identify missing
+renditions. Preview images and galleries use only cache rows that match the
+current Wagtail focal key for the row's filter, including fallback renditions.
+Older crops remain in storage.
 A direct model save deliberately has no media I/O.
 When code changes a post body outside those Wagtail boundaries, prepare its
 media explicitly after persistence:

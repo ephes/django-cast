@@ -93,6 +93,8 @@ Fixes
 - Fill missing player cue ends in one pass after sorting, including equal-start groups.
 - Skip malformed chapter entries in the player payload and chapters endpoint.
 - Resolve the selected blog in one query before syncing renditions.
+- Use the current focal point for rendition selection in post body image and
+  gallery previews while retaining older crops in the cache.
 - Canonicalize SVG rendition specifications before detecting misses in post previews.
 - Fall back to the configured theme when a visitor's session theme has been retired.
 - Require template files during theme discovery and warn about directories at soft-required template paths.

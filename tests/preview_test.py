@@ -8,7 +8,7 @@ from django.contrib.sessions.models import Session
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
-from wagtail.images.models import Image, Rendition
+from wagtail.images.models import Filter, Image, Rendition
 from wagtail.models import PageLogEntry, Revision
 
 from cast.devdata import create_image
@@ -72,6 +72,33 @@ def test_preview_gallery_loads_warm_renditions_once(post):
     }
     selects = [q["sql"] for q in queries if q["sql"].startswith("SELECT") and '"wagtailimages_rendition"' in q["sql"]]
     assert len(selects) == 1
+
+
+@pytest.mark.django_db
+def test_preview_selects_current_focal_generation(post, mocker):
+    image = create_image()
+    post.body = [{"type": "overview", "value": [{"type": "image", "value": image.pk}]}]
+    required = Filter("fill-1x1")
+    fallback = Filter("fill-2x2")
+    mocker.patch("cast.preview_media.get_all_filterstrings", return_value=[(image.pk, required.spec)])
+
+    stale = image.create_rendition(required)
+    stale_fallback = image.create_rendition(fallback)
+    retired_filter = Rendition.objects.create(
+        image=image, filter_spec="retired-operation", width=1, height=1, file="retired.png"
+    )
+    image.focal_point_x = image.focal_point_y = image.focal_point_width = image.focal_point_height = 1
+    image.save(update_fields=["focal_point_x", "focal_point_y", "focal_point_width", "focal_point_height"])
+    current_fallback = image.create_rendition(fallback)
+
+    rows = {row.filter_spec: row for row in PreviewMedia.from_post(post).renditions[image.pk]}
+    assert rows[required.spec].focal_point_key == required.get_cache_key(image) != stale.focal_point_key
+    assert rows[fallback.spec] == current_fallback
+    assert set(rows) == {required.spec, fallback.spec}
+    warm = PreviewMedia.from_post(post).renditions[image.pk]
+    assert {row.pk for row in warm} == {row.pk for row in rows.values()}
+    assert len(warm) == len(rows)
+    assert Rendition.objects.filter(pk__in=[stale.pk, stale_fallback.pk, retired_filter.pk]).count() == 3
 
 
 @pytest.mark.django_db
