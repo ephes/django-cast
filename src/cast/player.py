@@ -131,6 +131,8 @@ def parse_chapter_start_seconds(value: Any) -> int | float | None:
     seconds = _timestamp_seconds(value)
     if seconds is None or seconds < 0:
         return None
+    # Stored starts carry at most microseconds; drop float summation noise.
+    seconds = round(seconds, 6)
     return int(seconds) if seconds.is_integer() else seconds
 
 

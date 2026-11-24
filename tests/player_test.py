@@ -39,6 +39,13 @@ class TestParseChapterStartSeconds:
     def test_valid(self, value, expected):
         assert parse_chapter_start_seconds(value) == expected
 
+    @pytest.mark.parametrize(
+        "value, expected",
+        [("00:02:00.998697", "120.998697"), ("00:02:00.000001", "120.000001"), ("00:00:00.999999", "0.999999")],
+    )
+    def test_microsecond_starts_have_at_most_six_fraction_digits(self, value, expected):
+        assert repr(parse_chapter_start_seconds(value)) == expected
+
     @pytest.mark.parametrize("value", ["", "nonsense", "::", None, "-5", -5])
     def test_invalid(self, value):
         assert parse_chapter_start_seconds(value) is None

@@ -472,8 +472,11 @@ class TestTranscriptSpeakerMapping:
                 "  <v Jochen>Jochen: Hello <v.special Jochen>voice</v></v>",
             )
 
-    @pytest.mark.parametrize("payload", ["Speaker 1: Hello\r\n", "Speaker 1:\r\n", "Speaker 1: Hello"])
-    def test_renamed_generic_prefix_remains_discoverable_and_sanitizable(self, audio, payload):
+    @pytest.mark.parametrize(
+        "payload,dialogue",
+        [("Speaker 1: Hello\r\n", "Hello\r\n"), ("Speaker 1:\r\n", ""), ("Speaker 1: Hello", "Hello")],
+    )
+    def test_renamed_generic_prefix_remains_discoverable_and_sanitizable(self, audio, payload, dialogue):
         transcript = create_transcript(audio=audio, vtt="WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\n" + payload)
         assert transcript.rewrite_speaker_labels({"Speaker 1": "Jochen"})
         assert transcript.get_speaker_labels() == ["Jochen"]
@@ -491,9 +494,7 @@ class TestTranscriptSpeakerMapping:
         assert content == expected
         sanitized = sanitize_webvtt_content(content, allowed_speaker_labels=set())
         assert "Carol" not in sanitized
-        assert sanitized == "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\n" + payload.removeprefix("Speaker 1:").lstrip(
-            " "
-        )
+        assert sanitized == "WEBVTT\r\n\r\n00:00.000 --> 00:01.000\r\n" + dialogue
 
     @pytest.mark.parametrize("mapping", [{"Speaker 1": "Jochen"}, {"Speaker 1": "Jochen", "Speaker 2": "Carol"}])
     def test_generic_prefix_voice_spans_end_at_each_payload_line(self, mapping):
@@ -582,7 +583,7 @@ class TestTranscriptSpeakerMapping:
         assert (applied_count, changed) == (1, True)
         assert applied == f"{cue}<v Bob>Bob: hello</v>\n<v Bob>Bob: </v>\n"
         assert webvtt.get_speaker_labels(applied) == {"Bob"}
-        assert sanitize_webvtt_content(applied, set()) == f"{cue}hello\n\n"
+        assert sanitize_webvtt_content(applied, set()) == f"{cue}hello\n"
 
         cleared, cleared_count, changed = webvtt.clear_suggestions_from_content(renamed, {1000})
 

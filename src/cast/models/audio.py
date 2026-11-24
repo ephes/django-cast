@@ -3,7 +3,7 @@ import logging
 import re
 import subprocess
 from collections.abc import Iterable
-from datetime import timedelta
+from datetime import time, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Protocol
@@ -27,6 +27,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SAVE_OPTION_UNSET = object()
+
+
+def format_chapter_start(start: time) -> str:
+    """Format an elapsed chapter start without losing stored precision."""
+    if not start.microsecond:
+        return start.isoformat(timespec="seconds")
+    if start.microsecond % 1000 == 0:
+        return start.isoformat(timespec="milliseconds")
+    return start.isoformat(timespec="microseconds")
 
 
 class AudioDurationProbeError(Exception):
@@ -229,9 +238,7 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         for chapter in self._ordered_chaptermarks():
             items.append(
                 {
-                    "start": chapter.start.isoformat(
-                        timespec="milliseconds" if chapter.start.microsecond else "seconds"
-                    ),
+                    "start": format_chapter_start(chapter.start),
                     "title": chapter.title,
                     "href": chapter.link,  # could be None
                     "image": chapter.image,  # could be None
@@ -262,7 +269,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             title = tags.get("title") if isinstance(tags, dict) else None
             if not isinstance(start, str) or not isinstance(title, str):
                 continue
-            if title == "":
+            title = title.strip()
+            if not title:
                 continue
             cleaned.append({"start": start, "title": title})
         return cleaned

@@ -1081,9 +1081,9 @@ matching, such as Greek final sigma, remains supported.
 Public timing precision
 -----------------------
 
-Chapter starts preserve milliseconds from stored marks through ``Audio.chapters``,
+Chapter starts preserve microseconds from stored marks through ``Audio.chapters``,
 the shared player payload and Podcasting 2.0 chapters JSON. Distinct marks within
-one second remain distinct and ordered. Whole-second JSON values remain integers;
+one millisecond remain distinct and ordered. Whole-second JSON values remain integers;
 the TypeScript chapter ``number`` accepts both, and seeking keeps the fraction.
 The player and the chapters endpoint skip non-object entries and chapters with
 invalid starts or blank titles. Both return an empty chapter list if the
@@ -1128,7 +1128,10 @@ the actual request scheme/host when the configured Site uses an alias. Share bui
 that source identity, including optional playback time, even after browser
 history or a persistent dock moves to another page. Integrations without post
 context retain a connection-time document URL for sharing. Unsupported permalink
-schemes or malformed URLs fall back to that captured document URL.
+schemes or malformed URLs fall back to that captured document URL. The Share
+dialog accepts minutes and seconds, including minute values above 999, and
+adds the offset in whole seconds. If the browser cannot write to the clipboard,
+Copy focuses and selects the URL for manual copying.
 
 Automatic ``?t=`` seeks require a valid permalink matching the document origin
 and path; any identifying query parameters in the permalink must also match.
@@ -1227,7 +1230,10 @@ WebVTT cue boundaries
 ---------------------
 
 Speaker discovery, renaming, sanitizing, suggestions and text corrections only
-operate on actual cue payloads, following the WebVTT block-collection rules: a
+operate on actual cue payloads. Only LF, CRLF, and CR end physical lines.
+Unicode separators inside cue text do not split records. Rewrites preserve the
+original line endings. When removing hidden voice labels, sanitizing drops
+payload lines that become empty so later dialogue stays in the cue. A
 line with ``-->`` starts a cue when it is the first line of a block, or the
 second line after a first line without ``-->``. So ``NOTE``, ``STYLE``,
 ``REGION`` or an identifier followed by a valid timing line is a cue that
@@ -1472,7 +1478,9 @@ Chapter import limits
 FFprobe chapter starts are elapsed seconds, not calendar timestamps. Imports
 accept finite nonnegative offsets representable from ``00:00:00`` through
 ``23:59:59.999999`` and preserve microseconds. Negative, day-sized, overflowing
-or nonfinite offsets are validation errors. Audio uploads log and skip invalid
-extracted chapter sets without replacing existing marks. Text chapter input accepts at most 1000 nonempty lines
+or nonfinite offsets are validation errors. Embedded chapter titles are trimmed
+and whitespace-only titles are skipped before validating the extracted chapters.
+Spaces within a title are preserved. Audio uploads log and skip invalid extracted
+chapter sets without replacing existing marks. Text chapter input accepts at most 1000 nonempty lines
 and 262144 characters, checked before constructing chapter forms. Duplicate
 starts are rejected in input order with linear membership work.

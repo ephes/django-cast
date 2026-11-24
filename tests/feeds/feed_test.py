@@ -439,6 +439,7 @@ class TestGeneratedFeeds:
         self, client, episode, use_dummy_cache_backend, route_name, root_path
     ):
         ChapterMark.objects.create(audio=episode.podcast_audio, start=time(0, 2, 0, 123456), title="Middle")
+        ChapterMark.objects.create(audio=episode.podcast_audio, start=time(0, 2, 0, 123457), title="Next")
         ChapterMark.objects.create(audio=episode.podcast_audio, start=time(0, 1, 0), title="Intro")
         feed_url = reverse(route_name, kwargs={"slug": episode.podcast.slug, "audio_format": "m4a"})
 
@@ -461,7 +462,8 @@ class TestGeneratedFeeds:
         chapter_elements = chapters.findall("psc:chapter", namespace)
         assert [chapter.attrib for chapter in chapter_elements] == [
             {"start": "00:01:00", "title": "Intro"},
-            {"start": "00:02:00.123", "title": "Middle"},
+            {"start": "00:02:00.123456", "title": "Middle"},
+            {"start": "00:02:00.123457", "title": "Next"},
         ]
         podcast_chapters = item.find("podcast:chapters", namespace)
         assert podcast_chapters is not None
@@ -475,7 +477,8 @@ class TestGeneratedFeeds:
         assert endpoint_response.status_code == 200
         assert endpoint_response.json()["chapters"] == [
             {"startTime": 60, "title": "Intro"},
-            {"startTime": 120.123, "title": "Middle"},
+            {"startTime": 120.123456, "title": "Middle"},
+            {"startTime": 120.123457, "title": "Next"},
         ]
 
     def test_podcast_feed_declares_podlove_namespace_once_per_chaptered_episode(
@@ -957,7 +960,7 @@ def test_is_itunes_type(value, expected):
     ("iso", "expected"),
     [
         ("01:02:03", "01:02:03"),
-        ("01:02:03.987654", "01:02:03.987"),
+        ("01:02:03.987654", "01:02:03.987654"),
     ],
 )
 def test_psc_start_formats_iso_time_for_podlove_simple_chapters(iso, expected):
@@ -1103,7 +1106,7 @@ def test_podcast_index_add_item_elements_emits_podlove_simple_chapters_sequence(
     assert handler.calls == [
         ("startElement", "psc:chapters", {"xmlns:psc": PSC_NAMESPACE, "version": "1.2"}),
         ("addQuickElement", "psc:chapter", None, {"start": "00:01:02", "title": "Intro"}),
-        ("addQuickElement", "psc:chapter", None, {"start": "00:03:04.567", "title": "Middle"}),
+        ("addQuickElement", "psc:chapter", None, {"start": "00:03:04.567890", "title": "Middle"}),
         ("endElement", "psc:chapters"),
     ]
 

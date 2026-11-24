@@ -34,6 +34,7 @@ from cast.site_lookup import get_site_specific_unrestricted_page_or_404
 
 from .blog_index import public_posts
 from .models import Audio, Blog, Episode, EpisodeContributor, Podcast, Post
+from .models.audio import format_chapter_start
 from .models.repository import FeedContext, limit_blog_feed_posts
 from .models.theme import get_default_template_base_dir
 
@@ -76,11 +77,7 @@ def _is_itunes_type(value: object) -> bool:
 
 
 def _psc_start(iso: str) -> str:
-    start = time.fromisoformat(iso)
-    formatted = start.strftime("%H:%M:%S")
-    if start.microsecond == 0:
-        return formatted
-    return f"{formatted}.{start.microsecond // 1000:03d}"
+    return format_chapter_start(time.fromisoformat(iso).replace(tzinfo=None))
 
 
 class RepositoryMixin(Feed):
