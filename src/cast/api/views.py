@@ -103,7 +103,7 @@ class VideoListView(PrivateAPIView, generics.ListAPIView):
     def get_queryset(self) -> QuerySet[Video]:
         user = self.request.user
         qs = Video.objects.all().filter(user=user)
-        return qs.order_by("-created")
+        return qs.order_by("-created", "-pk")
 
 
 class VideoDetailView(PrivateAPIView, generics.RetrieveDestroyAPIView):
@@ -133,7 +133,7 @@ class AudioListView(PrivateAPIView, generics.ListAPIView):
     def get_queryset(self) -> QuerySet[Audio]:
         user = self.request.user
         qs = Audio.objects.all().filter(user=user)
-        return qs.order_by("-created")
+        return qs.order_by("-created", "-pk")
 
 
 class AudioDetailView(PrivateAPIView, generics.RetrieveDestroyAPIView):

@@ -36,6 +36,8 @@ Fixes
 
 - Accept matching weak ``If-None-Match`` validators on player transcript requests
   after checking access and generating the sanitized cues.
+- Break creation-time ties by descending ID in the owner audio and video
+  lists so pagination has a deterministic order.
 
 - Validate clock components before converting chapter and transcript times to
   seconds. Two-part clocks still accept total leading minutes.
