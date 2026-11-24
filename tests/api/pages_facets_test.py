@@ -7,6 +7,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.request import Request
+from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.models import PageViewRestriction
 
 from cast import modal_facet_counts
@@ -14,7 +15,7 @@ from cast.api.views import (
     CastImagesAPIViewSet,
     FilteredPagesAPIViewSet,
 )
-from cast.models import PostCategory
+from cast.models import Post, PostCategory
 from cast.models.pages import PostTag
 from tests.factories import PostFactory, UserFactory
 
@@ -147,6 +148,27 @@ def test_wagtail_api_viewsets_filter_null_bytes(rf, field_name, api_viewset_clas
     # Then there should be no null bytes in the resulting SQL query params
     _sql, params = queryset.query.sql_with_params()
     assert all(["\x00" not in str(param) for param in params])
+
+
+@pytest.mark.parametrize("slugs", [("fi\x00rst", "second", ""), ("first", "se\x00cond", "\x00")])
+def test_wagtail_query_cleanup_preserves_repeated_values(rf, mocker, slugs):
+    viewset = FilteredPagesAPIViewSet()
+    viewset.request = Request(rf.get("/", {"slug": slugs, "harmless": ["one", "two"], "title": "ti\x00tle"}))
+    original = viewset.request.GET
+    queryset = Post.objects.none()
+
+    def delegated_filter(view, queryset):
+        assert view.request.GET.getlist("slug") == ["first", "second", ""]
+        assert view.request.GET["slug"] == ""
+        assert view.request.GET.getlist("harmless") == ["one", "two"]
+        assert view.request.GET["title"] == "title"
+        return queryset
+
+    delegated = mocker.patch.object(PagesAPIViewSet, "filter_queryset", autospec=True, side_effect=delegated_filter)
+
+    assert viewset.filter_queryset(queryset) is queryset
+    delegated.assert_called_once_with(viewset, queryset)
+    assert original.getlist("slug") == list(slugs)
 
 
 @pytest.mark.django_db

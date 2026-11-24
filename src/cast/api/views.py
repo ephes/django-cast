@@ -394,12 +394,15 @@ class RemoveNullBytesMixin:
     request: HttpRequest
 
     def cleanup_null_bytes(self) -> None:
-        for key, value in self.request.GET.items():
-            value = cast(str, value)
-            if "\x00" in value:
-                mutable_copy = self.request.GET.copy()
-                mutable_copy[key] = value.replace("\x00", "")
-                cast(Any, self.request).GET = mutable_copy
+        params = self.request.GET
+        cleaned = None
+        for key, values in params.lists():
+            if any("\x00" in value for value in values):
+                if cleaned is None:
+                    cleaned = params.copy()
+                cleaned.setlist(key, [value.replace("\x00", "") for value in values])
+        if cleaned is not None:
+            cast(Any, self.request).GET = cleaned
 
     def filter_queryset(self, queryset: QuerySet) -> QuerySet:
         self.cleanup_null_bytes()

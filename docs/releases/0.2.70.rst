@@ -38,6 +38,8 @@ Fixes
   after checking access and generating the sanitized cues.
 - Break creation-time ties by descending ID in the owner audio and video
   lists so pagination has a deterministic order.
+- Preserve repeated Wagtail API query values in their original order when
+  removing NUL characters.
 
 - Validate clock components before converting chapter and transcript times to
   seconds. Two-part clocks still accept total leading minutes.

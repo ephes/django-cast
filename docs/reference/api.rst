@@ -159,6 +159,10 @@ client-side color mode switching.
 Content Access
 ~~~~~~~~~~~~~~
 
+The Wagtail pages and images APIs strip NUL characters from filter query
+values while preserving their order and count. Filters that read a single
+value for a repeated parameter still use its last value.
+
 **Wagtail Pages API**
 
 Access page content with filtering::
