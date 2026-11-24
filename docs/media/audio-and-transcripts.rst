@@ -1227,7 +1227,10 @@ WebVTT cue boundaries
 ---------------------
 
 Speaker discovery, renaming, sanitizing, suggestions and text corrections only
-operate on actual cue payloads, following the WebVTT block-collection rules: a
+operate on actual cue payloads. Only LF, CRLF, and CR end physical lines.
+Unicode separators inside cue text do not split records. Rewrites preserve the
+original line endings. When removing hidden voice labels, sanitizing drops
+payload lines that become empty so later dialogue stays in the cue. A
 line with ``-->`` starts a cue when it is the first line of a block, or the
 second line after a first line without ``-->``. So ``NOTE``, ``STYLE``,
 ``REGION`` or an identifier followed by a valid timing line is a cue that

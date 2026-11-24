@@ -34,6 +34,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Preserve physical WebVTT line endings and keep cue dialogue together when
+  removing hidden voice tags.
+
 - Honor a custom comment moderator returning ``True`` by saving the comment
   as non-public while preserving its removal flag.
 - Resolve paginated comment ancestors on the database of the visible comment.

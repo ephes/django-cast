@@ -134,3 +134,64 @@ def test_unkeyed_cue_does_not_inherit_previous_voice_stack():
     sanitized = webvtt.sanitize_webvtt_content(content, {"Bob"})
     assert sanitized.endswith("<v Bob>b</v></v>\n")
     assert "<v Hidden>" not in sanitized
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_only_physical_line_endings_separate_payload_records(ending):
+    prefix = ending.join(["WEBVTT", "", "00:01.000 --> 00:02.000", ""])
+    first = "before\u2029\u2029after"
+    second = "<v Original>spoken</v>"
+    content = prefix + ending.join([first, second, ""])
+    assert [line for line, _, payload in webvtt.cue_lines(content) if payload] == [
+        first + ending,
+        second + ending,
+    ]
+    assert webvtt.rewrite_speakers(content, {"Original": "New"}) == (content.replace("Original", "New"), True)
+
+
+def test_cr_ending_survives_rewriting_a_generic_speaker_prefix():
+    assert webvtt.rewrite_payload_line("Speaker 1: spoken\r", {"Speaker 1": "New"}) == (
+        "<v New>New: spoken</v>\r",
+        True,
+    )
+
+
+@pytest.mark.parametrize("ending", ["\n", "\r\n", "\r"])
+def test_hidden_voice_tag_only_lines_keep_cues_intact(ending):
+    first_timing = "00:01.000 --> 00:02.000"
+    second_timing = "00:03.000 --> 00:04.000"
+    content = ending.join(
+        [
+            "WEBVTT",
+            "",
+            first_timing,
+            "  <v Hidden>",
+            "First line",
+            "</v>",
+            "Second line",
+            "",
+            second_timing,
+            "<v Public>Next cue</v>",
+            "",
+        ]
+    )
+    sanitized = webvtt.sanitize_webvtt_content(content, {"Public"})
+    assert sanitized == ending.join(
+        ["WEBVTT", "", first_timing, "First line", "Second line", "", second_timing, "<v Public>Next cue</v>", ""]
+    )
+    assert [(start, line) for line, start, _ in webvtt.cue_lines(sanitized) if start is not None] == [
+        (1000, first_timing + ending),
+        (3000, second_timing + ending),
+    ]
+    assert [line for line, _, payload in webvtt.cue_lines(sanitized) if payload] == [
+        "First line" + ending,
+        "Second line" + ending,
+        "<v Public>Next cue</v>" + ending,
+    ]
+
+
+def test_hidden_voice_line_removal_keeps_a_mixed_ending_block_boundary():
+    content = "WEBVTT\n\n00:01.000 --> 00:02.000\nFirst\r<v Hidden>\n\nNOTE comment\nComment text\n"
+    sanitized = webvtt.sanitize_webvtt_content(content, set())
+    assert sanitized == "WEBVTT\n\n00:01.000 --> 00:02.000\nFirst\r\r\nNOTE comment\nComment text\n"
+    assert [line for line, _, payload in webvtt.cue_lines(sanitized) if payload] == ["First\r"]

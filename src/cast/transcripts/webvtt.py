@@ -6,6 +6,7 @@ from collections.abc import Iterator, Mapping
 
 from . import parsing
 
+_PHYSICAL_LINE_RE = re.compile(r"[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+")
 TIMING_SEPARATOR = "-->"
 VOICE_OPENING_RE = re.compile(r"<v(?P<classes>(?:\.[^\s>]+)*)(?:\s+(?P<label>[^>]*))?>")
 VOICE_CLOSING_RE = re.compile(r"</v>")
@@ -66,8 +67,10 @@ def cue_lines(content: str) -> Iterator[tuple[str, int | None, bool]]:
     seen_arrow = False
     in_cue = False
     in_header = False
-    for index, line in enumerate(content.splitlines(keepends=True)):
-        body = line.strip()
+    for index, match in enumerate(_PHYSICAL_LINE_RE.finditer(content)):
+        line = match.group()
+        body, _ending = split_line_ending(line)
+        body = body.strip(" \t")
         start_ms = None
         payload = False
         if not body:
@@ -94,11 +97,11 @@ def cue_lines(content: str) -> Iterator[tuple[str, int | None, bool]]:
 
 
 def split_line_ending(line: str) -> tuple[str, str]:
-    """Split ``line`` into its body and its CRLF or LF ending (empty when there is none)."""
+    """Split ``line`` into its body and its CRLF, LF, or CR ending (empty when there is none)."""
     if line.endswith("\r\n"):
         return line[:-2], "\r\n"
-    if line.endswith("\n"):
-        return line[:-1], "\n"
+    if line.endswith(("\n", "\r")):
+        return line[:-1], line[-1:]
     return line, ""
 
 
@@ -389,7 +392,7 @@ def set_cue_text(lines: list[str], text: str) -> list[str] | None:
     """
     if not lines:
         return None
-    ending = lines[-1][len(lines[-1].rstrip("\r\n")) :]
+    _body, ending = split_line_ending(lines[-1])
     body = " ".join(line.strip() for line in lines)
     prefix = suffix = ""
     voice_match = VOICE_OPENING_RE.match(body)
@@ -466,16 +469,20 @@ def sanitize_webvtt_content(content: str, allowed_speaker_labels: set[str] | Non
     if allowed_speaker_labels is None:
         return content
 
-    sanitized_lines = []
+    sanitized_lines: list[str] = []
     # One entry per voice opening still open in the current cue: whether it was kept.
     open_voices: list[bool] = []
     for line, _start_ms, is_payload in cue_lines(content):
         if not is_payload:
             # Every timing line (keyed or not) and block boundary starts a fresh cue stack.
             open_voices = []
+            if line == "\n" and sanitized_lines and sanitized_lines[-1].endswith("\r"):
+                # Dropping an intervening line must not fuse CR and LF into one ending.
+                line = "\r\n"
         else:
             line = _sanitize_webvtt_payload_line(line, allowed_speaker_labels, open_voices)
-        sanitized_lines.append(line)
+        if line:
+            sanitized_lines.append(line)
     return "".join(sanitized_lines)
 
 
@@ -515,4 +522,5 @@ def _sanitize_webvtt_payload_line(line: str, allowed_speaker_labels: set[str], o
         if label and label not in allowed_speaker_labels:
             body = f"{leading}{match.group('text')}"
 
-    return f"{body}{newline}"
+    # A blank payload record would end the cue before its remaining dialogue.
+    return f"{body}{newline}" if body.strip(" \t") else ""
