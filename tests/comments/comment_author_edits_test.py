@@ -592,6 +592,79 @@ class TestRenderCommentContext:
         assert "comment-edit-link" not in html
         assert "comment-delete-link" not in html
 
+    def test_edited_markers_are_scoped_to_each_list_render(self, post, comment, rf, feature_on):
+        from django.template import Context, Template
+        from django_comments import get_model
+
+        nested = get_model().objects.create(
+            content_object=post, site_id=dj_settings.SITE_ID, comment="Nested synthetic comment"
+        )
+        standalone = get_model().objects.create(
+            content_object=post, site_id=dj_settings.SITE_ID, comment="Standalone synthetic comment"
+        )
+        for edited_comment in (comment, nested, standalone):
+            author_edits.mark_edited(edited_comment)
+
+        feature_on.TEMPLATES = [
+            {
+                "BACKEND": "django.template.backends.django.DjangoTemplates",
+                "OPTIONS": {
+                    "loaders": [
+                        (
+                            "django.template.loaders.locmem.Loader",
+                            {
+                                "fluent_comments/templatetags/threaded_list.html": (
+                                    "{% load fluent_comments_tags %}"
+                                    "{% if nested_list %}"
+                                    "{% with comment_list=nested_list nested_list=None %}"
+                                    "{% fluent_comments_list %}{% endwith %}"
+                                    "{% endif %}"
+                                    "{% for comment in comment_list %}{% render_comment comment %}{% endfor %}"
+                                ),
+                            },
+                        ),
+                        "django.template.loaders.app_directories.Loader",
+                    ],
+                },
+            }
+        ]
+        page = Template(
+            "{% load fluent_comments_tags %}{% fluent_comments_list %}STANDALONE{% render_comment standalone %}"
+        )
+        html = page.render(
+            Context(
+                {"comment_list": [comment], "nested_list": [nested], "standalone": standalone, "request": rf.get("/")}
+            )
+        )
+        lists_html, standalone_html = html.split("STANDALONE")
+        assert lists_html.count("comment-edited-flag") == 2
+        assert standalone_html.count("comment-edited-flag") == 1
+
+    @pytest.mark.parametrize("reply_edited", [False, True])
+    def test_edited_marker_on_ancestor_filled_into_paginated_thread(self, post, rf, feature_on, reply_edited):
+        from django.template import Context, Template
+        from django_comments import get_model
+
+        parent = get_model().objects.create(
+            content_object=post, site_id=dj_settings.SITE_ID, comment="Synthetic edited parent"
+        )
+        reply = get_model().objects.create(
+            content_object=post, site_id=dj_settings.SITE_ID, parent=parent, comment="Synthetic reply"
+        )
+        author_edits.mark_edited(parent)
+        if reply_edited:
+            author_edits.mark_edited(reply)
+
+        html = Template("{% load fluent_comments_tags %}{% fluent_comments_list %}").render(
+            Context({"comment_list": [reply], "request": rf.get("/")})
+        )
+
+        # The flag sits in each comment's header, before its text.
+        parent_header, rest = html.split("Synthetic edited parent")
+        reply_header, _ = rest.split("Synthetic reply")
+        assert parent_header.count("comment-edited-flag") == 1
+        assert reply_header.count("comment-edited-flag") == int(reply_edited)
+
 
 class TestActionContext:
     pytestmark = pytest.mark.django_db
@@ -923,6 +996,33 @@ class TestReceivers:
         comment.is_removed = False
         comment.save()
         assert str(comment.pk) not in author_edits.deleted_comment_pks()
+
+    def test_saving_comment_only_updates_metadata_when_restoring(self, comment):
+        from django.db import connection
+
+        from cast.comments.models import CommentAuthorMeta
+
+        author_edits.mark_edited(comment)
+        comment.is_removed = True
+        comment.save(update_fields=["is_removed"])
+        author_edits.mark_deleted(comment)
+        affected_rows = []
+
+        def record_meta_updates(execute, sql, params, many, context):
+            result = execute(sql, params, many, context)
+            if sql.startswith("UPDATE") and CommentAuthorMeta._meta.db_table in sql:
+                affected_rows.append(context["cursor"].rowcount)
+            return result
+
+        with connection.execute_wrapper(record_meta_updates):
+            comment.is_removed = False
+            comment.save(update_fields=["is_removed"])
+            comment.save(update_fields=["comment"])
+
+        assert affected_rows == [1, 0]
+        meta = CommentAuthorMeta.objects.get(comment_pk=str(comment.pk))
+        assert meta.deleted_at is None
+        assert meta.edited is True
 
     def test_hard_delete_removes_meta_row(self, comment):
         from cast.comments.models import CommentAuthorMeta

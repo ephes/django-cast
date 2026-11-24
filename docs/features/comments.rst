@@ -161,9 +161,10 @@ When threaded mode is active:
 - Each rendered comment shows a "reply" link that sets the ``parent`` value via
   the JavaScript layer (see :ref:`comments_ajax_posting`).
 - The comment list template fills paginated ancestor paths only with visible
-  comments from the same content object and site, then uses
+  comments from the same database, content object, and site, then uses
   ``annotate_tree`` from ``threadedcomments`` to produce nested ``<ul>`` markup.
-  Reply submission enforces the same boundary for both AJAX and regular posts.
+  Reply submission checks the target, site, and visibility for both AJAX and
+  regular posts.
   Existing custom templates that use the legacy ``fill_tree`` filter inherit
   this protection when the Cast comments app starts; new overrides can call
   ``safe_fill_tree`` explicitly before ``annotate_tree``.
@@ -366,7 +367,9 @@ edit and delete controls on that comment:
   with an ``(edited)`` flag.
 - Deletion is a **soft delete**, not erasure. The comment is hidden from
   readers but kept in the database, and staff can restore it from the Django
-  admin (see :ref:`comments_manual_moderation`).
+  admin (see :ref:`comments_manual_moderation`). Restoring clears the author
+  deletion timestamp in a single conditional update. Ordinary comment saves
+  leave metadata rows with no deletion timestamp untouched.
 
 Scope and limitations
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -431,7 +434,10 @@ filters for rendering comments in templates.
 
 ``{% fluent_comments_list %}``
     Renders the full comment list. Uses ``threaded_list.html`` when threaded
-    comments are active, ``flat_list.html`` otherwise.
+    comments are active, ``flat_list.html`` otherwise. Each list render batches
+    its edit-marker lookup in its template context. A comment outside that
+    batch, such as an ancestor filled into a paginated thread or a separate
+    ``render_comment`` call outside the list, looks up its own marker.
 
 ``{{ object|comments_are_open }}``
     Filter that returns ``True`` if comments are enabled for the object.
@@ -473,8 +479,11 @@ When a comment is submitted:
    ``allow()`` method. If it returns ``False``, the comment is rejected
    entirely (the signal receiver returns ``False``, causing the view to
    return an error).
-2. The moderator's ``moderate()`` method is called. It can mark the comment as
-   spam by setting ``is_removed = True`` and ``is_public = False``.
+2. The moderator's ``moderate()`` method can return ``True`` to save the
+   comment as non-public pending approval. The receiver leaves ``is_removed``
+   as set by the moderator. Existing flag mutations still apply, including
+   marking spam with ``is_removed = True`` and ``is_public = False``. Returning
+   ``False`` or ``None`` leaves both flags as the moderator set them.
 
 The default ``cast.moderation.Moderator`` class:
 

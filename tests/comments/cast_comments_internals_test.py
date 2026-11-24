@@ -764,6 +764,44 @@ def test_safe_fill_tree_keeps_visible_ancestor_for_paginated_reply(post, setting
     assert "visible reply" in html
 
 
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("parent_is_public", [True, False])
+def test_safe_fill_tree_uses_visible_comments_database(settings, parent_is_public):
+    from django.contrib.contenttypes.models import ContentType
+    from django.contrib.sites.models import Site
+    from threadedcomments.models import PATH_DIGITS, PATH_SEPARATOR
+
+    model = get_comments_model()
+    secondary = "migration_other"
+    target_pk = 90001
+    # Use the same synthetic identity even when migrations assigned different content-type IDs.
+    for alias in ("default", secondary):
+        ContentType.objects.using(alias).create(pk=target_pk, app_label="synthetic_comments", model="target")
+        Site.objects.using(alias).get_or_create(pk=settings.SITE_ID, defaults={"domain": "synthetic.example.com"})
+    fields = {"content_type_id": target_pk, "object_pk": str(target_pk), "site_id": settings.SITE_ID}
+    decoy = model.objects.create(comment="primary decoy", **fields)
+    model(
+        pk=decoy.pk, tree_path=decoy.tree_path, comment="secondary parent", is_public=parent_is_public, **fields
+    ).save(using=secondary, skip_tree_path=True)
+    reply_pk = decoy.pk + 1
+    model(
+        pk=reply_pk,
+        parent_id=decoy.pk,
+        comment="secondary reply",
+        tree_path=PATH_SEPARATOR.join((decoy.tree_path, str(reply_pk).zfill(PATH_DIGITS))),
+        **fields,
+    ).save(using=secondary, skip_tree_path=True)
+
+    reply = model.objects.using(secondary).get(pk=reply_pk)
+    html = Template("{% load fluent_comments_tags %}{% fluent_comments_list %}").render(
+        Context({"comment_list": [reply]})
+    )
+
+    assert "primary decoy" not in html
+    assert "secondary reply" in html
+    assert ("secondary parent" in html) is parent_is_public
+
+
 @pytest.mark.django_db
 def test_post_comment_ajax_requires_ajax_header(client):
     ajax_url = reverse("comments-post-comment-ajax")
