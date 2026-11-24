@@ -37,6 +37,10 @@ Fixes
 - Honor a custom comment moderator returning ``True`` by saving the comment
   as non-public while preserving its removal flag.
 - Resolve paginated comment ancestors on the database of the visible comment.
+- Keep edited comment markers correct across nested lists and standalone
+  comment renders that share a request.
+- Avoid updating or locking edited-only comment metadata during ordinary saves
+  while still clearing the deletion marker when staff restore a comment.
 
 - Accept matching weak ``If-None-Match`` validators on player transcript requests
   after checking access and generating the sanitized cues.

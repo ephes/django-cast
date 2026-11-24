@@ -162,7 +162,7 @@ def mark_deleted(comment: Any, when: datetime | None = None) -> None:
 
 def clear_deleted(pk: object) -> None:
     """Clear the author-deletion marker (used when staff restore a comment)."""
-    _meta_model().objects.filter(comment_pk=str(pk)).update(deleted_at=None)
+    _meta_model().objects.filter(comment_pk=str(pk), deleted_at__isnull=False).update(deleted_at=None)
 
 
 def delete_meta(pk: object) -> None:

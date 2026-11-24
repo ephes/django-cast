@@ -5,7 +5,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from django.db import close_old_connections, connection
+from django.db import close_old_connections, connection, transaction
 from django.test import Client
 from django.urls import reverse
 from django_comments import get_form, get_model
@@ -244,3 +244,44 @@ def test_comment_rechecks_target_after_concurrent_moderation(
     finally:
         signals.comment_will_be_posted.disconnect(moderate)
         signals.comment_was_posted.disconnect(observer)
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="PostgreSQL row-lock semantics")
+def test_comment_save_does_not_wait_on_edited_only_metadata(pg_editor_actors, settings):
+    from cast.comments.models import CommentAuthorMeta
+
+    _, blog = pg_editor_actors
+    post = PostFactory(parent=blog, title="Synthetic metadata race", slug="metadata-race")
+    model = get_model()
+    comment = model.objects.create(content_object=post, site_id=settings.SITE_ID, comment="Original")
+    author_edits.mark_edited(comment)
+    metadata = CommentAuthorMeta.objects.filter(comment_pk=str(comment.pk))
+
+    def save_comment():
+        try:
+            with transaction.atomic():
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL lock_timeout = '2s'")
+                current = model.objects.get(pk=comment.pk)
+                current.comment = "Staff update"
+                current.save(update_fields=["comment"])
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        with transaction.atomic():
+            meta = metadata.select_for_update().get()
+            assert meta.edited and meta.deleted_at is None
+            pool.submit(save_comment).result(timeout=10)
+            comment.refresh_from_db()
+            assert comment.comment == "Staff update"
+
+    comment.is_removed = True
+    comment.save(update_fields=["is_removed"])
+    author_edits.mark_deleted(comment)
+    assert metadata.get().deleted_at is not None
+    comment.is_removed = False
+    comment.save(update_fields=["is_removed"])
+    meta = metadata.get()
+    assert meta.edited and meta.deleted_at is None

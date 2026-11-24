@@ -117,7 +117,7 @@ def render_comment(context: template.Context, comment: BaseComment) -> SafeStrin
     if request is not None:
         from .. import author_edits
 
-        edited_pks = getattr(request, "_cast_edited_pks", None)
+        edited_pks = context.get("_cast_edited_pks")
         ctx.update(author_edits.comment_action_context(request, comment, edited_pks))
     return mark_safe(render_to_string(template_name, ctx, request=request))
 
@@ -145,16 +145,6 @@ def comments_count(content_object: object) -> int:
 def fluent_comments_list(context: template.Context) -> SafeString:
     comment_list = context.get("comment_list")
     request = context.get("request")
-    # Precompute the 'edited' set once for the whole list to avoid an N+1 query
-    # in render_comment. Stored on the request; read by render_comment above.
-    # Skip entirely when the feature is off: comment_action_context will early-
-    # return without touching the DB, so _cast_edited_pks is not needed.
-    if request is not None:
-        from .. import author_edits
-
-        if author_edits.author_edits_enabled():
-            ids = [c.pk for c in comment_list] if comment_list else []
-            request._cast_edited_pks = author_edits.edited_pks_for(ids)
     target_object_id = context.get("target_object_id")
     if not target_object_id and comment_list:
         try:
@@ -165,6 +155,13 @@ def fluent_comments_list(context: template.Context) -> SafeString:
             target_object_id = getattr(first, "object_pk", None)
 
     ctx = cast(dict[str, Any], context.flatten())
+    # Scope the batched edit-marker lookup to this list's template render.
+    if request is not None:
+        from .. import author_edits
+
+        if author_edits.author_edits_enabled():
+            ids = [comment.pk for comment in comment_list] if comment_list else []
+            ctx["_cast_edited_pks"] = author_edits.edited_pks_for(ids)
     ctx["USE_THREADEDCOMMENTS"] = appsettings.USE_THREADEDCOMMENTS
     ctx["target_object_id"] = target_object_id
 
@@ -173,4 +170,4 @@ def fluent_comments_list(context: template.Context) -> SafeString:
         if appsettings.USE_THREADEDCOMMENTS
         else "fluent_comments/templatetags/flat_list.html"
     )
-    return mark_safe(render_to_string(template_name, ctx, request=context.get("request")))
+    return mark_safe(render_to_string(template_name, ctx, request=request))

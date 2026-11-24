@@ -367,7 +367,9 @@ edit and delete controls on that comment:
   with an ``(edited)`` flag.
 - Deletion is a **soft delete**, not erasure. The comment is hidden from
   readers but kept in the database, and staff can restore it from the Django
-  admin (see :ref:`comments_manual_moderation`).
+  admin (see :ref:`comments_manual_moderation`). Restoring clears the author
+  deletion timestamp in a single conditional update. Ordinary comment saves
+  leave metadata rows with no deletion timestamp untouched.
 
 Scope and limitations
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -432,7 +434,9 @@ filters for rendering comments in templates.
 
 ``{% fluent_comments_list %}``
     Renders the full comment list. Uses ``threaded_list.html`` when threaded
-    comments are active, ``flat_list.html`` otherwise.
+    comments are active, ``flat_list.html`` otherwise. Each list render batches
+    its edit-marker lookup in its template context. A separate
+    ``render_comment`` call outside the list looks up its own marker.
 
 ``{{ object|comments_are_open }}``
     Filter that returns ``True`` if comments are enabled for the object.
