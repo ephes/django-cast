@@ -304,6 +304,10 @@ If this is your first Playwright run on a machine, install browser binaries:
 
    $ uv run playwright install chromium
 
+The native player Share dialog can be checked in Chromium with
+``CAST_RUN_BROWSER=1 uv run pytest tests/native_player_browser_test.py``.
+Run ``just js-build-vite`` first so the check exercises the shipped asset.
+
 Asset freshness checks
 ----------------------
 

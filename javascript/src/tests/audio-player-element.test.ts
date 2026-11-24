@@ -429,6 +429,61 @@ describe("cast-audio-player share with timestamp", () => {
     expect(dialog.hasAttribute("open")).toBe(false);
   });
 
+  it("round-trips a four-digit minute position through the share dialog", () => {
+    const originalUrl = window.location.href;
+    try {
+      window.history.replaceState(null, "", "/episode/");
+      const payload = makePayload({ duration: 70000, permalink: "/episode/" });
+      const player = mountPlayer(payload);
+      audioOf(player).currentTime = 60005;
+      player.querySelector<HTMLButtonElement>(".cast-player__share")!.click();
+      const time = player.querySelector<HTMLInputElement>(".cast-share__time")!;
+      const url = player.querySelector<HTMLInputElement>(".cast-share__url")!;
+      expect(time.value).toBe("1000:05");
+      expect(time.checkValidity()).toBe(true);
+      const sharedUrl = new URL(url.value);
+      expect(sharedUrl.searchParams.get("t")).toBe("60005");
+
+      time.value = "999999999999999:59";
+      time.dispatchEvent(new Event("input"));
+      expect(new URL(url.value).searchParams.has("t")).toBe(false);
+      expect(time.checkValidity()).toBe(false);
+
+      player.remove();
+      window.history.replaceState(null, "", sharedUrl);
+      expect(audioOf(mountPlayer(payload)).currentTime).toBe(60005);
+    } finally {
+      window.history.replaceState(null, "", originalUrl);
+    }
+  });
+
+  it.each(["missing", "rejected", "fulfilled"])("handles a %s clipboard write", async (outcome) => {
+    const previousClipboard = Object.getOwnPropertyDescriptor(navigator, "clipboard");
+    const writeText = outcome === "rejected" ? vi.fn().mockRejectedValue(new Error("Denied")) : vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      value: outcome === "missing" ? undefined : { writeText }, configurable: true,
+    });
+    try {
+      const player = mountPlayer(makePayload());
+      player.querySelector<HTMLButtonElement>(".cast-player__share")!.click();
+      const url = player.querySelector<HTMLInputElement>(".cast-share__url")!;
+      const copy = player.querySelector<HTMLButtonElement>(".cast-share__copy")!;
+      copy.click();
+      await Promise.resolve();
+      if (outcome === "fulfilled") {
+        expect(writeText).toHaveBeenCalledWith(url.value);
+        expect(copy.textContent).toBe("Copied!");
+      } else {
+        expect(document.activeElement).toBe(url);
+        expect([url.selectionStart, url.selectionEnd]).toEqual([0, url.value.length]);
+        expect(copy.textContent).toBe("Copy");
+      }
+    } finally {
+      if (previousClipboard) Object.defineProperty(navigator, "clipboard", previousClipboard);
+      else Reflect.deleteProperty(navigator, "clipboard");
+    }
+  });
+
   it("no share button in the disabled (no-sources) state", () => {
     const player = mountPlayer(makePayload({ sources: [] }));
     expect(player.querySelector(".cast-player__share")).toBeNull();

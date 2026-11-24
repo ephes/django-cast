@@ -1128,7 +1128,10 @@ the actual request scheme/host when the configured Site uses an alias. Share bui
 that source identity, including optional playback time, even after browser
 history or a persistent dock moves to another page. Integrations without post
 context retain a connection-time document URL for sharing. Unsupported permalink
-schemes or malformed URLs fall back to that captured document URL.
+schemes or malformed URLs fall back to that captured document URL. The Share
+dialog accepts minutes and seconds, including minute values above 999, and
+adds the offset in whole seconds. If the browser cannot write to the clipboard,
+Copy focuses and selects the URL for manual copying.
 
 Automatic ``?t=`` seeks require a valid permalink matching the document origin
 and path; any identifying query parameters in the permalink must also match.

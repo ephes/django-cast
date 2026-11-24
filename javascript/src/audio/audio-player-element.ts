@@ -35,16 +35,22 @@ const SHORTCUTS: ReadonlyArray<[string, string]> = [
   ["Home / End", "start / end"],
 ];
 
+const MAX_SHARE_SECONDS = Number.MAX_SAFE_INTEGER;
+const SHARE_TIMECODE_PATTERN = "([0-9]{1,15}):([0-5][0-9])";
+const SHARE_TIMECODE_RE = new RegExp(`^${SHARE_TIMECODE_PATTERN}$`);
+
 function timecode(seconds: number): string {
-  const whole = Math.max(0, Math.floor(seconds));
-  const m = Math.floor(whole / 60);
-  const s = whole % 60;
-  return `${m}:${String(s).padStart(2, "0")}`;
+  const whole = Math.min(MAX_SHARE_SECONDS, Math.max(0, Math.floor(seconds)));
+  const remainder = whole % 60;
+  const minutes = (whole - remainder) / 60;
+  return `${minutes}:${String(remainder).padStart(2, "0")}`;
 }
 
 function parseTimecode(raw: string): number | null {
-  const match = /^(\d{1,3}):([0-5]\d)$/.exec(raw.trim());
-  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+  const match = SHARE_TIMECODE_RE.exec(raw);
+  if (!match) return null;
+  const seconds = Number(match[1]) * 60 + Number(match[2]);
+  return Number.isSafeInteger(seconds) ? seconds : null;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -386,7 +392,7 @@ export class CastAudioPlayerElement extends HTMLElement {
     const timeInput = el("input", "cast-share__time", {
       type: "text",
       inputmode: "numeric",
-      pattern: "[0-9]{1,3}:[0-5][0-9]",
+      pattern: SHARE_TIMECODE_PATTERN,
     });
     timeInput.setAttribute("aria-label", "Start time (minutes:seconds)");
     toggleLabel.append(startToggle, toggleText, timeInput);
@@ -409,6 +415,7 @@ export class CastAudioPlayerElement extends HTMLElement {
       base.searchParams.delete("t");
       if (startToggle.checked) {
         const seconds = parseTimecode(timeInput.value);
+        timeInput.setCustomValidity(timeInput.value && seconds == null ? "Enter a valid start time." : "");
         if (seconds != null) {
           base.searchParams.set("t", String(seconds));
         }
@@ -421,16 +428,19 @@ export class CastAudioPlayerElement extends HTMLElement {
       buildUrl();
     });
     timeInput.addEventListener("input", buildUrl);
-    copyButton.addEventListener("click", () => {
-      void navigator.clipboard?.writeText(urlInput.value).then(
-        () => {
+    copyButton.addEventListener("click", async () => {
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(urlInput.value);
           copyButton.textContent = "Copied!";
           window.setTimeout(() => (copyButton.textContent = "Copy"), 1500);
-        },
-        () => {
-          urlInput.select();
-        },
-      );
+          return;
+        }
+      } catch {
+        // A denied clipboard write falls back to manual copying.
+      }
+      urlInput.focus();
+      urlInput.select();
     });
     closeButton.addEventListener("click", () => this.closeShare());
 
