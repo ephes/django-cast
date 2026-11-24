@@ -34,6 +34,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Accept matching weak ``If-None-Match`` validators on player transcript requests
+  after checking access and generating the sanitized cues.
+
 - Validate clock components before converting chapter and transcript times to
   seconds. Two-part clocks still accept total leading minutes.
 

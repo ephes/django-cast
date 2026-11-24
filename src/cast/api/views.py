@@ -20,6 +20,7 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.cache import patch_cache_control, patch_vary_headers
 from django.utils.decorators import method_decorator
+from django.utils.http import parse_etags
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
@@ -238,8 +239,8 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
         serialized = json.dumps(cues, ensure_ascii=False, sort_keys=True)
         etag = f'"{hashlib.sha256(serialized.encode("utf-8")).hexdigest()}"'
         if_none_match = request.headers.get("If-None-Match", "")
-        candidates = {token.strip() for token in if_none_match.split(",") if token.strip()}
-        if etag in candidates or "*" in candidates:
+        validators = parse_etags(if_none_match)
+        if validators == ["*"] or etag in {tag.removeprefix("W/") for tag in validators}:
             response: Response = Response(status=status.HTTP_304_NOT_MODIFIED)
         else:
             response = Response({"cues": cues})

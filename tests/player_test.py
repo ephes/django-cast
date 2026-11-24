@@ -6,6 +6,7 @@ from unittest.mock import PropertyMock
 
 import pytest
 from django.urls import reverse
+from wagtail.models import PageViewRestriction
 
 from cast import appsettings
 from cast.checks import check_cast_audio_player_settings, check_cast_setting_types
@@ -502,6 +503,38 @@ class TestFallbackEndpoint:
         assert again.content == b""
         assert again["ETag"] == etag
         assert again["Cache-Control"] == "public, max-age=30, must-revalidate"
+
+    @pytest.mark.parametrize(
+        "method, validator, status",
+        [
+            ("get", "W/{etag}", 304),
+            ("head", '"other", W/{etag}', 304),
+            ("get", "*", 304),
+            ("get", 'W/"other"', 200),
+        ],
+    )
+    def test_revalidation_uses_weak_comparison(self, client, audio, episode, method, validator, status):
+        create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 0, "end_ms": 1000, "text": "hi"}]})
+        url = self._url(audio)
+        params = {"post_id": episode.pk}
+        first = client.get(url, params)
+        response = getattr(client, method)(url, params, HTTP_IF_NONE_MATCH=validator.format(etag=first["ETag"]))
+
+        assert response.status_code == status
+        assert response["ETag"] == first["ETag"]
+        assert response["Cache-Control"] == first["Cache-Control"]
+        assert response.content == (b"" if status == 304 else first.content)
+
+    def test_revalidation_checks_current_transcript_access(self, client, audio, episode):
+        create_transcript(audio=audio, podlove={"transcripts": [{"start_ms": 0, "end_ms": 1000, "text": "hi"}]})
+        url = self._url(audio)
+        params = {"post_id": episode.pk}
+        etag = client.get(url, params)["ETag"]
+        PageViewRestriction.objects.create(page=episode, restriction_type=PageViewRestriction.LOGIN)
+
+        response = client.get(url, params, HTTP_IF_NONE_MATCH=f"W/{etag}")
+
+        assert response.status_code == 404
 
 
 class TestContextFlags:
