@@ -50,7 +50,8 @@ integrations should use the editor API below for structured errors, scoped
 authorization, and ``If-Match`` revision handling.
 
 The legacy ``/api/videos/`` and ``/api/audios/`` collection endpoints are
-read-only. ``POST`` requests return ``405 Method Not Allowed``. Use
+read-only. They list the signed-in owner's media by descending creation time,
+then by descending ID when timestamps match. ``POST`` requests return ``405 Method Not Allowed``. Use
 ``POST /api/editor/media/videos/`` or ``POST /api/editor/media/audios/`` for
 permission-checked uploads. Existing legacy video clients can continue using
 ``POST /api/upload_video/`` while they migrate.
@@ -158,6 +159,10 @@ client-side color mode switching.
 Content Access
 ~~~~~~~~~~~~~~
 
+The Wagtail pages and images APIs strip NUL characters from filter query
+values while preserving their order and count. Filters that read a single
+value for a repeated parameter still use its last value.
+
 **Wagtail Pages API**
 
 Access page content with filtering::
@@ -188,6 +193,12 @@ Django Cast custom filters (requires ``use_post_filter=true``):
 - ``date_after``: Filter posts after date (format: ``YYYY-MM-DD``)
 - ``date_before``: Filter posts before date (format: ``YYYY-MM-DD``)
 - ``o``: Ordering by visible_date (use ``-visible_date`` for descending)
+
+With ``use_post_filter=true``, Django Cast applies full-text search once per
+listing request and retains the search query through pagination. Other page
+requests use Wagtail's native search. Wagtail returns ``meta.total_count`` and
+``items``. For subsequent requests, keep the search and other filters the same
+and advance ``offset`` by ``limit``.
 
 Example requests:
 
@@ -1818,15 +1829,21 @@ Using the API
 JavaScript Example
 ~~~~~~~~~~~~~~~~~~
 
-Fetching posts with facets:
+Fetch posts with facets and a search term using offset pagination.
 
 .. code-block:: javascript
 
-    async function fetchPosts(categorySlug, page = 1) {
-        const response = await fetch(
-            `/api/wagtail/pages/?type=cast.Post&child_of=4&use_post_filter=true&category_facets=${categorySlug}&page=${page}`,
-            { credentials: 'include' }
-        );
+    async function fetchPosts(categorySlug, search = '', offset = 0) {
+        const params = new URLSearchParams({
+            type: 'cast.Post',
+            child_of: '4',
+            use_post_filter: 'true',
+            category_facets: categorySlug,
+            search,
+            limit: '20',
+            offset: String(offset),
+        });
+        const response = await fetch(`/api/wagtail/pages/?${params}`, { credentials: 'include' });
         return await response.json();
     }
 

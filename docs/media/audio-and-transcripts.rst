@@ -167,9 +167,11 @@ seconds to the start.
 Public transcript responses include a strong ``ETag`` and a short shared-cache
 freshness window (``Cache-Control: public, max-age=30, must-revalidate``).
 Browsers, reverse proxies, and CDNs may reuse the response for 30 seconds, then
-must revalidate it; unchanged cues receive a small ``304`` while speaker
-corrections replace the cached response after at most that short window.
-Restricted or preview responses remain private and uncacheable.
+must revalidate it. After checking access and generating the sanitized cues,
+``GET`` and ``HEAD`` return ``304 Not Modified`` for a matching strong or weak
+``If-None-Match`` validator or the wildcard ``*``. Speaker corrections replace
+the cached response after at most that short window. Restricted or preview
+responses remain private and uncacheable.
 
 Theming tokens
 --------------

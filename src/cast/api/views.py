@@ -20,6 +20,9 @@ from django.shortcuts import get_object_or_404
 from django.urls import reverse
 from django.utils.cache import patch_cache_control, patch_vary_headers
 from django.utils.decorators import method_decorator
+from django.utils.functional import cached_property
+from django.utils.http import parse_etags
+from modelsearch.backends.base import BaseSearchResults
 from rest_framework import generics, status
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import PermissionDenied
@@ -28,6 +31,7 @@ from rest_framework.permissions import AllowAny, BasePermission, IsAdminUser, Is
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from wagtail.api.v2.filters import SearchFilter
 from wagtail.api.v2.router import WagtailAPIRouter
 from wagtail.api.v2.views import PagesAPIViewSet
 from wagtail.images.api.v2.views import ImagesAPIViewSet
@@ -102,7 +106,7 @@ class VideoListView(PrivateAPIView, generics.ListAPIView):
     def get_queryset(self) -> QuerySet[Video]:
         user = self.request.user
         qs = Video.objects.all().filter(user=user)
-        return qs.order_by("-created")
+        return qs.order_by("-created", "-pk")
 
 
 class VideoDetailView(PrivateAPIView, generics.RetrieveDestroyAPIView):
@@ -132,7 +136,7 @@ class AudioListView(PrivateAPIView, generics.ListAPIView):
     def get_queryset(self) -> QuerySet[Audio]:
         user = self.request.user
         qs = Audio.objects.all().filter(user=user)
-        return qs.order_by("-created")
+        return qs.order_by("-created", "-pk")
 
 
 class AudioDetailView(PrivateAPIView, generics.RetrieveDestroyAPIView):
@@ -238,8 +242,8 @@ class AudioPlayerTranscriptView(generics.RetrieveAPIView):
         serialized = json.dumps(cues, ensure_ascii=False, sort_keys=True)
         etag = f'"{hashlib.sha256(serialized.encode("utf-8")).hexdigest()}"'
         if_none_match = request.headers.get("If-None-Match", "")
-        candidates = {token.strip() for token in if_none_match.split(",") if token.strip()}
-        if etag in candidates or "*" in candidates:
+        validators = parse_etags(if_none_match)
+        if validators == ["*"] or etag in {tag.removeprefix("W/") for tag in validators}:
             response: Response = Response(status=status.HTTP_304_NOT_MODIFIED)
         else:
             response = Response({"cues": cues})
@@ -393,12 +397,15 @@ class RemoveNullBytesMixin:
     request: HttpRequest
 
     def cleanup_null_bytes(self) -> None:
-        for key, value in self.request.GET.items():
-            value = cast(str, value)
-            if "\x00" in value:
-                mutable_copy = self.request.GET.copy()
-                mutable_copy[key] = value.replace("\x00", "")
-                cast(Any, self.request).GET = mutable_copy
+        params = self.request.GET
+        cleaned = None
+        for key, values in params.lists():
+            if any("\x00" in value for value in values):
+                if cleaned is None:
+                    cleaned = params.copy()
+                cleaned.setlist(key, [value.replace("\x00", "") for value in values])
+        if cleaned is not None:
+            cast(Any, self.request).GET = cleaned
 
     def filter_queryset(self, queryset: QuerySet) -> QuerySet:
         self.cleanup_null_bytes()
@@ -406,7 +413,20 @@ class RemoveNullBytesMixin:
         return super().filter_queryset(queryset)  # type: ignore
 
 
+class _FilteredPagesSearchFilter(SearchFilter):
+    def filter_queryset(self, request: Request, queryset: QuerySet, view: APIView) -> QuerySet | BaseSearchResults:
+        if request.GET.get("use_post_filter") == "true":
+            # PostFilterset already handled search. Keep the query available to pagination.
+            return queryset
+        return super().filter_queryset(request, queryset, view)
+
+
 class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
+    filter_backends = [
+        _FilteredPagesSearchFilter if backend is SearchFilter else backend
+        for backend in PagesAPIViewSet.filter_backends
+    ]
+
     def _extend_known_query_parameters(self) -> None:
         additional_query_params = PostFilterset.Meta.fields + [
             "use_post_filter",
@@ -430,26 +450,22 @@ class FilteredPagesAPIViewSet(RemoveNullBytesMixin, PagesAPIViewSet):
         if hasattr(self.request, "_request"):
             setattr(self.request._request, "cast_template_base_dir", template_base_dir)
 
-    def get_filtered_queryset(self) -> QuerySet:
-        # allow additional query parameters from PostFilterset + use_post_filter flag
+    def get_filtered_queryset(self) -> QuerySet[Any]:
         self._extend_known_query_parameters()
         self._apply_template_base_dir_override()
-        # remove search parameter from query params because it won't work with PagesAPIViewSet
-        # in combination with PostFilterset. But doing full text search on PostFilterset will work.
-        original_get_params = self.request.GET.copy()
-        get_params = self.request.GET.copy()
-        if "search" in get_params:
-            del get_params["search"]
-        self.request.GET = get_params  # type: ignore
-        queryset = super().get_queryset()
-        filterset = PostFilterset(data=original_get_params, queryset=queryset)
-        return filterset.qs
+        return PostFilterset(data=self.request.GET, queryset=super().get_queryset()).qs
+
+    @cached_property
+    def _filtered_queryset(self) -> QuerySet[Any]:
+        # Wagtail calls get_queryset again to resolve the serializer model.
+        return self.get_filtered_queryset()
 
     def get_queryset(self) -> QuerySet[Any]:
+        self.cleanup_null_bytes()
+        if self.request.GET.get("use_post_filter") == "true":
+            return self._filtered_queryset
         self._extend_known_query_parameters()
         self._apply_template_base_dir_override()
-        if self.request.GET.dict().get("use_post_filter", "false") == "true":
-            return self.get_filtered_queryset()
         return super().get_queryset()
 
 

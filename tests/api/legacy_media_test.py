@@ -6,6 +6,8 @@ import pytest
 from django.contrib.auth.models import Permission
 from django.core.checks import run_checks
 from django.urls import reverse
+from django.utils import timezone
+from wagtail.models import Collection
 
 from cast.api.serializers import AudioPodloveSerializer
 from cast.api.views import (
@@ -34,6 +36,33 @@ def test_api_root(api_client):
 
 def test_standard_results_set_pagination_max_page_size():
     assert StandardResultsSetPagination.max_page_size == 200
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("model, route", [(Audio, "audio_list"), (Video, "video_list")])
+def test_owner_media_pagination_breaks_created_ties_by_descending_id(api_client, user, model, route):
+    collection = Collection.get_first_root_node()
+    other_user = UserFactory()
+    created = timezone.now()
+    first, _other, second, third, oldest = model.objects.bulk_create(
+        [
+            model(user=user, collection=collection, created=created),
+            model(user=other_user, collection=collection, created=created),
+            model(user=user, collection=collection, created=created),
+            model(user=user, collection=collection, created=created),
+            model(user=user, collection=collection, created=created - timedelta(days=1)),
+        ]
+    )
+    api_client.force_authenticate(user=user)
+    url = reverse(f"cast:api:{route}") + "?pageSize=1"
+    for expected in (third, second, first, oldest):
+        response = api_client.get(url)
+        assert response.status_code == 200
+        page = response.json()
+        assert page["count"] == 4
+        assert [item["id"] for item in page["results"]] == [expected.pk]
+        url = page["next"]
+    assert url is None
 
 
 class TestBlogVideo:
