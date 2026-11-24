@@ -435,8 +435,9 @@ filters for rendering comments in templates.
 ``{% fluent_comments_list %}``
     Renders the full comment list. Uses ``threaded_list.html`` when threaded
     comments are active, ``flat_list.html`` otherwise. Each list render batches
-    its edit-marker lookup in its template context. A separate
-    ``render_comment`` call outside the list looks up its own marker.
+    its edit-marker lookup in its template context. A comment outside that
+    batch, such as an ancestor filled into a paginated thread or a separate
+    ``render_comment`` call outside the list, looks up its own marker.
 
 ``{{ object|comments_are_open }}``
     Filter that returns ``True`` if comments are enabled for the object.

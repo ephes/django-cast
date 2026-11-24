@@ -640,6 +640,31 @@ class TestRenderCommentContext:
         assert lists_html.count("comment-edited-flag") == 2
         assert standalone_html.count("comment-edited-flag") == 1
 
+    @pytest.mark.parametrize("reply_edited", [False, True])
+    def test_edited_marker_on_ancestor_filled_into_paginated_thread(self, post, rf, feature_on, reply_edited):
+        from django.template import Context, Template
+        from django_comments import get_model
+
+        parent = get_model().objects.create(
+            content_object=post, site_id=dj_settings.SITE_ID, comment="Synthetic edited parent"
+        )
+        reply = get_model().objects.create(
+            content_object=post, site_id=dj_settings.SITE_ID, parent=parent, comment="Synthetic reply"
+        )
+        author_edits.mark_edited(parent)
+        if reply_edited:
+            author_edits.mark_edited(reply)
+
+        html = Template("{% load fluent_comments_tags %}{% fluent_comments_list %}").render(
+            Context({"comment_list": [reply], "request": rf.get("/")})
+        )
+
+        # The flag sits in each comment's header, before its text.
+        parent_header, rest = html.split("Synthetic edited parent")
+        reply_header, _ = rest.split("Synthetic reply")
+        assert parent_header.count("comment-edited-flag") == 1
+        assert reply_header.count("comment-edited-flag") == int(reply_edited)
+
 
 class TestActionContext:
     pytestmark = pytest.mark.django_db

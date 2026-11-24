@@ -118,6 +118,11 @@ def render_comment(context: template.Context, comment: BaseComment) -> SafeStrin
         from .. import author_edits
 
         edited_pks = context.get("_cast_edited_pks")
+        batched_pks = context.get("_cast_edited_batch_pks")
+        if edited_pks is not None and (batched_pks is None or str(comment.pk) not in batched_pks):
+            # Comments outside the list's batch (e.g. ancestors that safe_fill_tree
+            # adds to a paginated thread) need their own lookup.
+            edited_pks = None
         ctx.update(author_edits.comment_action_context(request, comment, edited_pks))
     return mark_safe(render_to_string(template_name, ctx, request=request))
 
@@ -160,7 +165,8 @@ def fluent_comments_list(context: template.Context) -> SafeString:
         from .. import author_edits
 
         if author_edits.author_edits_enabled():
-            ids = [comment.pk for comment in comment_list] if comment_list else []
+            ids = {str(comment.pk) for comment in comment_list} if comment_list else set()
+            ctx["_cast_edited_batch_pks"] = ids
             ctx["_cast_edited_pks"] = author_edits.edited_pks_for(ids)
     ctx["USE_THREADEDCOMMENTS"] = appsettings.USE_THREADEDCOMMENTS
     ctx["target_object_id"] = target_object_id
