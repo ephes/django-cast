@@ -102,7 +102,7 @@ def test_preview_selects_current_focal_generation(post, mocker):
 
 
 @pytest.mark.django_db
-def test_preview_renders_available_renditions_when_an_original_is_missing(rf, post):
+def test_preview_renders_available_renditions_when_an_original_is_missing(rf, post, caplog):
     missing_original = create_image()
     healthy = create_image()
     cached = missing_original.create_rendition(Filter("format-jpeg"))
@@ -117,9 +117,13 @@ def test_preview_renders_available_renditions_when_an_original_is_missing(rf, po
         }
     ]
 
-    response = post.serve_preview(rf.get("/"), "")
-    response.render()
+    with caplog.at_level("WARNING", logger="cast.preview_media"):
+        response = post.serve_preview(rf.get("/"), "")
+        response.render()
     assert response.status_code == 200
+    assert [record.getMessage() for record in caplog.records if record.name == "cast.preview_media"] == [
+        f"Preview cannot open the original of image {missing_original.pk}; skipping missing renditions format-avif."
+    ]
     renditions = response.context_data["repository"].renditions_for_posts
     assert renditions[missing_original.pk] == [cached]
     assert {row.filter_spec for row in renditions[healthy.pk]} == {"format-jpeg", "format-avif"}
@@ -127,6 +131,25 @@ def test_preview_renders_available_renditions_when_an_original_is_missing(rf, po
     assert cached.url in html
     assert all(row.url in html for row in renditions[healthy.pk])
     assert list(Rendition.objects.filter(image=missing_original)) == [cached]
+
+
+@pytest.mark.django_db
+def test_preview_warning_names_every_skipped_rendition(post, mocker, caplog):
+    image = create_image()
+    image.file.storage.delete(image.file.name)
+    post.body = [{"type": "overview", "value": [{"type": "image", "value": image.pk}]}]
+    mocker.patch(
+        "cast.preview_media.get_all_filterstrings",
+        return_value=[(image.pk, "fill-1x1"), (image.pk, "fill-2x2")],
+    )
+
+    with caplog.at_level("WARNING", logger="cast.preview_media"):
+        media = PreviewMedia.from_post(post)
+    assert image.pk not in media.renditions
+    assert [record.getMessage() for record in caplog.records if record.name == "cast.preview_media"] == [
+        f"Preview cannot open the original of image {image.pk}; skipping missing renditions fill-1x1, fill-2x2."
+    ]
+    assert not Rendition.objects.filter(image=image).exists()
 
 
 @pytest.mark.django_db

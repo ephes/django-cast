@@ -1,5 +1,6 @@
 """Request-local media for previews, without synchronizing persisted relationships."""
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -16,6 +17,8 @@ from .renditions import ImageType
 
 if TYPE_CHECKING:
     from .models import Post
+
+logger = logging.getLogger(__name__)
 
 
 def _media_id(value: Any, *, max_id: int = 2**63 - 1) -> int | None:
@@ -97,11 +100,17 @@ class PreviewMedia:
                     missing.pop(spec, None)
             # Keep obsolete cache rows. create_rendition uses get_or_create
             # without publishing to Wagtail's shared, alias-blind cache.
-            for image_filter in missing.values():
+            pending = list(missing)
+            for index, spec in enumerate(pending):
                 try:
-                    rendition = image.create_rendition(image_filter)
+                    rendition = image.create_rendition(missing[spec])
                 except SourceImageIOError:
                     # Keep cached variants and move on to the next image.
+                    logger.warning(
+                        "Preview cannot open the original of image %s; skipping missing renditions %s.",
+                        image_id,
+                        ", ".join(pending[index:]),
+                    )
                     break
                 renditions.setdefault(image_id, []).append(rendition)
         return cls(
