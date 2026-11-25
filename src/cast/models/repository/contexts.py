@@ -118,7 +118,7 @@ class PostDetailContext:
         # The page-link cache is request-scoped and repopulated by repository construction.
         clear_cached_page_urls()
         blog = post.blog
-        owner_username = "unknown"
+        owner_username = ""
         if post.owner is not None:
             owner_username = post.owner.username
         from ..pages import Episode

@@ -199,13 +199,17 @@ By default all posts are synced.
                         or RenditionIdentity.from_row(old_row) != old
                         or new_row is None
                         or RenditionIdentity.from_row(new_row) != replacement
-                        # Wagtail's deletion hook would also delete a shared file.
-                        or old.name == replacement.name
                         or not file_exists(new_row)
                     ):
                         conflicts += 1
                         self.stderr.write(f"Rendition retirement conflict for image {image_id}, rendition {old.pk}.")
                         continue
-                    old_row.delete(using=using)
+                    if old.name == replacement.name:
+                        # Wagtail's post_delete file cleanup would also delete the replacement's
+                        # file, so remove only the row and purge its cache entry like Wagtail does.
+                        renditions.filter(pk=old.pk)._raw_delete(using)
+                        old_row.purge_from_cache()
+                    else:
+                        old_row.delete(using=using)
         if conflicts:
             raise CommandError(f"{conflicts} rendition retirement conflict(s). Rerun sync_renditions.")

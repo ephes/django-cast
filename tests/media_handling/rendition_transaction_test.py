@@ -1,6 +1,7 @@
 """Synthetic storage writes follow the rendition transaction outcome."""
 
 import logging
+from io import StringIO
 from pathlib import Path
 
 import pytest
@@ -316,8 +317,19 @@ def test_sync_revalidates_first_replacement_after_another_image(disk_image, post
         yield images[second.pk]
 
     mocker.patch("cast.management.commands.sync_renditions.track", pause_after_first)
-    with pytest.raises(CommandError, match="retirement conflict"):
-        call_command("sync_renditions", post_slug=post.slug)
+    stderr = StringIO()
+    if change == "shared-file":
+        purge = mocker.spy(Rendition, "purge_from_cache")
+        call_command("sync_renditions", post_slug=post.slug, stderr=stderr)
+        assert stderr.getvalue() == ""
+        assert not Rendition.objects.filter(pk=old.pk).exists()
+        assert first.renditions.get(filter_spec=spec).file.name == old.file.name
+        assert old.file.storage.exists(old.file.name)
+        assert [call.args[0].pk for call in purge.call_args_list] == [old.pk]
+    else:
+        with pytest.raises(CommandError, match="retirement conflict"):
+            call_command("sync_renditions", post_slug=post.slug, stderr=stderr)
+        assert f"Rendition retirement conflict for image {first.pk}, rendition {old.pk}." in stderr.getvalue()
+        assert Rendition.objects.filter(pk=old.pk).exists()
     assert second.renditions.filter(filter_spec="width-1").exists()
-    assert Rendition.objects.filter(pk=old.pk).exists()
     assert old.file.storage.exists(old.file.name)

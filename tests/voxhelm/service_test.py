@@ -576,10 +576,16 @@ def test_generation_preserves_remote_failure_when_failure_update_raises(mocker, 
         with pytest.raises(CommandError, match="1 transcript generations failed"):
             call_command("generate_transcripts", audio_id=[audio.pk], stdout=StringIO(), stderr=errors)
         assert "synthetic Voxhelm wait failure" in errors.getvalue()
-        assert "Transcript generation status could not be confirmed (OperationalError)" in errors.getvalue()
+        assert (
+            "Transcript generation status for Voxhelm job job-7 could not be confirmed (OperationalError)"
+            in errors.getvalue()
+        )
 
     client.wait_for_job.assert_called_once_with(submission.job_id)
-    assert any("status could not be confirmed" in note and "OperationalError" in note for note in primary.__notes__)
+    assert any(
+        "status for Voxhelm job job-7 could not be confirmed" in note and "OperationalError" in note
+        for note in primary.__notes__
+    )
     generation = TranscriptGeneration.objects.get(audio=audio)
     assert generation.status == TranscriptGeneration.Status.RUNNING
     assert generation.voxhelm_job_id == submission.job_id

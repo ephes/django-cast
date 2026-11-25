@@ -191,7 +191,9 @@ images in batches, preserving every
 role of a shared image. Before it deletes an obsolete rendition, it rechecks
 the source and the exact verified replacement on the writer database.
 A changed pair is reported as a conflict and its old rendition is retained.
-Rerun the command to reconcile the current files.
+Rerun the command to reconcile the current files. An obsolete rendition that
+shares its stored file with its verified replacement is retired by removing
+only its database row, so the replacement keeps the file.
 
 Run this as a one-off migration step after a deployment that changes rendition
 specifications or policy; it is not required for every normal application

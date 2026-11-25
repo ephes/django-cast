@@ -790,6 +790,11 @@ def test_published_ownerless_episode_renders_in_index_and_feeds(client, episode,
     assert episode.title in response.content.decode()
     assert b'class="author"' not in response.content
 
+    detail = client.get(episode.get_url())
+    assert detail.status_code == 200
+    assert episode.title in detail.content.decode()
+    assert b'class="author"' not in detail.content
+
     latest_url = reverse("cast:latest_entries_feed", kwargs={"slug": podcast.slug})
     latest = client.get(latest_url)
     assert latest.status_code == 200

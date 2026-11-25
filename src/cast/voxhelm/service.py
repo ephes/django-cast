@@ -531,7 +531,8 @@ class VoxhelmTranscriptService:
                 )
             except Exception as settlement_error:
                 category = type.__getattribute__(type(settlement_error), "__name__")[:80]
-                BaseException.add_note(exc, f"Transcript generation status could not be confirmed ({category}).")
+                job = f" for Voxhelm job {submission.job_id}" if submission is not None else ""
+                BaseException.add_note(exc, f"Transcript generation status{job} could not be confirmed ({category}).")
             else:
                 if (
                     formatted
