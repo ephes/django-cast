@@ -179,15 +179,16 @@ def test_command_flags_are_local_to_each_call(site, settings, monkeypatch, fail_
     settings.CAST_STYLEGUIDE_REMOTE_MEDIA = False
     settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = False
     seen = []
-    original_build = command._build_styleguide_data
+    original_context = command._styleguide_context
 
-    def build(*args, **kwargs):
-        seen.append((settings.CAST_STYLEGUIDE_REMOTE_MEDIA, settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS))
+    def context(*args, **kwargs):
+        assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False
+        seen.append((settings.CAST_STYLEGUIDE_REMOTE_MEDIA, kwargs["ensure_renditions"]))
         if fail_build:
             raise RuntimeError("synthetic option failure")
-        return original_build(*args, **kwargs)
+        return original_context(*args, **kwargs)
 
-    monkeypatch.setattr(command, "_build_styleguide_data", build)
+    monkeypatch.setattr(command, "_styleguide_context", context)
     monkeypatch.setattr(
         styleguide_view,
         "_fetch_styleguide_remote_media",
@@ -202,7 +203,7 @@ def test_command_flags_are_local_to_each_call(site, settings, monkeypatch, fail_
     assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False
     fail_build = False
     call_command("ensure_reference_site")
-    assert seen == [(True, True), (False, False)]
+    assert seen == [(True, True), (False, None)]
 
 
 @pytest.mark.parametrize("with_site", [False, True])

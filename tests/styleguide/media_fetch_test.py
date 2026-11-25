@@ -2,10 +2,13 @@ from datetime import timedelta
 
 import pytest
 from django.core.files.base import ContentFile
+from django.core.management import call_command
 from django.test import RequestFactory
+from django.urls import reverse
 
 from cast import safe_fetch
 from cast.devdata import create_audio, create_image, create_user
+from cast.management.commands import styleguide_prefetch
 from cast.models import Audio
 from cast.views import styleguide as styleguide_view
 from cast.views.styleguide import StyleguideRemoteVideo
@@ -506,6 +509,33 @@ def test_styleguide_context_uses_remote_video_and_pagination_object_list(setting
     context = styleguide_view._styleguide_context(data, request, "plain")
     assert isinstance(context["styleguide_video"], StyleguideRemoteVideo)
     assert context["styleguide_media_post"].pk == data.posts[0].pk
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("configured", [False, True])
+def test_prefetch_rendition_policy_is_local_to_its_render(admin_client, settings, mocker, configured):
+    settings.CAST_ENABLE_STYLEGUIDE = True
+    settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = configured
+    inventory = mocker.patch.object(
+        styleguide_view, "get_obsolete_and_missing_rendition_strings", return_value=([], [])
+    )
+    build_data = styleguide_prefetch._build_styleguide_data
+
+    def build_after_web_render(request):
+        inventory.reset_mock()
+        response = admin_client.get(reverse("cast:styleguide"), {"theme": "plain"})
+        assert response.status_code == 200
+        assert inventory.called is configured
+        assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is configured
+        inventory.reset_mock()
+        return build_data(request)
+
+    mocker.patch.object(styleguide_prefetch, "_build_styleguide_data", side_effect=build_after_web_render)
+    call_command("styleguide_prefetch", theme="plain", with_renditions=True)
+    assert inventory.called
+
+    call_command("styleguide_prefetch", theme="plain")
+    assert inventory.called is configured
 
 
 @pytest.mark.django_db

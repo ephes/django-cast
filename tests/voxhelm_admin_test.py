@@ -9,6 +9,7 @@ from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
 from cast.models import Audio, Contributor, EpisodeContributor, Transcript, TranscriptGeneration, VoxhelmSettings
+from cast.models.voxhelm_settings import ordinary_settings_version
 from cast.views import voxhelm as voxhelm_views
 from cast.voxhelm import TranscriptSubmission, VoxhelmError, build_audio_task_ref
 from cast.wagtail_hooks import GenerateEpisodeTranscriptMenuItem
@@ -54,6 +55,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
             edit_url,
             {
                 "api_token": "",
+                "settings_version": ordinary_settings_version(VoxhelmSettings.for_site(site)),
                 "model": "whisper-1",
                 "language": "de",
                 "diarization_enabled": "false",
@@ -74,6 +76,7 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
             edit_url,
             {
                 "api_token": "replacement-token",
+                "settings_version": ordinary_settings_version(setting),
                 "model": "whisper-1",
                 "language": "de",
                 "diarization_enabled": "true",
@@ -96,6 +99,7 @@ def test_voxhelm_settings_new_instance_allows_empty_token(admin_client, site):
             edit_url,
             {
                 "api_token": "",
+                "settings_version": admin_client.get(edit_url).context["form"]["settings_version"].value(),
                 "model": "",
                 "language": "",
                 "diarization_enabled": "unknown",
@@ -740,7 +744,13 @@ def test_voxhelm_settings_form_has_no_api_base_field(admin_client, site):
     with TestCase.captureOnCommitCallbacks(execute=True):
         response = admin_client.post(
             edit_url,
-            {"api_base": "http://127.0.0.1:9999/admin#", "api_token": "", "model": "", "language": ""},
+            {
+                "api_base": "http://127.0.0.1:9999/admin#",
+                "api_token": "",
+                "settings_version": ordinary_settings_version(setting),
+                "model": "",
+                "language": "",
+            },
             follow=True,
         )
     assert response.status_code == 200
@@ -756,7 +766,13 @@ def test_voxhelm_site_token_can_be_cleared(admin_client, site, stored_token):
     with TestCase.captureOnCommitCallbacks(execute=True):
         response = admin_client.post(
             reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
-            {"api_token": "", "clear_api_token": "on", "model": "", "language": ""},
+            {
+                "api_token": "",
+                "settings_version": ordinary_settings_version(setting),
+                "clear_api_token": "on",
+                "model": "",
+                "language": "",
+            },
             follow=True,
         )
     assert response.status_code == 200
@@ -770,7 +786,13 @@ def test_voxhelm_site_token_clear_conflicts_with_new_token(admin_client, site):
     with TestCase.captureOnCommitCallbacks(execute=True):
         response = admin_client.post(
             reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
-            {"api_token": "new-key", "clear_api_token": "on", "model": "", "language": ""},
+            {
+                "api_token": "new-key",
+                "settings_version": ordinary_settings_version(setting),
+                "clear_api_token": "on",
+                "model": "",
+                "language": "",
+            },
         )
     assert response.status_code == 200
     assert "Either enter a new token or remove the stored one, not both." in response.content.decode()
@@ -820,4 +842,4 @@ def test_voxhelm_settings_form_subclass_without_boolean_fields():
     )
     form = form_class(instance=VoxhelmSettings())
 
-    assert set(form.fields) == {"api_token", "clear_api_token"}
+    assert set(form.fields) == {"api_token", "clear_api_token", "settings_version"}

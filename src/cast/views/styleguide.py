@@ -986,6 +986,8 @@ def _ensure_styleguide_gallery_blocks(
     repository: BlogIndexContext,
     template_base_dir: str,
     limit: int | None = None,
+    *,
+    ensure_renditions: bool | None = None,
 ) -> list[str]:
     # Always render gallery blocks locally using our own templates so that
     # links point to optimised renditions instead of original uploads.
@@ -996,7 +998,7 @@ def _ensure_styleguide_gallery_blocks(
                 images=list(gallery.images.all()),
                 repository=repository,
                 template_base_dir=template_base_dir,
-                ensure_renditions=True,
+                ensure_renditions=ensure_renditions,
             )
         )
     if limit is not None:
@@ -1711,7 +1713,11 @@ def _fetch_styleguide_remote_media(user: User) -> StyleguideRemoteMedia:
 
 
 def _styleguide_context(
-    styleguide_data: StyleguideData, request: HtmxHttpRequest, template_base_dir: str
+    styleguide_data: StyleguideData,
+    request: HtmxHttpRequest,
+    template_base_dir: str,
+    *,
+    ensure_renditions: bool | None = None,
 ) -> dict[str, Any]:
     blog_repository = styleguide_data.blog_repository
     podcast_repository = styleguide_data.podcast_repository
@@ -1737,6 +1743,7 @@ def _styleguide_context(
         blog_repository,
         template_base_dir,
         limit=1,
+        ensure_renditions=ensure_renditions,
     )
     if styleguide_data.video_url:
         styleguide_video: Video | StyleguideRemoteVideo = StyleguideRemoteVideo(

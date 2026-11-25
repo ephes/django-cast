@@ -1220,7 +1220,7 @@ def test_styleguide_prefetch_command(settings, mocker):
     call_command("styleguide_prefetch", theme="plain")
     request = build_styleguide_data.call_args.args[0]
     assert request.path == "/cast/styleguide/"
-    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
+    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain", ensure_renditions=None)
 
 
 def test_styleguide_prefetch_command_default_theme(settings, mocker):
@@ -1231,7 +1231,7 @@ def test_styleguide_prefetch_command_default_theme(settings, mocker):
     call_command("styleguide_prefetch")
     request = build_styleguide_data.call_args.args[0]
     default_theme.assert_called_once_with()
-    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
+    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain", ensure_renditions=None)
 
 
 def test_styleguide_prefetch_command_invalid_theme(settings, mocker):
@@ -1243,89 +1243,27 @@ def test_styleguide_prefetch_command_invalid_theme(settings, mocker):
         call_command("styleguide_prefetch", theme="not-a-theme")
 
 
-def _record_generate_renditions(build_styleguide_data, render_styleguide_context, styleguide_data):
-    """Record what the styleguide helpers see through the public app setting."""
-    from cast import appsettings
-
-    seen = []
-
-    def build(_request):
-        seen.append(("build", appsettings.CAST_STYLEGUIDE_GENERATE_RENDITIONS))
-        return styleguide_data
-
-    def render(*_args):
-        seen.append(("render", appsettings.CAST_STYLEGUIDE_GENERATE_RENDITIONS))
-
-    build_styleguide_data.side_effect = build
-    render_styleguide_context.side_effect = render
-    return seen
-
-
-@pytest.mark.parametrize("previous", [False, True, None, "from-project-settings"])
-def test_styleguide_prefetch_command_with_renditions_restores_the_setting(settings, mocker, previous):
-    settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = previous
-    styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
-        mocker
-    )
-    seen = _record_generate_renditions(build_styleguide_data, render_styleguide_context, styleguide_data)
-
-    call_command("styleguide_prefetch", theme="plain", with_renditions=True)
-
-    request = build_styleguide_data.call_args.args[0]
-    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain")
-    assert seen == [("build", True), ("render", True)]
-    assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS == previous
-
-    # A later call without the option in the same process uses the project's own value.
-    seen.clear()
-    call_command("styleguide_prefetch", theme="plain")
-    assert seen == [("build", previous), ("render", previous)]
-
-
-def test_styleguide_prefetch_command_with_renditions_keeps_the_setting_absent(settings, mocker):
-    from django.conf import settings as django_settings
-
-    from cast import appsettings
-
-    del settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS
-    assert not hasattr(django_settings, "CAST_STYLEGUIDE_GENERATE_RENDITIONS")
-    styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
-        mocker
-    )
-    seen = _record_generate_renditions(build_styleguide_data, render_styleguide_context, styleguide_data)
-
-    call_command("styleguide_prefetch", theme="plain", with_renditions=True)
-
-    assert seen == [("build", True), ("render", True)]
-    assert not hasattr(django_settings, "CAST_STYLEGUIDE_GENERATE_RENDITIONS")
-    assert appsettings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False  # the default again
-
-
 @pytest.mark.parametrize("failing", ["build", "render"])
-def test_styleguide_prefetch_command_restores_the_setting_when_the_build_fails(settings, mocker, failing):
+def test_styleguide_prefetch_failure_keeps_rendition_policy_local(settings, mocker, failing):
     settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = False
-    _styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
+    styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
         mocker
     )
     failing_mock = build_styleguide_data if failing == "build" else render_styleguide_context
-    failing_mock.side_effect = RuntimeError("remote media unavailable")
 
-    with pytest.raises(RuntimeError, match="remote media unavailable"):
+    def fail(*args, **kwargs):
+        assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False
+        raise RuntimeError("synthetic prefetch failure")
+
+    failing_mock.side_effect = fail
+    with pytest.raises(RuntimeError, match="synthetic prefetch failure"):
         call_command("styleguide_prefetch", theme="plain", with_renditions=True)
 
-    assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False
-
-
-def test_styleguide_prefetch_command_without_renditions_leaves_the_setting_alone(settings, mocker):
-    settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS = False
-    styleguide_data, build_styleguide_data, render_styleguide_context, _default_theme = _stub_styleguide_prefetch(
-        mocker
-    )
-    seen = _record_generate_renditions(build_styleguide_data, render_styleguide_context, styleguide_data)
-
+    failing_mock.side_effect = None
+    render_styleguide_context.reset_mock()
     call_command("styleguide_prefetch", theme="plain")
-
-    assert seen == [("build", False), ("render", False)]
+    request = build_styleguide_data.call_args.args[0]
+    render_styleguide_context.assert_called_once_with(styleguide_data, request, "plain", ensure_renditions=None)
     assert settings.CAST_STYLEGUIDE_GENERATE_RENDITIONS is False
 
 

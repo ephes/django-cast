@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from django import forms
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models, transaction
-from django.utils.crypto import salted_hmac
+from django.utils.crypto import constant_time_compare, salted_hmac
 from django.utils.html import format_html
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
@@ -88,34 +89,50 @@ class VoxhelmSettings(BaseSiteSetting):
         verbose_name = _("Voxhelm settings")
 
     def save(self, *args: Any, **kwargs: Any) -> None:
-        intent = getattr(self, "_token_save_intent", None)
+        intent = getattr(self, "_settings_save_intent", None)
         if intent is None:
             super().save(*args, **kwargs)
             return
         if self.pk is None:
             super().save(*args, **kwargs)
-            del self._token_save_intent
+            del self._settings_save_intent
             return
         kwargs, using = normalize_model_save_arguments(self, args, kwargs)
-        original_version, replacement = intent
+        settings_version, token_version, replacement = intent
         with transaction.atomic(using=using):
             current = type(self).objects.using(using).filter(pk=self.pk)
             # Obtain the write lock before reading, including on SQLite.
             current.update(api_token=models.F("api_token"))
-            stored = current.get().api_token
-            if replacement is not None and api_token_version(stored) != original_version:
+            stored = current.get()
+            if not constant_time_compare(settings_version, ordinary_settings_version(stored)):
+                raise ValidationError(SETTINGS_CONFLICT_MESSAGE)
+            if replacement is not None and api_token_version(stored.api_token) != token_version:
                 raise ValidationError(TOKEN_CONFLICT_MESSAGE)
-            self.api_token = stored if replacement is None else replacement
+            self.api_token = stored.api_token if replacement is None else replacement
             super().save(**kwargs)
-        del self._token_save_intent
+        del self._settings_save_intent
 
 
+SETTINGS_CONFLICT_MESSAGE = _("The Voxhelm settings changed. Reload settings before saving.")
 TOKEN_CONFLICT_MESSAGE = _("The stored API token changed. Reload settings before replacing or removing it.")
 
 
 def api_token_version(token: str) -> str:
     """Opaque fingerprint of a stored token; the form round-trips it instead of the secret."""
     return salted_hmac("cast.voxhelm.api_token_version", token).hexdigest()
+
+
+def ordinary_settings_version(instance: VoxhelmSettings) -> str:
+    """Fingerprint the persisted values and bind the snapshot to this settings row."""
+    values = (
+        instance.pk,
+        instance.site_id,
+        instance.model,
+        instance.language,
+        instance.diarization_enabled,
+        instance.known_speaker_enabled,
+    )
+    return salted_hmac("cast.voxhelm.ordinary_settings_version", json.dumps(values), algorithm="sha256").hexdigest()
 
 
 class InheritableBooleanSelect(forms.NullBooleanSelect):
@@ -153,6 +170,7 @@ class TokenInput(forms.PasswordInput):
 
 
 class VoxhelmSettingsForm(WagtailAdminModelForm):
+    settings_version = forms.CharField(required=False, widget=forms.HiddenInput, strip=False, max_length=64)
     clear_api_token = forms.BooleanField(
         required=False,
         label=_("Remove stored API token"),
@@ -168,6 +186,8 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         super().__init__(*args, **kwargs)
+        self._initial_settings_version = ordinary_settings_version(self.instance)
+        self.initial["settings_version"] = self._initial_settings_version
         # TokenInput renders the fingerprint of the token stored when the page was
         # rendered, so a replacement or removal from a page opened before another
         # administrator's change is refused. It is deliberately not a form field:
@@ -225,6 +245,8 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
 
     def clean(self) -> dict[str, object]:
         cleaned_data = super().clean()
+        if not constant_time_compare(cleaned_data.get("settings_version", ""), self._initial_settings_version):
+            self.add_error(None, SETTINGS_CONFLICT_MESSAGE)
         if cleaned_data.get("clear_api_token"):
             if self.data.get(self.add_prefix("api_token"), "").strip():
                 self.add_error("clear_api_token", _("Either enter a new token or remove the stored one, not both."))
@@ -244,10 +266,17 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
         return None
 
     def save(self, commit: bool = True) -> VoxhelmSettings:
-        # Keep intent on the model for Wagtail's save(commit=False) path too. The model
-        # rechecks the fingerprint under the row lock for a change after clean().
-        self.instance._token_save_intent = (self._original_api_token_version, self._token_replacement())
-        return super().save(commit=commit)
+        # Carry the submitted snapshots through Wagtail's save(commit=False) path.
+        instance = super().save(commit=False)
+        instance._settings_save_intent = (
+            self.cleaned_data["settings_version"],
+            self._original_api_token_version,
+            self._token_replacement(),
+        )
+        if commit:
+            instance.save()
+            self.save_m2m()
+        return instance
 
     def clean_model(self) -> str:
         return self.cleaned_data["model"].strip()

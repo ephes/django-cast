@@ -11,7 +11,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from cast.models import TranscriptGeneration, VoxhelmSettings
-from cast.models.voxhelm_settings import TokenInput, VoxhelmSettingsForm, api_token_version
+from cast.models.voxhelm_settings import TokenInput, VoxhelmSettingsForm, api_token_version, ordinary_settings_version
 from cast.voxhelm import TranscriptSubmission, VoxhelmTranscriptService
 from cast.voxhelm.service import StaleTranscriptAttempt, TranscriptGenerationActive
 from tests.transcripts.known_speaker_apply_helpers import make_transcript
@@ -20,7 +20,10 @@ from tests.voxhelm.tasks_status_helpers import VALID_DOTE_ARTIFACT, VALID_PODLOV
 
 def settings_form(instance, **data):
     form_class = modelform_factory(VoxhelmSettings, form=VoxhelmSettingsForm, fields=["api_token", "language"])
-    form = form_class(data={"api_token": "", "language": "de", **data}, instance=instance)
+    form = form_class(
+        data={"api_token": "", "language": "de", "settings_version": ordinary_settings_version(instance), **data},
+        instance=instance,
+    )
     assert form.is_valid(), form.errors
     return form
 
@@ -31,7 +34,7 @@ def settings_form(instance, **data):
 def test_blank_form_preserves_token_at_save(site, current_token, commit):
     setting = VoxhelmSettings.objects.create(site=site, api_token="old-synthetic")
     stale = settings_form(VoxhelmSettings.objects.get(pk=setting.pk))
-    settings_form(setting, api_token=current_token, clear_api_token=not current_token, language="en").save()
+    settings_form(setting, api_token=current_token, clear_api_token=not current_token, language="").save()
     saved = stale.save(commit=commit)
     if not commit:
         saved.save()
@@ -201,7 +204,12 @@ def test_form_reports_token_changed_after_render(site, clear):
     rendered = api_token_version("old-synthetic")
     VoxhelmSettings.objects.filter(pk=setting.pk).update(api_token="rotated")
     form_class = modelform_factory(VoxhelmSettings, form=VoxhelmSettingsForm, fields=["api_token", "language"])
-    data = {"api_token": "" if clear else "replacement", "language": "de", "api_token_version": rendered}
+    data = {
+        "api_token": "" if clear else "replacement",
+        "language": "de",
+        "api_token_version": rendered,
+        "settings_version": ordinary_settings_version(setting),
+    }
     if clear:
         data["clear_api_token"] = "on"
     form = form_class(data=data, instance=VoxhelmSettings.objects.get(pk=setting.pk))
@@ -222,7 +230,13 @@ def test_settings_edit_view_refuses_stale_token_replacement(admin_client, site):
     assert "old-synthetic" not in content
     # Another administrator rotates the token after the page was opened.
     VoxhelmSettings.objects.filter(pk=setting.pk).update(api_token="rotated")
-    post = {"api_token_version": rendered, "model": "", "language": "", "diarization_enabled": "unknown"}
+    post = {
+        "api_token_version": rendered,
+        "settings_version": ordinary_settings_version(setting),
+        "model": "",
+        "language": "",
+        "diarization_enabled": "unknown",
+    }
 
     response = admin_client.post(edit_url, {**post, "api_token": "replacement"})
 
@@ -236,6 +250,61 @@ def test_settings_edit_view_refuses_stale_token_replacement(admin_client, site):
     assert response.status_code == 200
     setting.refresh_from_db()
     assert (setting.api_token, setting.language) == ("rotated", "de")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("existing", [True, False])
+def test_settings_edit_view_refuses_stale_ordinary_fields(admin_client, site, existing):
+    if existing:
+        VoxhelmSettings.objects.create(site=site, api_token="old-synthetic", language="fr")
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+
+    def snapshot():
+        response = admin_client.get(edit_url)
+        form = response.context["form"]
+        versions = re.findall(r'<input[^>]*name="settings_version"[^>]*>', response.content.decode())
+        assert len(versions) == 1, versions
+        version = re.search(r'value="([^"]*)"', versions[0]).group(1)
+        return {"language": form["language"].value(), "settings_version": version}
+
+    stale = snapshot()
+    fresh = snapshot()
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        updated = admin_client.post(edit_url, {**fresh, "language": "de", "diarization_enabled": "true"})
+    assert updated.status_code == 302
+
+    response = admin_client.post(edit_url, {**stale, "api_token": "replacement"})
+    assert response.status_code == 200
+    assert "Reload settings before saving" in response.content.decode()
+    assert response.context["form"]["settings_version"].value() == stale["settings_version"]
+    setting = VoxhelmSettings.objects.get(site=site)
+    assert setting.language == "de"
+    assert setting.diarization_enabled is True
+    assert setting.api_token == ("old-synthetic" if existing else "")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("snapshot_data", [{}, {"settings_version": "0" * 64}, {"settings_version": "\x00"}])
+def test_settings_edit_view_refuses_missing_or_invalid_snapshot(admin_client, site, snapshot_data):
+    setting = VoxhelmSettings.objects.create(site=site, language="fr")
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    response = admin_client.post(edit_url, {"language": "de", **snapshot_data})
+    assert response.status_code == 200
+    assert "Reload settings before saving" in response.content.decode()
+    setting.refresh_from_db()
+    assert setting.language == "fr"
+
+
+@pytest.mark.django_db
+def test_ordinary_fields_are_rechecked_at_save(site):
+    setting = VoxhelmSettings.objects.create(site=site, language="fr", api_token="old-synthetic")
+    stale = settings_form(setting, api_token="replacement", language="fr")
+    pending = stale.save(commit=False)
+    VoxhelmSettings.objects.filter(pk=setting.pk).update(language="de")
+    with pytest.raises(ValidationError, match="Reload settings before saving"):
+        pending.save()
+    setting.refresh_from_db()
+    assert (setting.language, setting.api_token) == ("de", "old-synthetic")
 
 
 def test_token_input_without_form_renders_only_the_password_field():

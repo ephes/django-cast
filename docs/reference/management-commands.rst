@@ -590,11 +590,10 @@ Options:
     side effects are not undone.
 
 ``--with-renditions``
-    Generate missing image renditions while creating content.
+    Generate missing preview gallery renditions for this invocation.
 
-Both media options apply only during this command invocation. Existing Django
-settings are restored on success and failure; unflagged calls keep the configured
-defaults.
+Without these flags, the command uses the configured remote-media and rendition
+settings.
 
 On success, the command prints the resolved blog and podcast URLs plus a post
 count summary scoped to the created reference blog.
@@ -627,12 +626,10 @@ Options:
     theme (preferring bootstrap5, bootstrap4, plain in that order).
 
 ``--with-renditions``
-    Generate missing renditions while prefetching. This turns
-    ``CAST_STYLEGUIDE_GENERATE_RENDITIONS`` on for this run only: when the
-    command returns or fails, the setting has its previous value again, or is
-    unset again if the project does not define it. Calling the command with
-    ``call_command`` from a long-running process therefore does not change how
-    the styleguide behaves afterwards.
+    Generate missing preview gallery renditions for this invocation. An
+    invocation without the flag and ordinary styleguide requests use their
+    configured ``CAST_STYLEGUIDE_GENERATE_RENDITIONS`` value, including while
+    the command is running.
 
 On success, the command prints ``Styleguide prefetch complete for theme
 '<theme>'``.
