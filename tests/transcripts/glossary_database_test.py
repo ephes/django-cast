@@ -47,6 +47,27 @@ def test_routed_import_uses_one_alias(routed_podcast, tmp_path, dry_run):
 
 
 @pytest.mark.django_db(databases={"default", "migration_other"})
+def test_routed_import_validates_podcast_id_on_writer(routed_podcast, settings, tmp_path, monkeypatch):
+    class SplitReadRouter(GlossaryRouter):
+        def db_for_read(self, model, **hints):
+            if model is Podcast and not hints.get("instance"):
+                return "default"
+            return super().db_for_read(model, **hints)
+
+    settings.DATABASE_ROUTERS = [SplitReadRouter()]
+    pk = routed_podcast.pk
+    monkeypatch.setattr(connections["default"].ops, "integer_field_range", lambda field: (0, pk - 1))
+    monkeypatch.setattr(connections["migration_other"].ops, "integer_field_range", lambda field: (0, pk))
+    path = write_json(tmp_path, [{"term": "Synthetica"}])
+
+    with connections["default"].execute_wrapper(refuse_default):
+        stdout, stderr = run(str(pk), path)
+
+    assert "created=1" in stdout and not stderr
+    assert TranscriptGlossaryTerm.objects.using("migration_other").get().podcast_id == pk
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
 def test_routed_import_failure_rolls_back_updates_and_inserts(routed_podcast, tmp_path, monkeypatch):
     term = TranscriptGlossaryTerm.objects.create(podcast=routed_podcast, term="Synthetica", notes="old")
     save = TranscriptGlossaryTerm.save

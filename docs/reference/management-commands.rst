@@ -98,6 +98,9 @@ newline-separated string). Existing terms are matched ignoring case and
 updated; entries that fail validation are skipped and reported on stderr. See
 :ref:`transcript_glossary` for the format and the validation rules.
 
+Numeric podcast IDs are checked against the field range of the write database
+used to look up the podcast.
+
 .. code-block:: bash
 
     python manage.py import_transcript_glossary my-podcast glossary.json --dry-run
