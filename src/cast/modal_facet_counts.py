@@ -171,6 +171,10 @@ def _get_param(params: Mapping[str, str], name: str) -> str:
     return str(value)
 
 
+def _date_facet_slug(month: datetime) -> str:
+    return f"{month.year:04d}-{month.month:02d}"
+
+
 def _normalize_date_facet(value: str) -> str:
     if not value:
         return ""
@@ -178,7 +182,7 @@ def _normalize_date_facet(value: str) -> str:
         year_month = parse_date_facets(value)
     except ValueError:
         return ""
-    return year_month.strftime("%Y-%m")
+    return _date_facet_slug(year_month)
 
 
 def _normalize_slug_facet(value: str) -> str:
@@ -273,7 +277,7 @@ def _date_rows_to_counts(rows: Iterable[tuple[datetime | None, int]]) -> dict[st
     for month, count in rows:
         if month is None:
             continue
-        counts[month.strftime("%Y-%m")] = int(count)
+        counts[_date_facet_slug(month)] = int(count)
     return counts
 
 
