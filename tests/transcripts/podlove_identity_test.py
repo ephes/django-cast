@@ -14,7 +14,7 @@ def test_podlove_identity_uses_only_nonnegative_integers(invalid):
     assert podlove.get_texts(data) == [(1, "valid")]
     assert podlove.set_texts(data, {0: "new", 1: "new", -1: "new"}) == 1
     assert data["transcripts"][0]["text"] == "invalid"
-    assert podlove.apply_suggestions(data, {0: "Synthetic", 1: "Synthetic", -1: "Synthetic"}) == 1
+    assert podlove.apply_suggestions(data, {0: "Synthetic", 1: "Synthetic", -1: "Synthetic"}) == (1, True)
     data["transcripts"][0]["speaker"] = "untouched"
     assert podlove.clear_suggestions(data, {0, 1, -1})[0] == 1
     assert data["transcripts"][0]["speaker"] == "untouched"

@@ -1331,7 +1331,9 @@ selected start may match at most one destination in each stored format
 ``TranscriptArtifactError`` through the editor's HTTP 400 replacement boundary.
 Segment review preflights its prospective decisions before saving the sidecar.
 No public file or private sidecar is replaced on refusal. Unambiguous application
-continues to update the stored formats together.
+continues to update the stored formats together. The result counts every
+matched entry, including existing labels that already agree. Podlove and DOTe
+files are replaced only when a speaker field actually changes.
 
 Admin transcript replacement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

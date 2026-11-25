@@ -446,19 +446,19 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         self, names_by_start_ms: dict[int, str], *, replacements: StagedFileReplacementGroup | None = None
     ) -> int:
         data = self._load_transcript_json("podlove")
-        applied = podlove.apply_suggestions(data, names_by_start_ms)
-        if applied:
+        matched, changed = podlove.apply_suggestions(data, names_by_start_ms)
+        if changed:
             self._write_transcript_json("podlove", data, replacements=replacements)
-        return applied
+        return matched
 
     def _apply_suggestions_to_dote(
         self, names_by_start_ms: dict[int, str], *, replacements: StagedFileReplacementGroup | None = None
     ) -> int:
         data = self._load_transcript_json("dote")
-        applied = dote.apply_suggestions(data, names_by_start_ms)
-        if applied:
+        matched, changed = dote.apply_suggestions(data, names_by_start_ms)
+        if changed:
             self._write_transcript_json("dote", data, replacements=replacements)
-        return applied
+        return matched
 
     def _clear_suggestions_from_podlove(
         self, start_milliseconds: set[int], *, replacements: StagedFileReplacementGroup | None = None
