@@ -51,6 +51,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Return 404 when the Django-model feed repository reloads a blog or podcast
+  that was deleted after feed routing selected it.
 - Batch image discovery and repair loading in ``sync_renditions``, preserving
   both regular and gallery roles for shared images.
 - Recheck the source and replacement before retiring each obsolete

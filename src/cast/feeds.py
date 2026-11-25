@@ -100,7 +100,10 @@ class RepositoryMixin(Feed):
             return FeedContext.create_from_cachable_data(data=cachable_data)
         else:
             # create repository from django models
-            blog.refresh_from_db()  # FIXME this is stale sometimes
+            try:
+                blog.refresh_from_db(using=blog._state.db)
+            except blog.DoesNotExist as exc:
+                raise Http404("The selected feed page no longer exists.") from exc
             if self.is_podcast:
                 from .models import Episode
 

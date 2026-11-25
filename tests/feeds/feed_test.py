@@ -39,7 +39,17 @@ from cast.feeds import (
     _psc_start,
     rotate_feed_cache_generation,
 )
-from cast.models import ChapterMark, Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Post, Season
+from cast.models import (
+    Blog,
+    ChapterMark,
+    Contributor,
+    ContributorLink,
+    Episode,
+    EpisodeContributor,
+    Podcast,
+    Post,
+    Season,
+)
 from cast.models.repository import FeedContext
 from tests.factories import BlogFactory, EpisodeFactory
 
@@ -272,6 +282,26 @@ def use_django_repository():
     appsettings.CAST_REPOSITORY = "django"
     yield appsettings.CAST_REPOSITORY
     appsettings.CAST_REPOSITORY = previous
+
+
+def test_model_feed_returns_404_when_selected_blog_disappears(client, blog, monkeypatch, use_django_repository):
+    url = reverse("cast:latest_entries_feed", kwargs={"slug": blog.slug})
+    assert client.get(url).status_code == 200
+    rotate_feed_cache_generation()
+    refresh = Blog.refresh_from_db
+    refresh_aliases = []
+
+    def delete_before_refresh(selected, *, using=None):
+        assert selected.pk == blog.pk
+        refresh_aliases.append(using)
+        Blog.objects.using(blog._state.db).get(pk=blog.pk).delete()
+        refresh(selected, using=using)
+
+    monkeypatch.setattr(Blog, "refresh_from_db", delete_before_refresh)
+    disappeared = client.get(url)
+    initially_absent = client.get(url)
+    assert disappeared.status_code == initially_absent.status_code == 404
+    assert refresh_aliases == [blog._state.db]
 
 
 class TestGeneratedFeeds:
