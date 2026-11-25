@@ -41,6 +41,7 @@ Fixes
 ~~~~~
 
 - Roll back active ``ATOMIC_REQUESTS`` transactions for handled editor API exceptions.
+- Read editor collection breadcrumbs from the same database as the collection page.
 
 - Reject multiple selected episodes sharing one audio object in
   ``generate_transcripts`` before submitting jobs. Select one episode or use

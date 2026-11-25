@@ -632,11 +632,13 @@ class EditorMediaCollectionsView(EditorAPIView):
             raise EditorValidationError({"type": [{"code": "invalid_choice", "message": "Unsupported media type."}]})
 
         paginator = self.pagination_class()
-        page = paginator.paginate_queryset(queryset.order_by("path", "id"), request, view=self)
+        using = queryset.db
+        page = paginator.paginate_queryset(queryset.using(using).order_by("path", "id"), request, view=self)
         assert page is not None
         ancestor_path_set = {path for collection in page for path in _ancestor_paths(collection)}
         ancestors_by_path = {
-            collection.path: collection for collection in Collection.objects.filter(path__in=ancestor_path_set)
+            collection.path: collection
+            for collection in Collection.objects.using(using).filter(path__in=ancestor_path_set)
         }
         return paginator.get_paginated_response(
             [_collection_item(collection, ancestors_by_path=ancestors_by_path) for collection in page]

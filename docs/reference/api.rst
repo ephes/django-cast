@@ -1693,6 +1693,7 @@ Discover upload collections::
 The ``type`` parameter is required and must be one of ``image``, ``audio``, or
 ``video``. Responses use the same pagination envelope. Items include ``id``,
 ``name``, display-only ``breadcrumb``, and ``ancestors`` from root to parent.
+Ancestor names and IDs come from the database used to paginate the collections.
 Discovery returns candidate upload targets; custom permission policies can
 still make a saved audio/video object fail the defensive post-save choose check.
 

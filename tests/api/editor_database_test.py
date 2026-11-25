@@ -272,3 +272,40 @@ def test_editor_error_rolls_back_atomic_request(api_client, monkeypatch):
         "errors": {"title": [{"code": "invalid", "message": "Synthetic error."}]},
     }
     assert not Tag.objects.using(alias).filter(name="Synthetic failed request").exists()
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_editor_collections_use_page_database_for_ancestors(api_client, admin_user, monkeypatch):
+    from wagtail.models import Collection
+
+    from cast.api.editor import media
+
+    alias = "migration_other"
+    default_root = Collection.get_first_root_node()
+    with override_settings(DATABASE_ROUTERS=[EditorRouter()]):
+        routed_root, _ = Collection.objects.update_or_create(
+            path=default_root.path, defaults={"name": "Routed root", "depth": 1}
+        )
+        routed_first = routed_root.add_child(name="First routed collection")
+        routed_second = routed_root.add_child(name="Second routed collection")
+    assert routed_root.path == default_root.path
+    assert routed_root.name != default_root.name
+
+    permitted = Collection.objects.using(alias).filter(pk__in=[routed_second.pk, routed_first.pk])
+    monkeypatch.setattr(media, "_usable_image_collections", lambda user: permitted)
+    api_client.force_authenticate(user=admin_user)
+    url = reverse("cast:api:editor_media_collections")
+    for number, child in enumerate((routed_first, routed_second), start=1):
+        response = api_client.get(url, {"type": "image", "pageSize": 1, "page": number})
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["count"] == 2
+        assert data["results"] == [
+            {
+                "id": child.pk,
+                "name": child.name,
+                "breadcrumb": f"{routed_root.name} / {child.name}",
+                "ancestors": [{"id": routed_root.pk, "name": routed_root.name}],
+            }
+        ]
