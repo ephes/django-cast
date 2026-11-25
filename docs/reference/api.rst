@@ -576,6 +576,9 @@ Editor page writes, sibling slug checks, revisions and publication use one
 transaction on the routed page write database. Page/revision/related models
 must route reads and writes consistently to that database; split layouts and
 users from another database are rejected with a ``database`` validation error.
+Episode creation and updates resolve a submitted season on the admitted
+podcast's database. A missing season and a season belonging to another
+podcast both return the same ``season`` validation error.
 The publish response reloads the concrete page on that write database and uses
 that published page for its status, content and public URL.
 
@@ -687,7 +690,9 @@ Built-in image, audio, video and gallery references are resolved in batches of
 at most 500 distinct IDs. Permission results, including denied IDs, are reused
 only within one conversion, user and routed database, shared across overview
 and detail by the editor. Repeated denied references still report every block's
-validation path. A subsequent request re-evaluates choose permissions.
+validation path. The cache records matches and misses after a batch is read
+successfully, so a retry within the conversion re-reads failed batches and
+reuses completed ones. A subsequent request re-evaluates choose permissions.
 
 Stored body blocks that this API version cannot safely edit are returned as
 ``{"type": "unsupported", "value": {"stored_type": "...", "position":

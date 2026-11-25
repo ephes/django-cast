@@ -805,7 +805,7 @@ class EpisodeEditorMixin(PostEditorMixin):
         # another podcast collapse into one neutral error: distinguishing them would let
         # a caller enumerate Season ids of podcasts they cannot access (the same
         # non-disclosure rule applied to podcast_audio/cover_image above).
-        season = Season.objects.filter(pk=ref["id"], podcast_id=podcast.id).first()
+        season = Season.objects.using(podcast._state.db).filter(pk=ref["id"], podcast_id=podcast.id).first()
         if season is None:
             raise EditorValidationError(
                 {
