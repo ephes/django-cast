@@ -336,6 +336,10 @@ and a local completion task has been queued. Editors see local
 queued/running/succeeded/failed status on the same Episode and Audio edit
 surfaces while the background worker polls Voxhelm, downloads the artifacts,
 and updates the ``Transcript`` model.
+The worker retries unreadable JSON replies, including replies that exceed the
+decoder's nesting limit, until the polling deadline. HTTP errors report the
+status with a bounded detail, or the HTTP reason if the detail cannot be read.
+The client closes the error response stream after reading the detail.
 
 Site admins can manage the Voxhelm API token and optional model/language
 defaults in ``Settings -> Voxhelm settings``. The API base URL is not a site

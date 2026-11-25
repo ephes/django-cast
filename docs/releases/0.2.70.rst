@@ -34,6 +34,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Close Voxhelm HTTP error streams after bounded detail extraction and
+  preserve the HTTP status if reading or closing fails.
+- Let Voxhelm polling retry JSON responses that exceed the decoder's nesting
+  limit, within the existing polling deadline.
+
 - Skip replacing Podlove and DOTe artifacts when reapplying identical speaker
   labels while continuing to report all matched entries.
 

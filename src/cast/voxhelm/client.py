@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 from concurrent.futures import Future, TimeoutError as FutureTimeoutError
+from contextlib import suppress
 from http.client import HTTPException
 from threading import BoundedSemaphore, Thread
 from time import monotonic, sleep
@@ -146,9 +147,13 @@ class VoxhelmClient:
         except HTTPError as exc:
             try:
                 detail = read_http_error_detail(exc, max_bytes=MAX_VOXHELM_ERROR_BYTES)
-            except (HTTPException, OSError):
+            except (HTTPException, OSError, ValueError):
                 # The status is known; a lost error body must not hide it.
                 detail = str(exc.reason)
+            finally:
+                # Closing the owned stream must not mask the HTTP status.
+                with suppress(Exception):
+                    exc.close()
             raise VoxhelmError(f"Voxhelm request failed with status {exc.code}: {detail}") from exc
         except URLError as exc:
             raise VoxhelmConnectionError(f"Voxhelm request failed: {exc.reason}") from exc
@@ -167,9 +172,8 @@ class VoxhelmClient:
         )
         try:
             data = json.loads(raw.decode("utf-8"))
-        except ValueError as exc:
-            # A connection closed early can cut a body short without an error
-            # from the bounded read, so treat an unreadable answer as lost.
+        except (ValueError, RecursionError) as exc:
+            # Treat unreadable bodies as lost replies so polling can retry.
             raise VoxhelmConnectionError(f"Voxhelm returned an incomplete or invalid JSON response: {exc}") from exc
         if not isinstance(data, dict):
             raise VoxhelmError("Voxhelm returned a non-object JSON payload.")
