@@ -351,6 +351,33 @@ def test_find_proposals_fuzzy_matches(jon_glossary):
     assert find_proposals(found, effective, "en") == proposals
 
 
+def test_find_proposals_rejects_only_eligible_candidate_lengths(monkeypatch):
+    effective = EffectiveGlossary(
+        episode_terms=["northstar", "Buttondown", "Gilbert Ryle", "Django on the Med"], language="en"
+    )
+    found = segments("nort hst ar, Button Down, Gilbert Riley's book, Django on the Met.")
+    calls = 0
+    rejects = glossary._Target.rejects
+
+    def count_reject(target, candidate):
+        nonlocal calls
+        calls += 1
+        return rejects(target, candidate)
+
+    monkeypatch.setattr(glossary._Target, "rejects", count_reject)
+    proposals = find_proposals(found, effective, "en")
+    assert [(p.original, p.to) for p in proposals] == [
+        ("Button Down", "Buttondown"),
+        ("Gilbert Riley", "Gilbert Ryle"),
+        ("Django on the Met", "Django on the Med"),
+    ]
+
+    # The three-word canonical "nort hst ar" still protects the eligible two-word prefix.
+    targets = [glossary._Target.build(target) for target in effective.proposal_targets]
+    candidates = glossary._candidates(found[0].text, 5, "en")
+    assert calls == sum(c.words in target.candidate_word_counts for target in targets for c in candidates)
+
+
 def test_find_proposals_skips_common_words_and_existing_spellings():
     effective = EffectiveGlossary(
         [ContributorGlossary("Will Roe")],
@@ -404,16 +431,11 @@ def test_target_rules():
         found = glossary._candidates(text, 4, "xx")
         return max(found, key=lambda item: item.end - item.start)
 
-    assert single.rejects(candidate("Button Down Bay"))  # too many words
     assert single.rejects(candidate("Buttondow n"))  # a one-letter piece
     assert not single.rejects(candidate("Button Down"))
     assert target.rejects(candidate("Six Feet"))  # part of the term
     assert glossary._Target.build(glossary.ProposalTarget("DEP 19", "episode")).rejects(candidate("DEP 10"))
     assert single.rejects(candidate("buttondown.com"))
-    assert glossary._Target.build(glossary.ProposalTarget("spec-kit", "episode")).is_spelled_by(candidate("spec kit"))
-    assert not glossary._Target.build(glossary.ProposalTarget("Go-Giver", "episode")).is_spelled_by(
-        candidate("go giver")
-    )
 
 
 def test_score_filters():

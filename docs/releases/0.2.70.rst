@@ -34,6 +34,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Skip replacing Podlove and DOTe artifacts when reapplying identical speaker
+  labels while continuing to report all matched entries.
+
 - Keep early years zero-padded in modal date facet options and selections so
   clients can use the returned slugs to filter posts.
 - Publish absolute podcast artwork URLs in RSS and Atom when storage returns
@@ -163,6 +166,9 @@ Fixes
 
 Internal
 ~~~~~~~~
+
+- Index fuzzy glossary candidates once per cue by word count and spelling so
+  each term scores only eligible lengths and canonical overlaps stay protected.
 
 - Fetch only the contributor and link fields needed for Wagtail's link selector,
   without joining the contributor into each link row.

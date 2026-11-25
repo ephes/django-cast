@@ -19,6 +19,7 @@ from __future__ import annotations
 import functools
 import logging
 import re
+from collections import defaultdict
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
@@ -701,16 +702,8 @@ class _Target:
             return range(1, 3)
         return range(max(2, self.word_count - 1), self.word_count + 2)
 
-    def is_spelled_by(self, candidate: _Candidate) -> bool:
-        """The candidate already is this target (a lowercase identifier may be read aloud: "spec kit")."""
-        return candidate.normalized == self.normalized or (
-            candidate.key == self.key and self.text == self.text.lower()
-        )
-
     def rejects(self, candidate: _Candidate) -> bool:
-        """Candidates that are no misspelling of this target, whatever their similarity."""
-        if candidate.words not in self.candidate_word_counts:
-            return True
+        """Check an eligible candidate for reasons to skip it before scoring."""
         if candidate.words > self.word_count and min(candidate.piece_lengths) < MIN_TARGET_LETTERS:
             return True  # a word split by the recogniser leaves no one- or two-letter piece
         if candidate.key in self.part_keys:
@@ -804,23 +797,32 @@ def find_proposals(
                     Proposal(segment.start_ms, start, end, text[start:end], target_text, entry.source, 1.0)
                 )
             blocked.append((start, end))
-        candidates = [
-            candidate
-            for candidate in (_candidates(text, max_words, language) if targets else [])
-            if not _overlaps(candidate.start, candidate.end, blocked)
-        ]
+        by_word_count: dict[int, list[_Candidate]] = defaultdict(list)
+        by_normalized: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        by_key: dict[str, list[tuple[int, int]]] = defaultdict(list)
+        for candidate in _candidates(text, max_words, language) if targets else []:
+            if _overlaps(candidate.start, candidate.end, blocked):
+                continue
+            span = (candidate.start, candidate.end)
+            by_word_count[candidate.words].append(candidate)
+            by_normalized[candidate.normalized].append(span)
+            by_key[candidate.key].append(span)
+
         matches: list[tuple[tuple[int, float, int], _Candidate, _Target, float]] = []
         for target in targets:
-            # Where the text already spells this target, overlapping phrases are no misspelling of it.
+            # A canonical spelling can block an overlapping candidate of a different word count.
             present = [match.span() for match in target.pattern.finditer(text)]
-            present.extend((c.start, c.end) for c in candidates if target.is_spelled_by(c))
-            for candidate in candidates:
-                if target.rejects(candidate) or _overlaps(candidate.start, candidate.end, present):
-                    continue
-                score, matching = _score(candidate, target)
-                if score >= SIMILARITY_THRESHOLD:
-                    rank = (-matching, -score, candidate.end - candidate.start)
-                    matches.append((rank, candidate, target, score))
+            present.extend(by_normalized.get(target.normalized, ()))
+            if target.text == target.text.lower():
+                present.extend(by_key.get(target.key, ()))
+            for words in target.candidate_word_counts:
+                for candidate in by_word_count.get(words, ()):
+                    if target.rejects(candidate) or _overlaps(candidate.start, candidate.end, present):
+                        continue
+                    score, matching = _score(candidate, target)
+                    if score >= SIMILARITY_THRESHOLD:
+                        rank = (-matching, -score, candidate.end - candidate.start)
+                        matches.append((rank, candidate, target, score))
         matches.sort(key=lambda item: (item[0], item[1].start, item[2].text))
         taken: list[tuple[int, int]] = []
         for _rank, candidate, target, score in matches:

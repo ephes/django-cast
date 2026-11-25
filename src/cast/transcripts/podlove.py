@@ -32,11 +32,13 @@ def validate_edit_times(data: dict) -> None:
             )
 
 
-def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> int:
+def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> tuple[int, bool]:
+    """Apply speaker names and report the number of matches and whether any field changed."""
     segments = data.get("transcripts")
     if not isinstance(segments, list):
-        return 0
-    applied = 0
+        return 0, False
+    matched = 0
+    changed = False
     for segment in segments:
         if not isinstance(segment, dict):
             continue
@@ -45,10 +47,12 @@ def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> int:
             continue
         name = names_by_start_ms.get(start_ms)
         if name:
-            segment["speaker"] = name
-            segment["voice"] = name
-            applied += 1
-    return applied
+            matched += 1
+            if segment.get("speaker") != name or segment.get("voice") != name:
+                segment["speaker"] = name
+                segment["voice"] = name
+                changed = True
+    return matched, changed
 
 
 def clear_suggestions(data: dict, start_milliseconds: set[int]) -> tuple[int, bool]:

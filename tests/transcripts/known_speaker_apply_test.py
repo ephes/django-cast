@@ -260,6 +260,29 @@ def test_apply_smooths_uncertain_segments_by_default(audio):
 
 
 @pytest.mark.django_db
+def test_reapplying_speaker_suggestions_counts_matches_without_storage_writes(audio, mocker):
+    podlove = copy.deepcopy(PODLOVE)
+    podlove["transcripts"][0]["speaker"] = "Synthetic"
+    speakers = {"segments": [{"start": 10, "speaker": "Synthetic", "speaker_uncertain": False}]}
+    transcript = make_transcript(audio, podlove=podlove, dote=DOTE, vtt=VTT, speakers=speakers)
+    fields = ("podlove", "dote", "vtt")
+    original_names = [getattr(transcript, field).name for field in fields]
+
+    assert transcript.apply_known_speaker_suggestions() == 3
+    assert transcript.podlove_data["transcripts"][0]["voice"] == "Synthetic"
+    assert transcript.dote_data["lines"][0]["speakerDesignation"] == "Synthetic"
+    applied_names = [getattr(transcript, field).name for field in fields]
+    assert all(before != after for before, after in zip(original_names, applied_names, strict=True))
+
+    storages = {getattr(transcript, field).storage for field in fields}
+    saves = [mocker.spy(storage, "save") for storage in storages]
+    assert transcript.apply_known_speaker_suggestions() == 3
+    for save in saves:
+        save.assert_not_called()
+    assert [getattr(transcript, field).name for field in fields] == applied_names
+
+
+@pytest.mark.django_db
 def test_apply_updates_unlabeled_vtt_by_start_time_with_smoothing(audio):
     transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, vtt=VTT, speakers=SPEAKERS)
     with transcript.speakers.open("rb") as speakers_file:

@@ -33,11 +33,13 @@ def dote_timestamp_to_ms(value: object) -> int | None:
     return ((int(hours) * 3600 + int(minutes) * 60 + int(seconds)) * 1000) + millis
 
 
-def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> int:
+def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> tuple[int, bool]:
+    """Apply speaker names and report the number of matches and whether any field changed."""
     lines = data.get("lines")
     if not isinstance(lines, list):
-        return 0
-    applied = 0
+        return 0, False
+    matched = 0
+    changed = False
     for line in lines:
         if not isinstance(line, dict):
             continue
@@ -46,9 +48,11 @@ def apply_suggestions(data: dict, names_by_start_ms: Mapping[int, str]) -> int:
             continue
         name = names_by_start_ms.get(start_ms)
         if name:
-            line["speakerDesignation"] = name
-            applied += 1
-    return applied
+            matched += 1
+            if line.get("speakerDesignation") != name:
+                line["speakerDesignation"] = name
+                changed = True
+    return matched, changed
 
 
 def clear_suggestions(data: dict, start_milliseconds: set[int]) -> tuple[int, bool]:
