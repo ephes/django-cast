@@ -483,6 +483,12 @@ preserve_source_fingerprint=True)`` to keep approvals; code that replaces file
 bytes in place under the same file name calls
 ``Transcript.mark_artifacts_received()`` before saving.
 
+Speaker synchronization expects JSON objects, with an array under Podlove
+``transcripts`` or DOTe ``lines`` when that member is present. An invalid
+shape raises ``TranscriptArtifactError`` before any mapping rows are updated.
+An artifact replacement saved with synchronization also rolls back its
+database changes. Replace the malformed artifact before reviewing speakers.
+
 Generated transcript text is stored with the shared audio file and can appear
 on already published episodes as soon as generation completes. Public speaker
 metadata is stricter: player JSON, public transcript JSON, PodcastIndex JSON,

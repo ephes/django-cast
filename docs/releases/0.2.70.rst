@@ -44,6 +44,9 @@ Fixes
   ``generate_transcripts`` before submitting jobs. Select one episode or use
   ``--audio-id`` directly.
 
+- Refuse malformed Podlove and DOTe JSON shapes during speaker discovery so
+  synchronization preserves approved mappings.
+
 - Validate Voxhelm token changes on the settings write database when database
   routing separates reads and writes.
 

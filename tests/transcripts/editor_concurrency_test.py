@@ -76,13 +76,13 @@ def test_two_mapping_discoveries_serialize(concurrent_transcript, monkeypatch):
     release = threading.Event()
     original_labels = services.get_speaker_labels
 
-    def labels(current):
+    def labels(current, *, strict=False):
         if threading.current_thread().name.endswith("_0"):
             first_read.set()
             assert release.wait(10)
         else:
             second_read.set()
-        return original_labels(current)
+        return original_labels(current, strict=strict)
 
     monkeypatch.setattr(services, "get_speaker_labels", labels)
 
