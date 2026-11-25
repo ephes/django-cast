@@ -41,9 +41,11 @@ or restricted return 404 for visitors who can no longer view the page.
 The comment flag route (``comments-flag``, ``flag/<comment id>/``) still requires
 a login, but it only shows and flags comments that the requester can already
 see: public, not removed, on a target the requester may view. Hidden, removed,
-draft-page and view-restricted comments return 404 for both GET and POST, so
-the confirmation page no longer reveals their author or text. Users with the
-``django_comments.can_moderate`` permission can flag any comment on the site.
+draft-page and view-restricted comments return 404 for both GET and POST.
+The confirmation page uses the same comment that passed the visibility check.
+On POST, databases with row-level locking serialize that check and flag creation
+with changes to the comment. Users with the ``django_comments.can_moderate``
+permission can flag any comment on the site.
 
 .. _comments_configuration:
 

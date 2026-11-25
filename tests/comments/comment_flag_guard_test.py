@@ -2,8 +2,10 @@
 
 import pytest
 from django.contrib.auth.models import Group, Permission
+from django.db import connection
+from django.test import Client
 from django.urls import reverse
-from django_comments import get_model
+from django_comments import get_model, signals
 from django_comments.models import CommentFlag
 from wagtail.models import PageViewRestriction
 
@@ -102,3 +104,51 @@ def test_anonymous_user_is_sent_to_login(client, post, settings):
     response = client.get(flag_url(comment))
     assert response.status_code == 302
     assert HIDDEN_TEXT.encode() not in response.content
+
+
+@pytest.mark.parametrize("method", ["get", "post"])
+def test_flag_uses_one_comment_lookup(member_client, post, settings, method):
+    comment = make_comment(post, settings)
+    lookup_count = 0
+    table = connection.ops.quote_name(comment._meta.db_table)
+
+    def count_lookups(execute, sql, params, many, context):
+        nonlocal lookup_count
+        if sql.startswith("SELECT") and f"FROM {table} " in sql:
+            lookup_count += 1
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(count_lookups):
+        response = getattr(member_client, method)(flag_url(comment))
+
+    assert response.status_code == (200 if method == "get" else 302)
+    assert lookup_count == 1
+
+
+def test_flag_preserves_stock_signal_and_redirect(member_client, post, settings, mocker):
+    comment = make_comment(post, settings)
+    send = mocker.spy(signals.comment_was_flagged, "send")
+
+    for target, expected in [
+        ("/thanks/?a=1#done", f"/thanks/?a=1&c={comment.pk}#done"),
+        ("https://example.invalid/", f"{reverse('comments-flag-done')}?c={comment.pk}"),
+    ]:
+        response = member_client.post(flag_url(comment), {"next": target})
+        assert response.status_code == 302
+        assert response.url == expected
+
+    flag = CommentFlag.objects.get(comment_id=comment.pk, flag=CommentFlag.SUGGEST_REMOVAL)
+    assert [call.kwargs["created"] for call in send.call_args_list] == [True, False]
+    for call in send.call_args_list:
+        assert call.kwargs["sender"] is type(comment)
+        assert call.kwargs["comment"] == comment
+        assert call.kwargs["flag"] == flag
+
+
+def test_flag_post_requires_csrf(post, settings):
+    comment = make_comment(post, settings)
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(UserFactory())
+
+    assert client.post(flag_url(comment)).status_code == 403
+    assert not CommentFlag.objects.filter(comment_id=comment.pk).exists()

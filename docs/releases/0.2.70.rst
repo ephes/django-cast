@@ -19,6 +19,9 @@ Features
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
 
+- Use the admitted comment for flag confirmation and check its visibility under
+  the comment row lock before recording a flag.
+
 - Return 404 on slug-based feed and episode routes when Wagtail cannot resolve
   a site root for the request. Wagtail's configured default site still applies.
 

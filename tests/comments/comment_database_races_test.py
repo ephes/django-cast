@@ -9,10 +9,11 @@ from django.db import close_old_connections, connection, transaction
 from django.test import Client
 from django.urls import reverse
 from django_comments import get_form, get_model
+from django_comments.models import CommentFlag
 
 from cast.comments import author_edits
 from tests.comments.comment_author_edits_helpers import AJAX, seed_ownership
-from tests.factories import PostFactory
+from tests.factories import PostFactory, UserFactory
 
 
 @pytest.mark.django_db(transaction=True)
@@ -285,3 +286,51 @@ def test_comment_save_does_not_wait_on_edited_only_metadata(pg_editor_actors, se
     comment.save(update_fields=["is_removed"])
     meta = metadata.get()
     assert meta.edited and meta.deleted_at is None
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.skipif(connection.vendor != "postgresql", reason="PostgreSQL row-lock semantics")
+def test_flag_admission_waits_for_concurrent_removal(pg_editor_actors, settings):
+    _, blog = pg_editor_actors
+    post = PostFactory(parent=blog, title="Flag race", slug="flag-race", live=True)
+    model = get_model()
+    comment = model.objects.create(content_object=post, site_id=settings.SITE_ID, comment="Original", is_public=True)
+    member = Client()
+    member.force_login(UserFactory())
+    table = connection.ops.quote_name(model._meta.db_table)
+    removal_written = threading.Event()
+    flag_read_started = threading.Event()
+
+    def send_flag():
+        try:
+            assert removal_written.wait(10)
+
+            def observe(execute, sql, params, many, context):
+                if sql.startswith("SELECT") and f"FROM {table} " in sql and not flag_read_started.is_set():
+                    if "FOR UPDATE" in sql:
+                        flag_read_started.set()
+                    else:
+                        # An unlocked reader can see the old version. Let it
+                        # reach that snapshot before the moderator commits.
+                        result = execute(sql, params, many, context)
+                        flag_read_started.set()
+                        return result
+                return execute(sql, params, many, context)
+
+            with connection.cursor() as cursor:
+                cursor.execute("SET lock_timeout = '10s'")
+            with connection.execute_wrapper(observe):
+                return member.post(reverse("comments-flag", args=(comment.pk,)))
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        flag_request = pool.submit(send_flag)
+        with transaction.atomic():
+            model.objects.filter(pk=comment.pk).update(is_removed=True)
+            removal_written.set()
+            assert flag_read_started.wait(10), "Flag request did not read the comment"
+        response = flag_request.result(timeout=15)
+
+    assert response.status_code == 404
+    assert not CommentFlag.objects.filter(comment_id=comment.pk).exists()
