@@ -71,6 +71,9 @@ Podcast Feeds
 Podcast feeds extend blog feeds with additional podcast-specific features:
 
 - iTunes podcast metadata (artwork, categories, explicit content marking)
+- Podcast RSS reports a single ``lastBuildDate`` based on the latest date among
+  the included episodes. If no episode is included, it uses the podcast's
+  publication timestamp when available and otherwise omits the element.
 - Optional episode publishing metadata for iTunes and Podcasting 2.0:
   episode number, episode type, and season
 - Audio file enclosures for episode distribution
@@ -112,7 +115,14 @@ Additional metadata for podcast feeds:
   resolve relative storage URLs against the feed request and retain absolute
   artwork URLs from external storage.
 - **iTunes Subtitle**: From the blog's subtitle field
-- **iTunes Categories**: Podcast directory categorization
+- **iTunes Categories**: Leave blank or enter a JSON object such as
+  ``{"Technology": ["Gadgets"], "Arts": []}``. Category and subcategory names
+  must be nonblank text suitable for XML attributes. The Wagtail page editor and
+  the Django admin reject other values on every save, so an editor must correct
+  a stored legacy value before saving the podcast again. Saves outside these
+  forms, for example during automatic episode numbering, still accept legacy
+  values. Feeds omit invalid legacy categories or subcategories and keep the
+  valid entries.
 - **Explicit Content**: Content rating flag
 - **Podcast Type**: Optional ``episodic`` or ``serial`` channel ordering value
   emitted as ``itunes:type`` only when explicitly configured.

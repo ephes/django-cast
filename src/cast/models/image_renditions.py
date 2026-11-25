@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from contextlib import suppress
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeAlias
@@ -83,7 +84,8 @@ def get_obsolete_and_missing_rendition_strings(
     By default only database rows are compared, which keeps publication and
     gallery paths free of per-rendition storage requests. With
     ``check_files=True`` (``sync_renditions``) a required row whose stored file
-    is absent also counts as missing.
+    is absent also counts as missing. If ``using`` is explicit, all
+    database-bound images must come from that alias.
     """
     images_with_type = list(images_with_type)
     aliases = {image._state.db for _, image in images_with_type if hasattr(image, "_state")}
@@ -91,6 +93,8 @@ def get_obsolete_and_missing_rendition_strings(
         if len(aliases) > 1:
             raise ValueError("Rendition inventory requires images from one database.")
         using = next(iter(aliases), None)
+    elif aliases - {None, using}:
+        raise ValueError(f"Rendition inventory requires images from database {using!r}.")
     required_renditions: set[tuple[int, str]] = set()
     srgb_counterpart_renditions: set[tuple[int, str]] = set()
     for image_type, image in images_with_type:
@@ -100,11 +104,17 @@ def get_obsolete_and_missing_rendition_strings(
     all_image_ids = {image_id for image_id, filter_string in required_renditions}
     renditions = rendition_model.objects if using is None else rendition_model.objects.using(using)
     renditions_queryset = renditions.filter(image__in=all_image_ids)
-    existing_rendition_to_id = {
-        (image_id, filter_spec): pk
-        for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec")
-    }
-    existing_renditions = set(existing_rendition_to_id.keys())
+    # Only retire known gallery thumbnail counterparts whose specs are no
+    # longer required. Other Wagtail specs do not encode cast ownership.
+    obsolete_specs = srgb_counterpart_renditions - required_renditions
+    existing_renditions: set[tuple[int, str]] = set()
+    obsolete_rendition_pks: set[int] = set()
+    for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec"):
+        key = (image_id, filter_spec)
+        if key in required_renditions:
+            existing_renditions.add(key)
+        elif key in obsolete_specs:
+            obsolete_rendition_pks.add(pk)
     # Inspect only required keys, once per storage/key even for repeated images.
     exists: dict[tuple[int, str], bool] = {}
     for rendition in renditions_queryset if check_files else ():
@@ -115,15 +125,6 @@ def get_obsolete_and_missing_rendition_strings(
                 exists[storage_key] = bool(rendition.file.name) and rendition.file.storage.exists(rendition.file.name)
             if not exists[storage_key]:
                 existing_renditions.discard(key)
-    obsolete_renditions_unfiltered = existing_renditions - required_renditions
-
-    # Only remove known predecessor/successor specs from django-cast's gallery thumbnail sRGB policy.
-    # Generic Wagtail filter specs such as ``width-400`` do not encode ownership and must be preserved.
-    obsolete_renditions = obsolete_renditions_unfiltered & srgb_counterpart_renditions
-    obsolete_rendition_pks = {
-        existing_rendition_to_id[(image_id, filter_spec)] for image_id, filter_spec in obsolete_renditions
-    }
-
     # build missing renditions aggregated by image id
     missing_renditions = required_renditions - existing_renditions
     missing_renditions_by_image_id: dict[int, set[str]] = {}  # why mypy?
@@ -260,7 +261,8 @@ def discard_unreferenced_rendition_files(written: Iterable[tuple[Storage, str]],
                 continue
             storage.delete(name)
         except Exception:
-            logger.warning("Could not remove orphaned rendition file %s", name, exc_info=True)
+            with suppress(Exception):
+                logger.warning("Could not remove orphaned rendition file %s", name, exc_info=True)
 
 
 def create_missing_renditions_for_posts(posts: Iterable["Post"]) -> None:

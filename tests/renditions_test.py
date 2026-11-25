@@ -1,6 +1,12 @@
-import pytest
-from django.test import override_settings
+from io import BytesIO
 
+import pytest
+from django.core.files.base import ContentFile
+from django.test import override_settings
+from PIL import Image as PillowImage
+
+from cast.blocks import get_srcset_images_for_slots
+from cast.models.repository import deserialize_renditions, serialize_renditions
 from cast.renditions import (
     DEFAULT_IMAGE_FORMATS,
     IMAGE_TYPE_TO_SLOTS,
@@ -240,8 +246,9 @@ def test_default_image_formats_is_runtime_sequence():
 
 
 class RenditionStub:
-    def __init__(self, url):
+    def __init__(self, url, width=None):
         self.url = url
+        self.width = width
 
 
 def test_gallery_thumbnail_uses_existing_pre_srgb_renditions_until_sync():
@@ -291,6 +298,47 @@ def test_gallery_thumbnail_uses_existing_srgb_renditions_when_policy_is_disabled
 
     assert thumbnail.src == {"jpeg": "/srgb-120.jpg"}
     assert thumbnail.srcset == {"jpeg": "/srgb-120.jpg 120w, /srgb-240.jpg 240w, /srgb-360.jpg 360w"}
+
+
+@pytest.mark.parametrize("cached", [None, "with-width", "without-width"])
+@pytest.mark.parametrize("formats", [["webp"], ["jpeg", "webp"]])
+def test_format_only_srcset_uses_converted_image_width(disk_image, settings, cached, formats):
+    settings.CAST_REGULAR_IMAGE_SLOT_DIMENSIONS = [(900, 900)]
+    settings.CAST_IMAGE_FORMATS = formats
+    data = BytesIO()
+    PillowImage.new("RGB", (1000, 1000)).save(data, "JPEG")
+    disk_image.file = ContentFile(data.getvalue(), name="synthetic.jpg")
+    disk_image.save()
+    rendition = disk_image.get_rendition("format-webp")
+    assert rendition.width == 1000
+    if cached:
+        data_by_post = serialize_renditions({1: [rendition]})
+        if cached == "without-width":
+            del data_by_post[1][0]["width"]
+        rendition = deserialize_renditions(data_by_post)[1][0]
+        if cached == "without-width":
+            rendition.width = None
+
+    slot = next(iter(get_srcset_images_for_slots(disk_image, "regular", {"format-webp": rendition}).values()))
+
+    assert slot.width == 900
+    assert slot.src["webp"] == rendition.url
+    assert slot.srcset["webp"] == f"{rendition.url} 1000w"
+
+
+def test_format_only_srcset_uses_selected_counterpart_width():
+    slot = Rectangle(Width(900), Height(900))
+    filters = RenditionFilters(
+        image=Rectangle(Width(1000), Height(1000)),
+        original_format="jpeg",
+        slots=[slot],
+        image_formats=["webp"],
+        normalize_to_srgb_slots=[slot],
+        srgb_counterpart_fallback_slots=[slot],
+    )
+    filters.set_filter_to_url_via_wagtail_renditions({"format-webp": RenditionStub("/converted.webp", width=999)})
+
+    assert filters.get_srcset_for_slot(slot) == {"webp": "/converted.webp 999w"}
 
 
 def test_srcset_keeps_width_matched_to_each_available_rendition():

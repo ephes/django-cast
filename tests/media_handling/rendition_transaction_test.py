@@ -1,5 +1,6 @@
 """Synthetic storage writes follow the rendition transaction outcome."""
 
+import logging
 from pathlib import Path
 
 import pytest
@@ -62,6 +63,57 @@ def test_sync_compensates_completed_writes_after_rollback(
         assert "Could not remove orphaned rendition file" in caplog.text
     else:
         assert after_files == before_files
+
+
+@pytest.mark.django_db
+def test_publication_rendition_rollback_survives_logging_failure(disk_image, mocker):
+    from cast.models.image_renditions import create_missing_renditions_for_images, logger
+
+    class BrokenHandler(logging.Handler):
+        def emit(self, record):
+            raise RuntimeError("synthetic logging failure")
+
+    storage = Rendition._meta.get_field("file").storage
+    store = storage.save
+    written = []
+
+    def record_write(*args, **kwargs):
+        name = store(*args, **kwargs)
+        written.append(name)
+        return name
+
+    publish_failure = OSError("synthetic rendition write failure")
+    save_row = Rendition.save
+
+    def save_or_fail(rendition, *args, **kwargs):
+        if len(written) == 2:
+            raise publish_failure
+        return save_row(rendition, *args, **kwargs)
+
+    delete = storage.delete
+
+    def delete_or_fail(name):
+        if name == written[0]:
+            raise OSError("synthetic orphan delete failure")
+        delete(name)
+
+    mocker.patch.object(storage, "save", side_effect=record_write)
+    mocker.patch.object(Rendition, "save", save_or_fail)
+    delete_attempt = mocker.patch.object(storage, "delete", side_effect=delete_or_fail)
+    handler = BrokenHandler()
+    logger.addHandler(handler)
+    try:
+        with pytest.raises(OSError) as exc:
+            create_missing_renditions_for_images({disk_image.pk: {"width-1", "height-1"}})
+    finally:
+        logger.removeHandler(handler)
+        handler.close()
+
+    assert exc.value is publish_failure
+    assert not disk_image.renditions.exists()
+    assert [call.args[0] for call in delete_attempt.call_args_list] == written
+    assert storage.exists(written[0])
+    assert not storage.exists(written[1])
 
 
 @pytest.mark.django_db

@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from time import mktime
 from types import SimpleNamespace
 from urllib.parse import urlparse
@@ -8,15 +8,18 @@ import feedparser
 import pytest
 import pytz
 from django.conf import settings as django_settings
+from django.contrib import admin
 from django.contrib.sites import models as sites_models
 from django.contrib.sites.models import Site as DjangoSite
 from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured
 from django.http import Http404
 from django.urls import resolve, reverse
+from django.utils.feedgenerator import rfc2822_date
 from wagtail.models import PageViewRestriction
 
 from cast import appsettings
+from cast.admin import PodcastModelAdmin
 from cast.devdata import create_transcript
 from cast.feeds import (
     PSC_NAMESPACE,
@@ -27,12 +30,14 @@ from cast.feeds import (
     LatestEntriesFeed,
     PodcastFeed,
     PodcastIndexElements,
+    RssITunesFeedGenerator,
     RssPodcastFeed,
     _episode_season_data,
     _feed_stylesheets,
     _is_itunes_type,
     _is_positive_integer,
     _psc_start,
+    rotate_feed_cache_generation,
 )
 from cast.models import ChapterMark, Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Post, Season
 from cast.models.repository import FeedContext
@@ -126,6 +131,139 @@ def test_podcast_feed_artwork_uses_absolute_url(
     assert artwork is not None
     assert artwork.get("href") == expected_url
     assert channel.findtext(image_path) == expected_url
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        ("null", {}),
+        ("not JSON", {}),
+        ('{"Technology": "Gadgets"}', {}),
+        (
+            r'{"Technology": ["Gadgets", 1, null, "", " ", "bad\u0000"], "Arts": [], " ": ["Books"]}',
+            {"Technology": ["Gadgets"], "Arts": []},
+        ),
+    ],
+)
+def test_rss_normalizes_legacy_itunes_categories(client, podcast, use_dummy_cache_backend, stored, expected):
+    Podcast.objects.filter(pk=podcast.pk).update(itunes_categories=stored)
+    url = reverse("cast:podcast_feed_rss", kwargs={"slug": podcast.slug, "audio_format": "mp3"})
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    category_tag = "{http://www.itunes.com/dtds/podcast-1.0.dtd}category"
+    root = ElementTree.fromstring(response.content)
+    assert {
+        category.get("text"): [child.get("text") for child in category.findall(category_tag)]
+        for category in root.findall(f"./channel/{category_tag}")
+    } == expected
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    ["null", "not JSON", '{"Technology": "Gadgets"}', '{" ": []}', '{"Arts": ["Books", 1]}'],
+)
+@pytest.mark.parametrize("editor", ["wagtail", "django-admin"])
+def test_podcast_editor_rejects_invalid_itunes_category_shape(podcast, rf, invalid, editor):
+    if editor == "wagtail":
+        form_class = Podcast.get_edit_handler().get_form_class()
+    else:
+        request = rf.get("/")
+        request.user = podcast.owner
+        form_class = PodcastModelAdmin(Podcast, admin.site).get_form(request)
+
+    def category_errors(value):
+        return form_class(instance=podcast, data={"itunes_categories": value}).errors.get("itunes_categories")
+
+    assert category_errors(invalid) == ["Enter a JSON object mapping category names to lists of subcategory names."]
+    assert category_errors('{"Technology": ["Gadgets"], "Arts": []}') is None
+    assert category_errors("") is None
+
+
+def test_legacy_itunes_categories_do_not_block_internal_podcast_saves(podcast, audio, body):
+    Podcast.objects.filter(pk=podcast.pk).update(
+        itunes_categories="Technology",
+        automatic_episode_numbering_enabled=True,
+        next_episode_number=1,
+    )
+    podcast.refresh_from_db()
+    podcast.full_clean()
+    episode = EpisodeFactory(
+        owner=podcast.owner,
+        parent=podcast,
+        title="legacy categories",
+        slug="legacy-categories",
+        live=False,
+        first_published_at=None,
+        podcast_audio=audio,
+        body=body,
+    )
+
+    episode.save_revision().publish()
+
+    episode.refresh_from_db()
+    podcast.refresh_from_db()
+    assert episode.live is True
+    assert episode.episode_number == 1
+    assert podcast.next_episode_number == 2
+    assert podcast.itunes_categories == "Technology"
+
+
+@pytest.mark.parametrize("repository", ["default", "django"])
+@pytest.mark.parametrize("has_publication_date", [False, True])
+def test_empty_podcast_rss_build_date_is_stable(
+    client, episode, monkeypatch, mocker, repository, has_publication_date
+):
+    podcast = episode.podcast
+    published = datetime(2024, 1, 1, tzinfo=timezone.utc) if has_publication_date else None
+    Podcast.objects.filter(pk=podcast.pk).update(first_published_at=published, last_published_at=published)
+    Episode.objects.filter(pk=episode.pk).update(live=False)
+    episode.refresh_from_db()
+    monkeypatch.setattr(appsettings, "CAST_REPOSITORY", repository)
+    now = mocker.patch("django.utils.timezone.now", return_value=datetime(2025, 1, 1, tzinfo=timezone.utc))
+    monkeypatch.setattr(RssPodcastFeed, "ttl", 5, raising=False)
+    monkeypatch.setattr(RssPodcastFeed, "feed_copyright", "Synthetic copyright", raising=False)
+    render = mocker.spy(RssPodcastFeed, "get_feed")
+    url = reverse("cast:podcast_feed_rss", kwargs={"slug": podcast.slug, "audio_format": "m4a"})
+    expected_dates = [rfc2822_date(published)] if published else []
+
+    def get_channel():
+        response = client.get(url)
+        assert response.status_code == 200
+        return ElementTree.fromstring(response.content).find("channel")
+
+    rotate_feed_cache_generation()
+    cold = get_channel()
+    now.return_value = datetime(2025, 1, 2, tzinfo=timezone.utc)
+    warm = get_channel()
+    assert render.call_count == 1
+    rotate_feed_cache_generation()
+    fresh = get_channel()
+    assert render.call_count == 2
+    for channel in (cold, warm, fresh):
+        assert channel.findall("item") == []
+        assert [date.text for date in channel.findall("lastBuildDate")] == expected_dates
+
+    episode.save_revision().publish()
+    episode.refresh_from_db()
+
+    rotate_feed_cache_generation()
+    populated = get_channel()
+    assert populated.findtext("ttl") == "5"
+    assert populated.findtext("copyright") == "Synthetic copyright"
+    assert populated.findtext("item/title") == episode.title
+    expected = rfc2822_date(max(episode.visible_date, episode.last_published_at))
+    assert [date.text for date in populated.findall("lastBuildDate")] == [expected]
+
+
+def test_podcast_rss_can_omit_optional_channel_metadata(podcast):
+    generator = RssITunesFeedGenerator("Synthetic Podcast", "https://example.com/", "Description", blog=podcast)
+
+    channel = ElementTree.fromstring(generator.writeString("utf-8")).find("channel")
+
+    assert channel.find("{http://www.w3.org/2005/Atom}link") is None
+    assert channel.find("language") is None
 
 
 @pytest.fixture()

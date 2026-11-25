@@ -34,6 +34,19 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Validate iTunes category mappings in the Wagtail editor and Django admin, and
+  keep valid category entries when generating feeds from legacy data.
+- Emit a single stable podcast RSS build date using stored publication dates
+  and omit it when no date is available.
+- Use the converted image's intrinsic width in ``srcset`` for format-only
+  renditions while preserving each slot's display width.
+- Preserve the original rendition publication error and continue rollback cleanup
+  if reporting an orphan-file deletion failure raises.
+- Reject rendition inventory inputs from a database other than the explicit
+  alias, even when the image IDs exist on both databases.
+- Retire every focal-point row for an obsolete gallery thumbnail counterpart
+  after verifying the replacement policy's renditions.
+
 - Keep code block rendering and editor validation available during highlight
   cache outages.
 - Continue through the query-free player permalink fallbacks when a cached

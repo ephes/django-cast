@@ -354,9 +354,17 @@ The full rendering pipeline works as follows:
 4. The ``get_image_for_slot()`` method produces an ``ImageForSlot`` object
    that is attached to the image and passed to the template context. If several
    slots fall back to the original, they reuse the same storage URL in their
-   ``src`` and ``srcset`` values and keep the dimensions calculated for each slot.
+   ``src`` and ``srcset`` values and keep the display dimensions calculated for
+   each slot. The ``srcset`` width descriptors use the dimensions of the stored
+   rendition, including full-size format conversions. If older cached data
+   lacks a width for a format-only rendition, the original width is used.
 5. Theme templates use the ``ImageForSlot`` attributes to render
    ``<picture>`` elements with appropriate ``<source>`` and ``<img>`` tags.
+
+Rendition inventory uses a single database. Callers passing an explicit
+``using`` alias to ``get_obsolete_and_missing_rendition_strings()`` must supply
+images bound to that alias. The planner rejects an alias mismatch before
+querying rendition rows.
 
 To create missing renditions in bulk (e.g. after changing slot dimensions,
 image formats, or gallery thumbnail color-profile policy), run this one-off

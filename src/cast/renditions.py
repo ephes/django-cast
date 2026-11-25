@@ -114,7 +114,7 @@ class RenditionFilter:
     A rendition filter for an image that fits into a slot.
     """
 
-    width: Width  # width of the rendition
+    width: Width  # filter selection width
     slot: Rectangle  # slot the image needs to fit into
     format: ImageFormat  # desired image format
     normalize_to_srgb: bool = False  # whether to compact profiled raster renditions to sRGB
@@ -230,6 +230,7 @@ class RenditionFilters:
             self.slot_to_fitting_width[slot] = Width(calculate_fitting_width(image, slot))
         self.filters = self.build_filters()
         self.filter_to_url: dict[str, str] = {}
+        self._filter_to_width: dict[str, int] = {}
 
     @classmethod
     def from_wagtail_image(
@@ -267,8 +268,10 @@ class RenditionFilters:
         )
 
     def set_filter_to_url_via_wagtail_renditions(self, renditions: dict[str, AbstractRendition]) -> None:
-        # self.filter_to_url = {fs: renditions[fs].url for fs in self.filter_strings}
-        self.filter_to_url = {fs: renditions[fs].url for fs in renditions}
+        self.filter_to_url = {spec: rendition.url for spec, rendition in renditions.items()}
+        self._filter_to_width = {
+            spec: width for spec, rendition in renditions.items() if (width := getattr(rendition, "width", None))
+        }
 
     def build_filters(self) -> Filters:
         """
@@ -354,13 +357,16 @@ class RenditionFilters:
 
     def get_url_for_filter(self, rendition_filter: RenditionFilter, *, allow_srgb_counterpart: bool) -> str | None:
         """Return a rendition URL, optionally falling back across the thumbnail sRGB policy boundary."""
+        spec = self._available_filter_spec(rendition_filter, allow_srgb_counterpart=allow_srgb_counterpart)
+        return self.filter_to_url.get(spec)
+
+    def _available_filter_spec(self, rendition_filter: RenditionFilter, *, allow_srgb_counterpart: bool) -> str:
         filter_spec = rendition_filter.get_wagtail_filter_str(self.original_format)
-        url = self.filter_to_url.get(filter_spec)
-        if url is not None or not allow_srgb_counterpart:
-            return url
+        if filter_spec in self.filter_to_url or not allow_srgb_counterpart:
+            return filter_spec
         counterpart_filter_spec = get_srgb_counterpart_filter_spec(filter_spec)
         assert counterpart_filter_spec is not None
-        return self.filter_to_url.get(counterpart_filter_spec)
+        return counterpart_filter_spec
 
     def get_srcset_for_slot(self, slot: Rectangle) -> dict[ImageFormat, str]:
         srcset = {}
@@ -369,12 +375,18 @@ class RenditionFilters:
             filters_for_format = filters_for_slot[image_format]
             srcset_parts = []
             for rendition_filter in filters_for_format:
-                url = self.get_url_for_filter(
+                spec = self._available_filter_spec(
                     rendition_filter,
                     allow_srgb_counterpart=slot in self.srgb_counterpart_fallback_slots,
                 )
-                if url is not None:
-                    srcset_parts.append(f"{url} {rendition_filter.width}w")
+                if (url := self.filter_to_url.get(spec)) is not None:
+                    fallback_width = (
+                        self.image.width
+                        if isinstance(rendition_filter, FormatRenditionFilter)
+                        else rendition_filter.width
+                    )
+                    width = self._filter_to_width.get(spec, fallback_width)
+                    srcset_parts.append(f"{url} {width}w")
             srcset[image_format] = ", ".join(srcset_parts)
         return srcset
 

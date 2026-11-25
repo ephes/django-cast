@@ -11,11 +11,12 @@ from django.core.management import call_command
 from django.db import connections
 from django.test.utils import CaptureQueriesContext
 from PIL import Image as PillowImage
-from wagtail.images.models import Image, Rendition
+from wagtail.images.models import Filter, Image, Rendition
 from wagtail.models import Collection
 
 from cast.models import Gallery
 from cast.models.image_renditions import (
+    create_missing_renditions_for_images,
     create_missing_renditions_for_posts,
     get_all_filterstrings,
     get_obsolete_and_missing_rendition_strings,
@@ -92,6 +93,40 @@ def test_sync_repairs_existing_row_with_missing_file(
 
 
 @pytest.mark.django_db
+def test_sync_removes_every_obsolete_gallery_focal_row(post, disk_image, settings):
+    settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [(40, 40), (10, 10)]
+    settings.CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = True
+    settings.CAST_IMAGE_FORMATS = ["png"]
+    data = BytesIO()
+    PillowImage.new("RGB", (100, 100), "red").save(data, "PNG")
+    disk_image.file = SimpleUploadedFile("gallery.png", data.getvalue(), "image/png")
+    disk_image.save()
+    gallery = Gallery.objects.create()
+    gallery.images.add(disk_image)
+    post.galleries.add(gallery)
+    gallery.create_renditions()
+
+    replacement = disk_image.renditions.get(filter_spec="width-10|srgb")
+    obsolete = disk_image.get_rendition("width-10")
+    with obsolete.file.open("rb") as file:
+        other_focal_row = disk_image.renditions.create(
+            filter_spec=obsolete.filter_spec,
+            focal_point_key="older-focus",
+            file=SimpleUploadedFile("old-focus.png", file.read()),
+        )
+    unrelated = disk_image.get_rendition("fill-8x8")
+    assert replacement.file.storage.exists(replacement.file.name)
+
+    call_command("sync_renditions", post_slug=post.slug)
+
+    assert not disk_image.renditions.filter(pk__in=[obsolete.pk, other_focal_row.pk]).exists()
+    assert disk_image.renditions.filter(pk=unrelated.pk).exists()
+    assert unrelated.file.storage.exists(unrelated.file.name)
+    assert disk_image.renditions.filter(pk=replacement.pk).exists()
+    assert replacement.file.storage.exists(replacement.file.name)
+
+
+@pytest.mark.django_db
 def test_planning_checks_each_required_storage_key_once(disk_image, mocker):
     image = disk_image
     rendition = image.get_rendition("width-1")
@@ -118,6 +153,38 @@ def test_inventory_refuses_mixed_database_identities(disk_image):
     other._state.db = "migration_other"
     with pytest.raises(ValueError, match="one database"):
         get_obsolete_and_missing_rendition_strings([("regular", disk_image), ("regular", other)])
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("include_local", [False, True])
+def test_inventory_rejects_explicit_alias_for_foreign_images(disk_image, settings, include_local):
+    settings.CAST_IMAGE_FORMATS = ["webp"]
+    alias = "migration_other"
+    collection = Collection.get_first_root_node()
+    Collection.objects.using(alias).create(
+        pk=collection.pk, name="Synthetic", path=collection.path, depth=1, numchild=0
+    )
+    other = Image(pk=disk_image.pk, title="Other alias", collection_id=collection.pk, file=disk_image.file.name)
+    other.save(using=alias)
+    disk_image.create_rendition(Filter("format-webp"))
+    other.create_rendition(Filter("format-jpeg"))
+
+    inputs = [("regular", other)]
+    if include_local:
+        inputs.append(("regular", disk_image))
+    with CaptureQueriesContext(connections["default"]) as default_queries:
+        with CaptureQueriesContext(connections[alias]) as other_queries:
+            with pytest.raises(ValueError, match="database"):
+                get_obsolete_and_missing_rendition_strings(inputs, using="default", check_files=True)
+    assert not default_queries
+    assert not other_queries
+
+    assert get_obsolete_and_missing_rendition_strings([("regular", disk_image)], using="default") == (set(), {})
+    plan = get_obsolete_and_missing_rendition_strings([("regular", other)], using=alias, check_files=True)
+    assert plan == (set(), {other.pk: {"format-webp"}})
+    create_missing_renditions_for_images(plan[1], using=alias)
+    assert set(other.renditions.values_list("filter_spec", flat=True)) == {"format-webp", "format-jpeg"}
+    assert list(disk_image.renditions.values_list("filter_spec", flat=True)) == ["format-webp"]
 
 
 @pytest.mark.django_db
