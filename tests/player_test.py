@@ -761,6 +761,30 @@ def test_player_payload_uses_request_local_page_link_cache(audio, episode, rf_re
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("fallback", ["episode", "page-link", "wagtail"])
+def test_player_payload_skips_invalid_cached_permalinks(rf_request, django_assert_num_queries, fallback):
+    from types import SimpleNamespace
+
+    from cast.wagtail_hooks import PageLinkHandlerWithCache
+
+    audio = SimpleNamespace(pk=1, title="Episode", subtitle="", duration=None, chapters=[])
+    episode = SimpleNamespace(
+        pk=2,
+        page_url="/episode/" if fallback == "episode" else "mailto:episode@example.test",
+        url_path="/podcast/episode/",
+        get_url_parts=lambda request: (1, "http://testserver", "/wagtail/"),
+    )
+    post = SimpleNamespace(page_url="https://[", specific=episode)
+    PageLinkHandlerWithCache.cache_url(episode.pk, "/page-link/" if fallback != "wagtail" else "ftp://example.test")
+    rf_request._wagtail_cached_site_root_paths = [(1, "/", "http://testserver")]
+
+    with django_assert_num_queries(0):
+        payload = build_player_payload(audio, post=post, request=rf_request)
+
+    assert payload["permalink"] == f"http://testserver/{fallback}/"
+
+
+@pytest.mark.django_db
 def test_player_payload_uses_wagtail_request_site_cache(audio, episode):
     from django.test import RequestFactory
 

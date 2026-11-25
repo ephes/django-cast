@@ -382,23 +382,23 @@ def _post_permalink(post: Any, episode: Any, request: Any) -> str:
     """Return the playing post's HTTP(S) URL from already-resolved sources only.
 
     Payloads are built for every card on cached overview pages, so the permalink
-    must not add per-render database work. Sources, in order: a ``page_url`` the
-    repository attached to the post, cast's request-local page-link URL cache
-    (filled by repositories for every listed post), and Wagtail's request-scoped
-    site-root cache. When none is available the permalink is omitted; callers
-    that know the URL can pass it to :func:`build_player_payload` explicitly.
+    must not add per-render database work. Use the first valid URL from the
+    post's ``page_url``, the specific episode's ``page_url``, cast's request-local
+    page-link URL cache, or Wagtail's request-scoped site-root cache. When none
+    is valid the permalink is omitted; callers that know the URL can pass it to
+    :func:`build_player_payload` explicitly.
     """
     for candidate in (post, episode):
-        page_url = getattr(candidate, "page_url", None)
-        if isinstance(page_url, str) and page_url:
-            return _http_permalink(page_url, request)
+        permalink = _http_permalink(getattr(candidate, "page_url", None), request)
+        if permalink:
+            return permalink
     post_id = getattr(episode, "pk", None)
     if isinstance(post_id, int):
         from .wagtail_hooks import PageLinkHandlerWithCache
 
-        cached_url = PageLinkHandlerWithCache.cache.get(post_id)
-        if cached_url:
-            return _http_permalink(cached_url, request)
+        permalink = _http_permalink(PageLinkHandlerWithCache.cache.get(post_id), request)
+        if permalink:
+            return permalink
     if request is None:
         return ""
     return _http_permalink(_request_cached_page_url(episode, request), request)
