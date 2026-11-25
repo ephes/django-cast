@@ -1,7 +1,7 @@
 import re
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -10,7 +10,7 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import InMemoryStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, connection, connections
+from django.db import IntegrityError, connection, connections, transaction
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.response import Response
@@ -102,6 +102,15 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
 def test_collection_breadcrumbs_survive_move_after_page_read(api_client, monkeypatch, use_snapshot):
     if not use_snapshot:
         monkeypatch.setattr(editor_media, "_collection_read_snapshot", lambda using: nullcontext(False))
+    elif connection.vendor != "postgresql":
+        # Only PostgreSQL takes the snapshot in production; a WAL read
+        # transaction exercises the same view branch on SQLite.
+        @contextmanager
+        def wal_snapshot(using):
+            with transaction.atomic(using=using):
+                yield True
+
+        monkeypatch.setattr(editor_media, "_collection_read_snapshot", wal_snapshot)
 
     root = Collection.get_first_root_node() or Collection.add_root(name="Synthetic root")
     destination = root.add_child(name="Destination")
@@ -162,6 +171,17 @@ def test_collection_breadcrumbs_survive_move_after_page_read(api_client, monkeyp
         if original_mode is not None:
             with connection.cursor() as cursor:
                 cursor.execute(f"PRAGMA journal_mode={original_mode}")
+
+
+@pytest.mark.django_db
+def test_collection_read_snapshot_opens_no_sqlite_transaction(mocker):
+    db = mocker.MagicMock(vendor="sqlite")
+    mocker.patch.object(editor_media, "connections", {"default": db})
+    atomic = mocker.patch.object(editor_media.transaction, "atomic")
+    with editor_media._collection_read_snapshot("default") as has_snapshot:
+        assert has_snapshot is False
+    atomic.assert_not_called()
+    db.cursor.assert_not_called()
 
 
 @pytest.mark.django_db
