@@ -184,6 +184,9 @@ class TestTranscriptSpeakerMapping:
             ("dote", b'{"lines": "unexpected"}'),
             ("dote", b'{"lines": null}'),
             ("podlove", b"[]"),
+            ("podlove", b"{not json"),
+            ("dote", b'{"lines": [], "lines": []}'),
+            ("dote", b"\xff\xfe"),
         ],
     )
     def test_sync_refuses_unreadable_speaker_source(self, audio, field_name, invalid_json):

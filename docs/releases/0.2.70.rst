@@ -44,8 +44,8 @@ Fixes
   ``generate_transcripts`` before submitting jobs. Select one episode or use
   ``--audio-id`` directly.
 
-- Refuse malformed Podlove and DOTe JSON shapes during speaker discovery so
-  synchronization preserves approved mappings.
+- Refuse unreadable or malformed Podlove and DOTe JSON during speaker
+  discovery so synchronization preserves approved mappings.
 
 - Exclude timed speech without a speaker label from solo voice-reference
   ranges.
