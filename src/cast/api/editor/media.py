@@ -648,11 +648,12 @@ def _with_upload_lock(user: Any, callback: Callable[[], Response]) -> Response:
 
 @contextmanager
 def _collection_read_snapshot(using: str) -> Iterator[bool]:
+    # Other backends, and PostgreSQL inside a caller's transaction, read page
+    # rows and ancestry in one statement instead. SQLite stays there too: a
+    # transaction with ``transaction_mode="IMMEDIATE"`` would take the write
+    # lock for this GET.
     connection = connections[using]
-    if connection.vendor == "sqlite":
-        with transaction.atomic(using=using):
-            yield True
-    elif connection.vendor == "postgresql" and connection.get_autocommit():
+    if connection.vendor == "postgresql" and connection.get_autocommit():
         with transaction.atomic(using=using):
             with connection.cursor() as cursor:
                 cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
