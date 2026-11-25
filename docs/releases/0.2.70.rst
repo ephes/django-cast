@@ -36,6 +36,8 @@ Fixes
 
 - Apply the styleguide preview gallery rendition policy per render. The
   ``--with-renditions`` command flag stays local to its invocation.
+- Reject stale Wagtail Voxhelm settings forms after a concurrent change to
+  model, language, diarization, or known-speaker preferences.
 
 - Validate iTunes category mappings in the Wagtail editor and Django admin, and
   keep valid category entries when generating feeds from legacy data.

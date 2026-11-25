@@ -524,7 +524,10 @@ diarization override (the API base URL is deployment-only, see
 ``CAST_VOXHELM_API_BASE``). These values take precedence over Django
 settings and environment variables for Wagtail-admin-triggered transcript
 generation on that site; the diarization and known-speaker fields can also be
-left at "Not set here" to inherit the Django/environment value.
+left at "Not set here" to inherit the Django/environment value. If another
+administrator changes the site's model, language, diarization, or known-speaker
+preference while the form is open, reload the settings and reapply your edits.
+This also applies when submitting a token replacement or removal.
 
 Wagtail-admin-triggered transcript completion is queued through Django Tasks.
 Production sites that need a database-backed transcript worker should install
