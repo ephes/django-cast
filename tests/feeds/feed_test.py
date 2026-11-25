@@ -90,6 +90,44 @@ class TestFeedCreation:
         assert "itunes:category" in dummy_handler.ee
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "route, channel_path, image_path",
+    [
+        ("podcast_feed_rss", "./channel", "image/url"),
+        ("podcast_feed_atom", ".", "{http://www.w3.org/2005/Atom}image/{http://www.w3.org/2005/Atom}url"),
+    ],
+)
+@pytest.mark.parametrize(
+    "media_url, public_media_url",
+    [("media/", "https://example.com/media/"), ("https://cdn.example/media/", "https://cdn.example/media/")],
+)
+def test_podcast_feed_artwork_uses_absolute_url(
+    client,
+    podcast_with_artwork,
+    settings,
+    use_dummy_cache_backend,
+    route,
+    channel_path,
+    image_path,
+    media_url,
+    public_media_url,
+):
+    settings.MEDIA_URL = media_url
+    url = reverse(f"cast:{route}", kwargs={"slug": podcast_with_artwork.slug, "audio_format": "mp3"})
+    expected_url = public_media_url + podcast_with_artwork.itunes_artwork.original.name
+
+    response = client.get(url, secure=True, HTTP_HOST="example.com")
+
+    assert response.status_code == 200
+    channel = ElementTree.fromstring(response.content).find(channel_path)
+    assert channel is not None
+    artwork = channel.find("{http://www.itunes.com/dtds/podcast-1.0.dtd}image")
+    assert artwork is not None
+    assert artwork.get("href") == expected_url
+    assert channel.findtext(image_path) == expected_url
+
+
 @pytest.fixture()
 def use_django_repository():
     previous = appsettings.CAST_REPOSITORY

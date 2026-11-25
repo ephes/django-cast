@@ -34,6 +34,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Keep early years zero-padded in modal date facet options and selections so
+  clients can use the returned slugs to filter posts.
+- Publish absolute podcast artwork URLs in RSS and Atom when storage returns
+  relative media URLs.
+
 - Preserve physical WebVTT line endings and keep cue dialogue together when
   removing hidden voice tags.
 - Publish distinct chapter starts at their stored precision in RSS, Atom, the

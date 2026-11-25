@@ -108,7 +108,9 @@ Podcast-Specific Fields
 
 Additional metadata for podcast feeds:
 
-- **iTunes Artwork**: High-resolution podcast cover image
+- **iTunes Artwork**: High-resolution podcast cover image. RSS and Atom
+  resolve relative storage URLs against the feed request and retain absolute
+  artwork URLs from external storage.
 - **iTunes Subtitle**: From the blog's subtitle field
 - **iTunes Categories**: Podcast directory categorization
 - **Explicit Content**: Content rating flag

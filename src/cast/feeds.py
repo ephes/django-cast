@@ -376,6 +376,7 @@ class LatestEntriesAtomFeed(LatestEntriesFeed):
 
 class ITunesElements(SyndicationFeed):
     feed: dict[str, Any]
+    request: HttpRequest
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if args or kwargs:
@@ -387,6 +388,8 @@ class ITunesElements(SyndicationFeed):
 
         haqe = handler.addQuickElement
         itunes_artwork_url = cast(Image, podcast.itunes_artwork).original.url
+        if hasattr(self, "request"):
+            itunes_artwork_url = self.request.build_absolute_uri(itunes_artwork_url)
         handler.addQuickElement("itunes:image", attrs={"href": itunes_artwork_url})
         handler.startElement("image", cast(Any, {}))
         haqe("url", itunes_artwork_url)
@@ -469,7 +472,6 @@ class ITunesElements(SyndicationFeed):
 
 class PodcastIndexElements(ITunesElements):
     feed: dict[str, Any]
-    request: HttpRequest
     repository: FeedContext
 
     @staticmethod

@@ -167,6 +167,9 @@ Modal payloads are calculated by ``cast.modal_facet_counts.get_modal_facet_count
 - Per-group ``all_count`` with that group temporarily excluded
 - ``options`` including zero-count values so the modal can keep the full facet universe visible
 
+Date options and selections use ``YYYY-MM``, including leading zeroes for early
+years such as ``0001-02``. Pass the returned option slug as ``date_facets``.
+
 See :doc:`../reference/api` for exact response shapes.
 
 Architecture Notes

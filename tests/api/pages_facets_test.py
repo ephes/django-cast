@@ -614,6 +614,39 @@ def test_facet_counts_detail_mode_modal_with_date_facets(api_client, blog, body)
 
 
 @pytest.mark.django_db
+def test_facet_counts_detail_mode_modal_round_trips_early_year(api_client, blog, post, body):
+    Post.objects.filter(pk=post.pk).update(visible_date=timezone.make_aware(datetime(1, 2, 15)))
+    _create_modal_facet_posts(blog, body)
+    url = reverse("cast:api:facet-counts-detail", kwargs={"pk": blog.pk})
+
+    response = api_client.get(url, {"mode": "modal"}, format="json")
+    assert response.status_code == 200
+    options = response.json()["groups"]["date_facets"]["options"]
+    assert [option["slug"] for option in options] == ["2026-02", "2026-01", "0001-02"]
+    assert options[-1] == {"slug": "0001-02", "name": "0001-02", "count": 1}
+
+    response = api_client.get(url, {"mode": "modal", "date_facets": options[-1]["slug"]}, format="json")
+    assert response.status_code == 200
+    result = response.json()
+    assert result["result_count"] == 1
+    assert result["groups"]["date_facets"]["selected"] == "0001-02"
+
+
+def test_modal_date_slugs_ignore_platform_year_padding(mocker):
+    class UnpaddedYear(datetime):
+        def strftime(self, fmt):
+            if fmt == "%Y-%m":
+                return f"{self.year}-{self.month:02d}"
+            return super().strftime(fmt)
+
+    month = UnpaddedYear(1, 2, 1)
+    mocker.patch("cast.filters.datetime", UnpaddedYear)
+
+    assert modal_facet_counts._date_rows_to_counts([(month, 1)]) == {"0001-02": 1}
+    assert modal_facet_counts._normalize_date_facet("0001-02") == "0001-02"
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("date_value", ["not-a-date", "2026-13", "abc"])
 def test_facet_counts_detail_mode_modal_with_invalid_date_facets(api_client, blog, body, date_value):
     """Invalid date_facets param should be normalized to empty and not filter results."""
