@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import logging
 from dataclasses import dataclass, replace
@@ -15,6 +16,7 @@ from wagtail.models import Site
 from cast.models.contributors import ContributorVoiceReference, validate_voice_reference_range
 from cast.models.transcript import Transcript
 from cast.models.transcript_generation import TranscriptGeneration
+from cast.transcripts import parsing
 from cast.transcripts.corrections import refresh_transcript_corrections
 from cast.transcripts.generation_status import get_transcript_generation
 from cast.transcripts.services import artifact_revision
@@ -93,9 +95,10 @@ def optional_artifact_path(job_payload: dict[str, Any], format_name: str) -> str
 
 
 def parse_json_artifact(content: bytes, *, format_name: str) -> dict[str, Any]:
+    # Parse like the stored-artifact reader, so an accepted import stays readable after saving.
     try:
-        data = json.loads(content.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        data = parsing.read_json_artifact(io.BytesIO(content))
+    except (json.JSONDecodeError, parsing.TranscriptArtifactError) as exc:
         raise VoxhelmError(f"Voxhelm {format_name} artifact was not valid UTF-8 JSON.") from exc
     if not isinstance(data, dict):
         raise VoxhelmError(f"Voxhelm {format_name} artifact must be a JSON object.")

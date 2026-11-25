@@ -46,8 +46,10 @@ Fixes
 
 - Refuse unreadable or malformed Podlove and DOTe JSON during speaker
   discovery so synchronization preserves approved mappings. Transcript
-  uploads with a UTF-8 byte order mark or repeated JSON members are refused
-  with a field error, because the stored-artifact reader cannot read them.
+  uploads with a UTF-8 byte order mark, repeated JSON members or more than
+  10 MiB of JSON are refused with a field error, and Voxhelm imports with
+  repeated members fail validation, because the stored-artifact reader cannot
+  read them.
 
 - Exclude timed speech without a speaker label from solo voice-reference
   ranges.

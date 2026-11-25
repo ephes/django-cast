@@ -12,6 +12,7 @@ from wagtail.models import Collection, GroupCollectionPermission
 
 from cast.forms import AudioForm, ChapterMarkForm, FFProbeStartField, TranscriptForm, get_video_form
 from cast.models import Audio, ChapterMark, Transcript, Video
+from cast.transcripts import parsing
 from tests.factories import UserFactory
 
 
@@ -347,6 +348,14 @@ class TestTranscriptForm:
         form = TranscriptForm({"audio": audio.id}, {field_name: upload})
         assert form.is_valid() is False
         assert message in str(form.errors[field_name])
+
+    def test_json_upload_over_stored_limit_gets_size_error(self, audio, monkeypatch):
+        monkeypatch.setattr(parsing, "MAX_STORED_TRANSCRIPT_JSON_BYTES", 1024 * 1024)
+        content = b'{"transcripts": [], "padding": "' + b"x" * (1024 * 1024) + b'"}'
+        upload = SimpleUploadedFile("podlove.json", content, content_type="application/json")
+        form = TranscriptForm({"audio": audio.id}, {"podlove": upload})
+        assert form.is_valid() is False
+        assert "exceeds the 1 MiB limit for stored transcript JSON" in str(form.errors["podlove"])
 
     def test_bom_json_in_vtt_field_points_to_json_field(self, audio):
         upload = SimpleUploadedFile("test.vtt", b'\xef\xbb\xbf{"transcripts": []}', content_type="text/vtt")

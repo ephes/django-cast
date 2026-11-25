@@ -489,6 +489,11 @@ class TranscriptForm(BaseCollectionMemberForm):
                 return json.loads(content)  # only identifies the right field for a misplaced JSON upload
             if isinstance(content, str):
                 content = content.encode("utf-8")
+            if len(content) > parsing.MAX_STORED_TRANSCRIPT_JSON_BYTES:
+                raise ValidationError(
+                    _("%(field)s transcript exceeds the %(limit)s MiB limit for stored transcript JSON."),
+                    params={"field": field_label, "limit": parsing.MAX_STORED_TRANSCRIPT_JSON_BYTES // (1024 * 1024)},
+                )
             if content.startswith(codecs.BOM_UTF8):
                 raise ValidationError(
                     _("%(field)s transcript must be UTF-8 JSON without a byte order mark."),
