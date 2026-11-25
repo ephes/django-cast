@@ -53,6 +53,7 @@ Fixes
 
 - Cache editor media permission results only after a successful batch read,
   so conversion retries can resolve references from a failed batch.
+- Resolve editor episode seasons on the admitted podcast's database.
 - Roll back active ``ATOMIC_REQUESTS`` transactions for handled editor API exceptions.
 - Read editor collection breadcrumbs from the same database as the collection page.
 - Hold the editor audio PATCH lock and reload on the admitted write database.

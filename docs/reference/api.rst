@@ -576,6 +576,9 @@ Editor page writes, sibling slug checks, revisions and publication use one
 transaction on the routed page write database. Page/revision/related models
 must route reads and writes consistently to that database; split layouts and
 users from another database are rejected with a ``database`` validation error.
+Episode creation and updates resolve a submitted season on the admitted
+podcast's database. A missing season and a season belonging to another
+podcast both return the same ``season`` validation error.
 The publish response reloads the concrete page on that write database and uses
 that published page for its status, content and public URL.
 

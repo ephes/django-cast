@@ -9,9 +9,9 @@ from django.urls import reverse
 from taggit.models import Tag
 from wagtail.models import Locale, Page, Revision
 
-from cast.api.editor.views import PostEditorMixin
-from cast.models import Blog, Episode, Podcast, Post
-from tests.factories import EpisodeFactory, PostFactory
+from cast.api.editor.views import EpisodeEditorMixin, PostEditorMixin
+from cast.models import Blog, Episode, Podcast, Post, Season
+from tests.factories import EpisodeFactory, PodcastFactory, PostFactory
 
 
 class EditorRouter:
@@ -90,6 +90,64 @@ def replica_parent():
                 ContentType.objects.clear_cache()
 
     return create
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("writer_owns_season", [True, False])
+def test_episode_create_resolves_season_on_podcast_database(
+    settings, api_client, admin_user, podcast, replica_parent, monkeypatch, writer_owns_season
+):
+    other_podcast = PodcastFactory(parent=podcast.get_parent())
+    season = Season.objects.create(podcast=podcast if writer_owns_season else other_podcast, number=1)
+    replica_podcast = replica_parent(podcast)
+    with override_settings(DATABASE_ROUTERS=[EditorRouter()]):
+        try:
+            other_replica_podcast = replica_podcast.get_parent().add_child(
+                instance=Podcast(title="Other replica podcast", slug="other-replica-podcast")
+            )
+            Season.objects.create(
+                pk=season.pk,
+                podcast=other_replica_podcast if writer_owns_season else replica_podcast,
+                number=1,
+            )
+        finally:
+            ContentType.objects.clear_cache()
+
+    class SeasonReadRouter:
+        use_replica = False
+
+        def db_for_read(self, model, **hints):
+            if model is Season and self.use_replica:
+                return "migration_other"
+
+    routing = SeasonReadRouter()
+    settings.DATABASE_ROUTERS = [routing]
+    original_apply = EpisodeEditorMixin._apply_episode_metadata
+
+    def apply_metadata(self, *args, **kwargs):
+        # The page graph has already been admitted and its podcast locked.
+        with monkeypatch.context() as context:
+            context.setattr(routing, "use_replica", True)
+            return original_apply(self, *args, **kwargs)
+
+    monkeypatch.setattr(EpisodeEditorMixin, "_apply_episode_metadata", apply_metadata)
+    api_client.force_authenticate(user=admin_user)
+    response = api_client.post(
+        reverse("cast:api:editor_episode_create"),
+        {"parent": {"id": podcast.pk}, "title": "Routed episode", "overview": [], "season": {"id": season.pk}},
+        format="json",
+    )
+
+    if writer_owns_season:
+        assert response.status_code == 201, response.content
+        assert response.json()["season"] == {"id": season.pk}
+        assert Episode.objects.using("default").get(pk=response.json()["id"]).season_id == season.pk
+    else:
+        assert response.status_code == 400, response.content
+        assert response.json()["errors"] == {
+            "season": [{"code": "invalid", "message": "The selected season must belong to this episode's podcast."}]
+        }
+        assert not Episode.objects.using("default").filter(slug="routed-episode").exists()
 
 
 @pytest.mark.django_db(databases={"default", "migration_other"})
