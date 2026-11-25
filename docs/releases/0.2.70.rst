@@ -59,6 +59,10 @@ Fixes
   ``generate_transcripts``, including transcripts finished during an earlier job.
 - Report audio removed during ``generate_transcripts`` as a per-target failure
   and continue processing the batch.
+- Render published posts whose Wagtail owner was deleted in listings and
+  feeds, omitting item author markup when the owner is absent.
+- Pin the post snapshot queryset to its initial database alias so routing
+  changes cannot mix base pages with specific page and media data.
 
 - Rebuild chapter companions when they reconnect so their controls seek the
   currently bound player.

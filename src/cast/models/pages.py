@@ -409,7 +409,8 @@ class Post(Page):
         context["updated_timestamp"] = self.get_updated_timestamp()
         context = self.get_context_from_repository(context, repository)
         context_page = copy(self)
-        context_page.owner = user_model(username=context["owner_username"])
+        username = context["owner_username"]
+        context_page.owner = user_model(username=username) if username else None
         if context["render_for_feed"]:
             # use absolute urls for feed
             context_page.page_url = context["absolute_page_url"]

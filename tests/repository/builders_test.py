@@ -612,6 +612,10 @@ def test_post_queryset_snapshot_bulk_fetches_non_episode_specific_models(rf, blo
         db = "default"
         model = Post
 
+        def using(self, alias):
+            assert alias == self.db
+            return self
+
         def select_related(self, *_args):
             return self
 
@@ -668,6 +672,10 @@ def test_post_queryset_snapshot_bulk_fetches_episode_subclass_specific_models(rf
     class FakeQuerySet(list):
         db = "default"
         model = Post
+
+        def using(self, alias):
+            assert alias == self.db
+            return self
 
         def select_related(self, *_args):
             return self
@@ -732,6 +740,10 @@ def test_queryset_data_create_from_post_queryset_raises_attribute_error_for_brok
 
     class FakeQuerySet(list):
         db = "default"
+
+        def using(self, alias):
+            assert alias == self.db
+            return self
 
         def select_related(self, *_args):
             return self

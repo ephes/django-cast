@@ -392,3 +392,30 @@ def test_blog_index_facet_counts_follow_blog_database(independent_podcasts):
         tag_choices = filterset.form.fields["tag_facets"].choices
     assert ("synthetic-category", "migration_other category (1)") in category_choices
     assert ("synthetic-tag", "migration_other tag (1)") in tag_choices
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_snapshot_pins_base_and_specific_rows_to_initial_route(independent_podcasts, settings, rf, monkeypatch):
+    _, episode, _ = independent_podcasts["migration_other"]
+
+    class ChangingPostRouter:
+        route = "migration_other"
+
+        def db_for_read(self, model, **hints):
+            if model is Post:
+                alias, self.route = self.route, "default"
+                return alias
+            return None
+
+    settings.DATABASE_ROUTERS = [ChangingPostRouter()]
+    monkeypatch.setattr(Post, "get_url", lambda *a, **kw: "/synthetic/episode/")
+    monkeypatch.setattr(Post, "full_url", property(lambda self: "http://testserver/synthetic/episode/"))
+
+    snapshot = PostQuerySnapshot.create_from_post_queryset(
+        request=rf.get("/"), site=None, queryset=Post.objects.filter(pk=episode.pk)
+    )
+
+    assert snapshot.owner_username_by_id[episode.pk] == "migration_other-owner"
+    assert [post._state.db for post in snapshot.queryset] == ["migration_other"]
+    assert snapshot.post_by_id[episode.pk].season.name == "migration_other"
+    assert snapshot.podcast_audio_by_episode_id[episode.pk].title == "migration_other"

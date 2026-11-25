@@ -150,7 +150,7 @@ class PostQuerySnapshot:
 
         using = queryset.db
         site = _site_for_database(site, using)
-        queryset = queryset.select_related("owner", "cover_image", "content_type")
+        queryset = queryset.using(using).select_related("owner", "cover_image", "content_type")
         queryset_model = getattr(queryset, "model", None)
         if isinstance(queryset_model, type) and issubclass(queryset_model, Episode):
             queryset = queryset.select_related("podcast_audio__transcript", "season").prefetch_related(
@@ -204,7 +204,7 @@ class PostQuerySnapshot:
         for post in posts:
             specific_post = specific_post_by_id[post.pk]
             post_by_id[post.pk] = specific_post
-            owner_username_by_id[post.pk] = post.owner.username
+            owner_username_by_id[post.pk] = post.owner.username if post.owner is not None else ""
             audios_count = 0
             try:
                 audios_count = post.audios.count()
