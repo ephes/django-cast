@@ -5,12 +5,11 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
-from django.core.exceptions import ObjectDoesNotExist
 from django.core.management.base import BaseCommand, CommandError
 
-from ...models import Audio, Episode, Transcript
-from ...voxhelm import VoxhelmError, VoxhelmTranscriptService, transcript_complete
-from ...voxhelm.service import TranscriptGenerationActive
+from ...models import Audio, Episode
+from ...voxhelm import VoxhelmError, VoxhelmTranscriptService
+from ...voxhelm.service import TranscriptAlreadyComplete, TranscriptGenerationActive, generation_failure_diagnostic
 
 
 @dataclass(frozen=True)
@@ -58,25 +57,28 @@ class Command(BaseCommand):
 
         for target in targets:
             audio = target.audio
-            existing = self._get_existing_transcript(audio=audio)
-            if not options["force"] and existing is not None and transcript_complete(existing):
-                skipped += 1
-                self.stdout.write(f"skipped audio={audio.pk} transcript={existing.pk}")
-                continue
-
             task_ref = f"cast-audio-{audio.pk}"
             if options["force"]:
                 task_ref = f"{task_ref}-{uuid4().hex[:8]}"
 
             try:
-                result = service.generate_for_audio(audio, task_ref=task_ref, episode=target.episode)
+                result = service.generate_for_audio(
+                    audio, task_ref=task_ref, episode=target.episode, skip_complete=not options["force"]
+                )
+            except TranscriptAlreadyComplete as exc:
+                skipped += 1
+                self.stdout.write(f"skipped audio={audio.pk} transcript={exc.transcript_id}")
+                continue
             except TranscriptGenerationActive as exc:
                 skipped += 1
                 self.stdout.write(f"skipped audio={audio.pk}: {exc}")
                 continue
             except VoxhelmError as exc:
                 errors += 1
-                self.stderr.write(f"error audio={audio.pk}: {exc}")
+                message, _ = generation_failure_diagnostic(exc)
+                self.stderr.write(f"error audio={audio.pk}: {message}")
+                for note in getattr(exc, "__notes__", ()):
+                    self.stderr.write(f"error audio={audio.pk}: {note}")
                 continue
 
             for warning in result.warnings:
@@ -95,20 +97,11 @@ class Command(BaseCommand):
         if errors:
             raise CommandError(f"{errors} transcript generations failed.")
 
-    @staticmethod
-    def _get_existing_transcript(*, audio: Audio) -> Transcript | None:
-        try:
-            return audio.transcript
-        except ObjectDoesNotExist:
-            return None
-
     def _resolve_targets(self, *, episode_ids: list[int], audio_ids: list[int]) -> list[TranscriptTarget]:
         targets: list[TranscriptTarget] = []
         episode_by_audio_id: dict[int, int] = {}
 
-        episodes = list(
-            Episode.objects.filter(pk__in=episode_ids).select_related("podcast_audio__transcript").order_by("pk")
-        )
+        episodes = list(Episode.objects.filter(pk__in=episode_ids).select_related("podcast_audio").order_by("pk"))
         found_episode_ids = {episode.pk for episode in episodes}
         missing_episode_ids = sorted(set(episode_ids).difference(found_episode_ids))
         if missing_episode_ids:
@@ -128,7 +121,7 @@ class Command(BaseCommand):
             targets.append(TranscriptTarget(audio=audio, episode=episode))
             episode_by_audio_id[audio.pk] = episode.pk
 
-        direct_audios = list(Audio.objects.filter(pk__in=audio_ids).select_related("transcript").order_by("pk"))
+        direct_audios = list(Audio.objects.filter(pk__in=audio_ids).order_by("pk"))
         found_audio_ids = {audio.pk for audio in direct_audios}
         missing_audio_ids = sorted(set(audio_ids).difference(found_audio_ids))
         if missing_audio_ids:

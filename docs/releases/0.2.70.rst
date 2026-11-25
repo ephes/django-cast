@@ -51,6 +51,25 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Batch image discovery and repair loading in ``sync_renditions``, preserving
+  both regular and gallery roles for shared images.
+- Recheck the source and replacement before retiring each obsolete
+  rendition. Report changed pairs and retain the old files. Retire an obsolete
+  rendition that shares its replacement's file without deleting that file.
+- Recheck transcript completeness at each target's turn in
+  ``generate_transcripts``, including transcripts finished during an earlier job.
+- Report audio removed during ``generate_transcripts`` as a per-target failure
+  and continue processing the batch.
+- Render published posts whose Wagtail owner was deleted in listings and
+  feeds, omitting item author markup when the owner is absent. Post detail
+  pages without an owner also omit the author instead of showing "Unknown".
+- Pin the post snapshot queryset to its initial database alias so routing
+  changes cannot mix base pages with specific page and media data.
+- Record a failed transcript generation even if its exception message
+  cannot be formatted, so the attempt can be retried.
+- Preserve the upstream transcript generation failure and report unconfirmed
+  status if the writer fails to record the failure.
+
 - Rebuild chapter companions when they reconnect so their controls seek the
   currently bound player.
 - Rebuild transcript companions on reconnection with fresh search and cue

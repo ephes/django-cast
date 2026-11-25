@@ -18,7 +18,7 @@ from cast.models.transcript import Transcript
 from cast.models.transcript_generation import TranscriptGeneration
 from cast.transcripts import parsing
 from cast.transcripts.corrections import refresh_transcript_corrections
-from cast.transcripts.generation_status import get_transcript_generation
+from cast.transcripts.generation_status import get_transcript_generation, transcript_complete
 from cast.transcripts.services import artifact_revision
 
 from ..file_replacement import StagedFileReplacementGroup, stage_file_replacement
@@ -312,6 +312,26 @@ class TranscriptGenerationActive(VoxhelmError):
     """Another (admin-queued) attempt currently owns this audio's transcript generation."""
 
 
+class TranscriptAlreadyComplete(VoxhelmError):
+    """The writer already has a complete transcript for this target."""
+
+    def __init__(self, transcript_id: int) -> None:
+        self.transcript_id = transcript_id
+        super().__init__(f"Transcript {transcript_id} is already complete.")
+
+
+class TranscriptTargetDisappeared(VoxhelmError):
+    """The selected audio no longer exists on the generation writer."""
+
+
+def generation_failure_diagnostic(error: BaseException) -> tuple[str, bool]:
+    """Return a bounded diagnostic and whether the exception supplied its message."""
+    try:
+        return str(error)[:2048], True
+    except BaseException:
+        return type.__getattribute__(type(error), "__name__")[:80], False
+
+
 class VoxhelmTranscriptService:
     def __init__(
         self,
@@ -440,11 +460,20 @@ class VoxhelmTranscriptService:
         *,
         task_ref: str | None = None,
         episode: Any | None = None,
+        skip_complete: bool = False,
     ) -> TranscriptGenerationResult:
+        from cast.models import Audio as AudioModel
+
         if audio.pk is None:
             raise VoxhelmError("Audio must be saved before requesting a transcript.")
         using = audio._state.db or "default"
         with transaction.atomic(using=using):
+            target = AudioModel.objects.using(using).filter(pk=audio.pk)
+            # A conditional write prevents deletion between admission and claim,
+            # including on SQLite, where select_for_update() does not lock rows.
+            if not target.update(title=models.F("title")):
+                raise TranscriptTargetDisappeared(f"Audio {audio.pk} disappeared before transcript generation.")
+            audio = target.get()
             generation, created = TranscriptGeneration.objects.using(using).get_or_create(
                 audio=audio, defaults={"task_ref": ""}
             )
@@ -452,6 +481,9 @@ class VoxhelmTranscriptService:
                 updated_at=models.F("updated_at")
             )
             generation.refresh_from_db(using=using)
+            transcript = Transcript.objects.using(using).select_for_update().filter(audio=audio).first()
+            if skip_complete and transcript is not None and transcript_complete(transcript):
+                raise TranscriptAlreadyComplete(transcript.pk)
             if not created and generation.is_active:
                 raise TranscriptGenerationActive(
                     "Transcript generation is already queued or running for this audio; retry after it finishes."
@@ -465,7 +497,6 @@ class VoxhelmTranscriptService:
                 requested_by=None,
             )
             generation.mark_running()
-            transcript = Transcript.objects.using(using).filter(audio=audio).first()
             expected_revision = artifact_revision(transcript) if transcript is not None else ""
         current = TranscriptGeneration.objects.using(using).filter(
             pk=generation.pk, attempt_id=generation.attempt_id, status=TranscriptGeneration.Status.RUNNING
@@ -490,14 +521,26 @@ class VoxhelmTranscriptService:
             )
         except BaseException as exc:
             # BaseException: an interrupted or cancelled CLI wait must not leave the row RUNNING.
-            current.update(
-                status=TranscriptGeneration.Status.FAILED,
-                error_message=str(exc),
-                completed_at=timezone.now(),
-                updated_at=timezone.now(),
-            )
-            if isinstance(exc, VoxhelmError) and submission is not None and submission.job_id not in str(exc):
-                raise type(exc)(f"{exc} (Voxhelm job {submission.job_id})") from exc
+            message, formatted = generation_failure_diagnostic(exc)
+            try:
+                current.update(
+                    status=TranscriptGeneration.Status.FAILED,
+                    error_message=message,
+                    completed_at=timezone.now(),
+                    updated_at=timezone.now(),
+                )
+            except Exception as settlement_error:
+                category = type.__getattribute__(type(settlement_error), "__name__")[:80]
+                job = f" for Voxhelm job {submission.job_id}" if submission is not None else ""
+                BaseException.add_note(exc, f"Transcript generation status{job} could not be confirmed ({category}).")
+            else:
+                if (
+                    formatted
+                    and isinstance(exc, VoxhelmError)
+                    and submission is not None
+                    and submission.job_id not in message
+                ):
+                    raise type(exc)(f"{message} (Voxhelm job {submission.job_id})") from exc
             raise
         current.update(
             status=TranscriptGeneration.Status.SUCCEEDED,

@@ -458,7 +458,8 @@ class ITunesElements(SyndicationFeed):
         # Maybe add license later
         # year = timezone.now().year
         # haqe("copyright", "{0} {1}".format("insert license", year))
-        haqe("itunes:author", post.owner.get_full_name())
+        if post.owner is not None:
+            haqe("itunes:author", post.owner.get_full_name())
         haqe("itunes:subtitle", post.title)
         if appsettings.CAST_FEED_ITUNES_SUMMARY:
             haqe("itunes:summary", post.description)

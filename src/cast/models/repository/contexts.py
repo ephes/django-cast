@@ -118,7 +118,7 @@ class PostDetailContext:
         # The page-link cache is request-scoped and repopulated by repository construction.
         clear_cached_page_urls()
         blog = post.blog
-        owner_username = "unknown"
+        owner_username = ""
         if post.owner is not None:
             owner_username = post.owner.username
         from ..pages import Episode
@@ -392,7 +392,8 @@ class FeedContext:
                 videos=videos,
                 audios=audios,
             )
-            post.owner = user_model(username=owner_username_by_id[post.pk])
+            username = owner_username_by_id[post.pk]
+            post.owner = user_model(username=username) if username else None
             post.page_url = page_url_by_id[post.pk]
 
         queryset_data = PostQuerySnapshot(
@@ -572,7 +573,8 @@ class BlogIndexContext:
                 videos=videos,
                 audios=audios,
             )
-            post.owner = user_model(username=data["owner_username_by_id"][post.pk])
+            username = data["owner_username_by_id"][post.pk]
+            post.owner = user_model(username=username) if username else None
             post.page_url = data["page_url_by_id"][post.pk]
             cover_image_url = data["cover_by_post_id"].get(post.pk, "")
             cover_alt_text = data["cover_alt_by_post_id"].get(post.pk, "")

@@ -57,6 +57,14 @@ If two selected episodes share one audio object, the command stops before
 submitting any jobs. Select a single episode for that audio to use its context,
 or select the audio directly with ``--audio-id`` without those episode IDs.
 Repeating the same ``--episode-id`` generates at most one transcript.
+The command checks for a complete transcript on the writer database when each
+audio target reaches its turn. Use ``--force`` to bypass that check.
+If selected audio disappears before its turn, the command reports that audio
+ID as a failed target, processes the remaining targets, and exits with an error.
+Generation failures record a bounded diagnostic or, if the diagnostic cannot
+be formatted, the exception type. If the writer cannot record the failure,
+the command reports that durable status is unconfirmed alongside the original
+failure. Check the generation's recorded status before retrying.
 
 .. code-block:: bash
 
@@ -176,9 +184,16 @@ Uploaded originals, Wagtail admin renditions, and custom site renditions with
 unrelated filter specs are preserved.
 
 The command also checks that each required rendition's stored file still
-exists, and regenerates the file for rows whose file was lost. This check makes
-one storage request per required rendition, so it runs only here: publication
-and gallery rendition creation compare database rows only.
+exists, and regenerates the file for rows whose file was lost. Only this
+command checks stored files. Publication and gallery rendition creation
+compare database rows. The command discovers post images and loads repair
+images in batches, preserving every
+role of a shared image. Before it deletes an obsolete rendition, it rechecks
+the source and the exact verified replacement on the writer database.
+A changed pair is reported as a conflict and its old rendition is retained.
+Rerun the command to reconcile the current files. An obsolete rendition that
+shares its stored file with its verified replacement is retired by removing
+only its database row, so the replacement keeps the file.
 
 Run this as a one-off migration step after a deployment that changes rendition
 specifications or policy; it is not required for every normal application

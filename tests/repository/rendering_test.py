@@ -768,3 +768,42 @@ def test_post_detail_malformed_referer_falls_back(rf, post_in_blog, referer):
     request = rf.get(post_in_blog.get_url(), HTTP_REFERER=referer)
     repository = PostDetailContext.create_from_django_models(request=request, post=post_in_blog)
     assert repository.blog_url == post_in_blog.blog.get_url()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("theme", ["plain", "bootstrap4"])
+def test_published_ownerless_episode_renders_in_index_and_feeds(client, episode, theme):
+    from django.contrib.auth import get_user_model
+
+    podcast = episode.podcast
+    podcast.template_base_dir = theme
+    podcast.save(update_fields=["template_base_dir"])
+    owner = get_user_model().objects.create(username="synthetic-retired-owner")
+    episode.owner = owner
+    episode.save_revision().publish()
+    owner.delete()
+    episode.refresh_from_db()
+    assert episode.owner is None
+
+    response = client.get(podcast.get_url())
+    assert response.status_code == 200
+    assert episode.title in response.content.decode()
+    assert b'class="author"' not in response.content
+
+    detail = client.get(episode.get_url())
+    assert detail.status_code == 200
+    assert episode.title in detail.content.decode()
+    assert b'class="author"' not in detail.content
+
+    latest_url = reverse("cast:latest_entries_feed", kwargs={"slug": podcast.slug})
+    latest = client.get(latest_url)
+    assert latest.status_code == 200
+    assert episode.title in latest.content.decode()
+    assert 'class="author"' not in ElementTree.fromstring(latest.content).findtext("./channel/item/description")
+
+    rss_url = reverse("cast:podcast_feed_rss", kwargs={"slug": podcast.slug, "audio_format": "m4a"})
+    rss = client.get(rss_url)
+    assert rss.status_code == 200
+    item = ElementTree.fromstring(rss.content).find("./channel/item")
+    assert item.findtext("title") == episode.title
+    assert item.find("{http://www.itunes.com/dtds/podcast-1.0.dtd}author") is None

@@ -74,6 +74,10 @@ Key Repository Classes
 
 **PostQuerySnapshot**
   Base class that converts querysets to dictionaries with prefetch optimization.
+  The base queryset stays on the database alias selected at snapshot creation,
+  including when a caller explicitly selects an alias with ``using()``.
+  Posts whose Wagtail owner has been removed remain in listings and feeds
+  with an empty owner username and no item author in the bundled renderers.
 
 **PostDetailContext**
   Fetches single post data with all relations in minimal queries.

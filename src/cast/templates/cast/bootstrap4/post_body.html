@@ -10,8 +10,8 @@
       {% endif %}
     </h2>
     <!-- link is on one line to avoid underlined whitespace -->
-    <a href="{{ page.page_url }}"><time datetime="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date }}</time>,</a>
-    <span class="author">{{ page.owner.username | title}}</span>
+    <a href="{{ page.page_url }}"><time datetime="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date }}</time>{% if page.owner %},{% endif %}</a>
+    {% if page.owner %}<span class="author">{{ page.owner.username | title}}</span>{% endif %}
   </header>
   {% block episode_contributors %}
     {% if render_detail and not render_for_feed and episode_contributors %}

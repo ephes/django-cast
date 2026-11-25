@@ -714,7 +714,8 @@ class TestPostModel:
 
         post.owner = None
         context = post.get_context(request)
-        assert context["owner_username"] == "unknown"
+        assert context["owner_username"] == ""
+        assert context["page"].owner is None
 
     @pytest.mark.parametrize(
         ("render_for_feed", "expected_page_url"),

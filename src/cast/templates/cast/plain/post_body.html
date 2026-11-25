@@ -5,9 +5,9 @@
   <header>
     <h2>{{ page.title }}</h2>
     <a href="{{ page.page_url }}">
-      <time datetime="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date}}</time>,
+      <time datetime="{{ page.visible_date|date:"c" }}">{{ page.visible_date|date}}</time>{% if page.owner %},{% endif %}
     </a>
-    <span class="author">{{ page.owner.username | title}}</span>
+    {% if page.owner %}<span class="author">{{ page.owner.username | title}}</span>{% endif %}
   </header>
   {% block episode_contributors %}
     {% if render_detail and not render_for_feed and episode_contributors %}
