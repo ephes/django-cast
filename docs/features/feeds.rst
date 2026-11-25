@@ -71,6 +71,9 @@ Podcast Feeds
 Podcast feeds extend blog feeds with additional podcast-specific features:
 
 - iTunes podcast metadata (artwork, categories, explicit content marking)
+- Podcast RSS reports a single ``lastBuildDate`` based on the latest date among
+  the included episodes. If no episode is included, it uses the podcast's
+  publication timestamp when available and otherwise omits the element.
 - Optional episode publishing metadata for iTunes and Podcasting 2.0:
   episode number, episode type, and season
 - Audio file enclosures for episode distribution

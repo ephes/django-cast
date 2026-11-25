@@ -410,6 +410,9 @@ class ITunesElements(SyndicationFeed):
     def add_root_elements(self, handler: SimplerXMLGenerator) -> None:
         """Add additional elements to the blog object"""
         super().add_root_elements(handler)
+        self._add_itunes_root_elements(handler, include_legacy_build_date=True)
+
+    def _add_itunes_root_elements(self, handler: SimplerXMLGenerator, *, include_legacy_build_date: bool) -> None:
         haqe = handler.addQuickElement
         blog = self.feed["blog"]
 
@@ -429,10 +432,11 @@ class ITunesElements(SyndicationFeed):
         haqe("itunes:explicit", blog.get_explicit_display())
         if _is_itunes_type(itunes_type := getattr(blog, "itunes_type", "")):
             haqe("itunes:type", itunes_type)
-        try:
-            haqe("lastBuildDate", rfc2822_date(blog.last_build_date))
-        except IndexError:
-            pass
+        if include_legacy_build_date:
+            try:
+                haqe("lastBuildDate", rfc2822_date(blog.last_build_date))
+            except IndexError:
+                pass
         generator = "Django Web Framework / django-cast"
         haqe("generator", generator)
         haqe("docs", "https://blogs.law.harvard.edu/tech/rss")
@@ -543,6 +547,30 @@ class AtomITunesFeedGenerator(PodcastIndexElements, AtomStylesheetsMixin, Atom1F
 
 
 class RssITunesFeedGenerator(PodcastIndexElements, Rss201rev2Feed):
+    def add_root_elements(self, handler: SimplerXMLGenerator) -> None:
+        # Django's RSS generator always emits lastBuildDate, using the wall clock
+        # for an empty feed. RSS allows the date to be omitted.
+        add = handler.addQuickElement
+        add("title", self.feed["title"])
+        add("link", self.feed["link"])
+        add("description", self.feed["description"])
+        if (url := self.feed["feed_url"]) is not None:
+            add("atom:link", attrs={"rel": "self", "href": url})
+        if (language := self.feed["language"]) is not None:
+            add("language", language)
+        for category in self.feed["categories"]:
+            add("category", category)
+        if (copyright := self.feed["feed_copyright"]) is not None:
+            add("copyright", copyright)
+
+        blog = self.feed["blog"]
+        date = self.latest_post_date() if self.items else blog.last_published_at or blog.first_published_at
+        if date is not None:
+            add("lastBuildDate", rfc2822_date(date))
+        if (ttl := self.feed["ttl"]) is not None:
+            add("ttl", ttl)
+        self._add_itunes_root_elements(handler, include_legacy_build_date=False)
+
     def rss_attributes(self) -> dict[str, str]:
         rss_attrs = super().rss_attributes()
         rss_attrs.update(self.namespace_attributes())

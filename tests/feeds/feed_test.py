@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import datetime, time, timezone
 from time import mktime
 from types import SimpleNamespace
 from urllib.parse import urlparse
@@ -14,6 +14,7 @@ from django.core.cache import cache
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http import Http404
 from django.urls import resolve, reverse
+from django.utils.feedgenerator import rfc2822_date
 from wagtail.models import PageViewRestriction
 
 from cast import appsettings
@@ -27,12 +28,14 @@ from cast.feeds import (
     LatestEntriesFeed,
     PodcastFeed,
     PodcastIndexElements,
+    RssITunesFeedGenerator,
     RssPodcastFeed,
     _episode_season_data,
     _feed_stylesheets,
     _is_itunes_type,
     _is_positive_integer,
     _psc_start,
+    rotate_feed_cache_generation,
 )
 from cast.models import ChapterMark, Contributor, ContributorLink, Episode, EpisodeContributor, Podcast, Post, Season
 from cast.models.repository import FeedContext
@@ -169,6 +172,62 @@ def test_podcast_editor_rejects_invalid_itunes_category_shape(podcast, invalid):
     podcast.full_clean()
     podcast.itunes_categories = ""
     podcast.full_clean()
+
+
+@pytest.mark.parametrize("repository", ["default", "django"])
+@pytest.mark.parametrize("has_publication_date", [False, True])
+def test_empty_podcast_rss_build_date_is_stable(
+    client, episode, monkeypatch, mocker, repository, has_publication_date
+):
+    podcast = episode.podcast
+    published = datetime(2024, 1, 1, tzinfo=timezone.utc) if has_publication_date else None
+    Podcast.objects.filter(pk=podcast.pk).update(first_published_at=published, last_published_at=published)
+    Episode.objects.filter(pk=episode.pk).update(live=False)
+    episode.refresh_from_db()
+    monkeypatch.setattr(appsettings, "CAST_REPOSITORY", repository)
+    now = mocker.patch("django.utils.timezone.now", return_value=datetime(2025, 1, 1, tzinfo=timezone.utc))
+    monkeypatch.setattr(RssPodcastFeed, "ttl", 5, raising=False)
+    monkeypatch.setattr(RssPodcastFeed, "feed_copyright", "Synthetic copyright", raising=False)
+    render = mocker.spy(RssPodcastFeed, "get_feed")
+    url = reverse("cast:podcast_feed_rss", kwargs={"slug": podcast.slug, "audio_format": "m4a"})
+    expected_dates = [rfc2822_date(published)] if published else []
+
+    def get_channel():
+        response = client.get(url)
+        assert response.status_code == 200
+        return ElementTree.fromstring(response.content).find("channel")
+
+    rotate_feed_cache_generation()
+    cold = get_channel()
+    now.return_value = datetime(2025, 1, 2, tzinfo=timezone.utc)
+    warm = get_channel()
+    assert render.call_count == 1
+    rotate_feed_cache_generation()
+    fresh = get_channel()
+    assert render.call_count == 2
+    for channel in (cold, warm, fresh):
+        assert channel.findall("item") == []
+        assert [date.text for date in channel.findall("lastBuildDate")] == expected_dates
+
+    episode.save_revision().publish()
+    episode.refresh_from_db()
+
+    rotate_feed_cache_generation()
+    populated = get_channel()
+    assert populated.findtext("ttl") == "5"
+    assert populated.findtext("copyright") == "Synthetic copyright"
+    assert populated.findtext("item/title") == episode.title
+    expected = rfc2822_date(max(episode.visible_date, episode.last_published_at))
+    assert [date.text for date in populated.findall("lastBuildDate")] == [expected]
+
+
+def test_podcast_rss_can_omit_optional_channel_metadata(podcast):
+    generator = RssITunesFeedGenerator("Synthetic Podcast", "https://example.com/", "Description", blog=podcast)
+
+    channel = ElementTree.fromstring(generator.writeString("utf-8")).find("channel")
+
+    assert channel.find("{http://www.w3.org/2005/Atom}link") is None
+    assert channel.find("language") is None
 
 
 @pytest.fixture()
