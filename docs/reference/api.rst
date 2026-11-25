@@ -1430,8 +1430,8 @@ Fields:
   ``queued``, ``running``, ``succeeded``, ``failed``, or ``interrupted`` (a
   queued/running generation older than ``CAST_VOXHELM_STALE_AFTER``);
   ``active`` is true only for a queued or running generation that is not
-  interrupted. ``error`` carries the failure message. Poll ``GET`` until
-  ``active`` is false.
+  interrupted. Both fields use the same cutoff check within a response.
+  ``error`` carries the failure message. Poll ``GET`` until ``active`` is false.
 - ``transcript`` is ``null`` until a transcript exists. ``speaker_labels`` are
   the labels stored in the transcript files. ``preview_speaker_labels`` are the
   names an editor sees in the preview after approved speaker mappings and the
@@ -1720,7 +1720,9 @@ Discover upload collections::
 The ``type`` parameter is required and must be one of ``image``, ``audio``, or
 ``video``. Responses use the same pagination envelope. Items include ``id``,
 ``name``, display-only ``breadcrumb``, and ``ancestors`` from root to parent.
-Ancestor names and IDs come from the database used to paginate the collections.
+Page items and their ancestor names and IDs come from the same view of the
+collection tree on the selected read database, even if a collection moves
+while the request runs.
 Discovery returns candidate upload targets; custom permission policies can
 still make a saved audio/video object fail the defensive post-save choose check.
 

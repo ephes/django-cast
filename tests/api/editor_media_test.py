@@ -1,5 +1,6 @@
 import re
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import nullcontext
 from types import SimpleNamespace
 
@@ -9,7 +10,7 @@ from django.core.cache import cache
 from django.core.files.base import ContentFile
 from django.core.files.storage import InMemoryStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db import IntegrityError, connection
+from django.db import IntegrityError, connection, connections
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.response import Response
@@ -94,6 +95,89 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
         GroupPagePermission.objects.create(group=group, page=root_page, permission=permission)
     user.groups.add(group)
     return user
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("use_snapshot", [True, False])
+def test_collection_breadcrumbs_survive_move_after_page_read(api_client, monkeypatch, use_snapshot):
+    if not use_snapshot:
+        monkeypatch.setattr(editor_media, "_collection_read_snapshot", lambda using: nullcontext(False))
+
+    root = Collection.get_first_root_node() or Collection.add_root(name="Synthetic root")
+    destination = root.add_child(name="Destination")
+    source = root.add_child(name="Source")
+    parent = source.add_child(name="Moved parent")
+    child = parent.add_child(name="Selected child")
+    assert child.get_parent().get_parent().pk == source.pk
+    permitted = Collection.objects.filter(pk=child.pk)
+    monkeypatch.setattr(editor_media, "_usable_image_collections", lambda user: permitted)
+    api_client.force_authenticate(user=UserFactory(is_staff=True, is_superuser=True))
+
+    def move_parent():
+        try:
+            Collection.objects.get(pk=parent.pk).move(Collection.objects.get(pk=destination.pk), pos="sorted-child")
+        finally:
+            connections.close_all()
+
+    paginator = editor_media.EditorMediaCollectionsView.pagination_class
+    paginate = paginator.paginate_queryset
+    moved = False
+
+    def paginate_before_move(self, *args, **kwargs):
+        nonlocal moved
+        page = paginate(self, *args, **kwargs)
+        if not moved:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                pool.submit(move_parent).result(timeout=10)
+            moved = True
+        return page
+
+    monkeypatch.setattr(paginator, "paginate_queryset", paginate_before_move)
+    original_mode = None
+    if connection.vendor == "sqlite":
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA journal_mode")
+            original_mode = cursor.fetchone()[0]
+            cursor.execute("PRAGMA journal_mode=WAL")
+    try:
+        url = reverse("cast:api:editor_media_collections")
+        for branch in (source, destination):
+            response = api_client.get(url, {"type": "image", "pageSize": 1})
+            assert response.status_code == 200, response.content
+            assert moved
+            assert response.json() == {
+                "count": 1,
+                "next": None,
+                "previous": None,
+                "results": [
+                    {
+                        "id": child.pk,
+                        "name": child.name,
+                        "breadcrumb": " / ".join(node.name for node in (root, branch, parent, child)),
+                        "ancestors": [{"id": node.pk, "name": node.name} for node in (root, branch, parent)],
+                    }
+                ],
+            }
+    finally:
+        if original_mode is not None:
+            with connection.cursor() as cursor:
+                cursor.execute(f"PRAGMA journal_mode={original_mode}")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("autocommit", [True, False])
+def test_collection_read_snapshot_only_sets_postgres_isolation_when_it_owns_transaction(mocker, autocommit):
+    db = mocker.MagicMock(vendor="postgresql")
+    db.get_autocommit.return_value = autocommit
+    mocker.patch.object(editor_media, "connections", {"default": db})
+    with editor_media._collection_read_snapshot("default") as has_snapshot:
+        assert has_snapshot is autocommit
+    if autocommit:
+        db.cursor.return_value.__enter__.return_value.execute.assert_called_once_with(
+            "SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"
+        )
+    else:
+        db.cursor.assert_not_called()
 
 
 class TestEditorMediaEndpoints:
@@ -254,10 +338,6 @@ class TestEditorMediaEndpoints:
         assert image.status_code == 200
         video = api_client.get(f"{url}?type=video", format="json")
         assert video.status_code == 200
-
-        root = Collection.get_first_root_node()
-        child = root.add_child(instance=Collection(name="Child fallback"))
-        assert editor_media._collection_item(child)["ancestors"][0]["id"] == root.id
 
     def test_collection_discovery_rejects_unsupported_parameter(self, api_client, superuser):
         api_client.force_authenticate(user=superuser)

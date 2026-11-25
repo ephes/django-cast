@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from copy import copy
 from pathlib import PurePosixPath
 from typing import Any, Protocol, cast
@@ -9,8 +10,9 @@ from urllib.parse import urlsplit, urlunsplit
 
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
-from django.db import router, transaction
-from django.db.models import F, Q, QuerySet
+from django.db import connections, router, transaction
+from django.db.models import Exists, F, OuterRef, Q, QuerySet, Subquery, Window
+from django.db.models.functions import RowNumber
 from django.http import HttpResponse, HttpResponseBase
 from django.urls import NoReverseMatch, reverse
 from rest_framework import status
@@ -166,15 +168,8 @@ def _ancestor_paths(collection: Collection) -> list[str]:
     return [collection.path[:depth] for depth in range(collection.steplen, len(collection.path), collection.steplen)]
 
 
-def _collection_item(
-    collection: Collection, *, ancestors_by_path: dict[str, Collection] | None = None
-) -> dict[str, Any]:
-    if ancestors_by_path is None:
-        ancestor_objects = list(collection.get_ancestors())
-    else:
-        ancestor_objects = [
-            ancestors_by_path[path] for path in _ancestor_paths(collection) if path in ancestors_by_path
-        ]
+def _collection_item(collection: Collection, ancestors_by_path: dict[str, Collection]) -> dict[str, Any]:
+    ancestor_objects = [ancestors_by_path[path] for path in _ancestor_paths(collection) if path in ancestors_by_path]
     ancestors = [{"id": ancestor.id, "name": ancestor.name} for ancestor in ancestor_objects]
     names = [ancestor["name"] for ancestor in ancestors] + [collection.name]
     return {
@@ -651,6 +646,49 @@ def _with_upload_lock(user: Any, callback: Callable[[], Response]) -> Response:
         return _flat_error("rate_limited", "Another audio or video upload is already in progress.", http_status=429)
 
 
+@contextmanager
+def _collection_read_snapshot(using: str) -> Iterator[bool]:
+    connection = connections[using]
+    if connection.vendor == "sqlite":
+        with transaction.atomic(using=using):
+            yield True
+    elif connection.vendor == "postgresql" and connection.get_autocommit():
+        with transaction.atomic(using=using):
+            with connection.cursor() as cursor:
+                cursor.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY")
+            yield True
+    else:
+        yield False
+
+
+class _CollectionPageQuery:
+    """Provide Django's paginator with a slice that includes its ancestry."""
+
+    ordered = True
+
+    def __init__(self, permitted: QuerySet[Collection]) -> None:
+        self.permitted = permitted
+
+    def count(self) -> int:
+        return self.permitted.count()
+
+    def __getitem__(self, bounds: slice) -> list[dict[str, Any]]:
+        # Window bounds also work on databases that reject LIMIT in an IN subquery.
+        collections = Collection.objects.using(self.permitted.db)
+        page_ids = (
+            collections.filter(pk__in=Subquery(self.permitted.order_by().values("pk")))
+            .alias(page_row=Window(RowNumber(), order_by=[F("path").asc(), F("id").asc()]))
+            .filter(page_row__gt=bounds.start, page_row__lte=bounds.stop)
+            .order_by()
+            .values("pk")
+        )
+        on_page = Q(pk__in=Subquery(page_ids))
+        descendants = collections.filter(on_page, path__startswith=OuterRef("path"))
+        rows = list(collections.filter(Exists(descendants)).annotate(on_page=on_page).order_by("path", "id"))
+        by_path = {row.path: row for row in rows}
+        return [_collection_item(row, by_path) for row in rows if row.on_page]
+
+
 class EditorMediaCollectionsView(EditorAPIView):
     required_scopes = {"GET": None}
     pagination_class = StandardResultsSetPagination
@@ -674,13 +712,17 @@ class EditorMediaCollectionsView(EditorAPIView):
 
         paginator = self.pagination_class()
         using = queryset.db
-        page = paginator.paginate_queryset(queryset.using(using).order_by("path", "id"), request, view=self)
-        assert page is not None
-        ancestor_path_set = {path for collection in page for path in _ancestor_paths(collection)}
-        ancestors_by_path = {
-            collection.path: collection
-            for collection in Collection.objects.using(using).filter(path__in=ancestor_path_set)
-        }
-        return paginator.get_paginated_response(
-            [_collection_item(collection, ancestors_by_path=ancestors_by_path) for collection in page]
-        )
+        queryset = queryset.using(using).order_by("path", "id")
+        with _collection_read_snapshot(using) as has_snapshot:
+            if has_snapshot:
+                page = paginator.paginate_queryset(queryset, request, view=self)
+                assert page is not None
+                ancestor_paths = {path for collection in page for path in _ancestor_paths(collection)}
+                ancestors_by_path = {
+                    collection.path: collection
+                    for collection in Collection.objects.using(using).filter(path__in=ancestor_paths)
+                }
+                data = [_collection_item(collection, ancestors_by_path) for collection in page]
+            else:
+                data = paginator.paginate_queryset(_CollectionPageQuery(queryset), request, view=self)
+        return paginator.get_paginated_response(data)

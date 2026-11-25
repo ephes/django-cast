@@ -1,5 +1,5 @@
 import json
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from types import SimpleNamespace
 
 import pytest
@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from cast.api.editor import media as editor_media
+from cast.api.editor.transcripts import generation_payload
 from cast.devdata import create_transcript
 from cast.models import (
     Audio,
@@ -20,6 +21,23 @@ from cast.models import (
 )
 from cast.voxhelm import TranscriptSubmission, VoxhelmError, build_audio_task_ref
 from tests.factories import UserFactory
+
+
+@pytest.mark.parametrize("stored_status", [TranscriptGeneration.Status.QUEUED, TranscriptGeneration.Status.RUNNING])
+@pytest.mark.parametrize("offset_us", [-1, 0, 1])
+def test_generation_projection_uses_one_staleness_cutoff(settings, mocker, stored_status, offset_us):
+    settings.CAST_VOXHELM_STALE_AFTER = 10
+    activity = datetime(2026, 1, 1, tzinfo=dt_timezone.utc)
+    cutoff = activity + timedelta(seconds=10)
+    generation = TranscriptGeneration(status=stored_status, started_at=activity, updated_at=activity)
+    now = mocker.Mock(side_effect=[cutoff + timedelta(microseconds=offset_us), cutoff + timedelta(seconds=1)])
+    mocker.patch("cast.models.transcript_generation.timezone", SimpleNamespace(now=now))
+
+    payload = generation_payload(generation)
+
+    assert payload["status"] == ("interrupted" if offset_us > 0 else stored_status)
+    assert payload["active"] is (offset_us <= 0)
+    now.assert_called_once_with()
 
 
 class _FakeScopedToken:

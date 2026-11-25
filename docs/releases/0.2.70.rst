@@ -55,6 +55,10 @@ Fixes
   so the original slug can be retried.
 - Return a null file URL for a malformed storage URL in the editor media
   library, so the rest of the list remains available.
+- Keep collection discovery breadcrumbs consistent with the selected page
+  when a collection moves during an editor request.
+- Use the same staleness check for transcript generation status and activity
+  in each editor response.
 
 - Return 404 when the Django-model feed repository reloads a blog or podcast
   that was deleted after feed routing selected it.
