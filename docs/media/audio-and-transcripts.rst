@@ -244,6 +244,10 @@ upload name is kept in storage and a page-like name could be rendered as a
 document where media is served from the site's own origin. Files that are
 already stored, and files written by Voxhelm, are unaffected.
 
+Podlove and DOTe uploads must be UTF-8 JSON without a byte order mark and
+without repeated object members, because the stored-artifact reader refuses
+both. Such uploads get a field error instead of being saved.
+
 Transcript admin permissions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 

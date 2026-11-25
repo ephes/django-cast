@@ -5,6 +5,8 @@ admin, chapter mark parsing and validation, a theme selection form, and
 a search form that rejects empty queries.
 """
 
+import codecs
+import io
 import json
 import logging
 import math
@@ -478,8 +480,16 @@ class TranscriptForm(BaseCollectionMemberForm):
             content = uploaded_file.read(max_bytes + 1)
             if (content.decode("utf-8-sig") if isinstance(content, bytes) else content).lstrip().startswith("WEBVTT"):
                 raise ValidationError(_("This is a WebVTT file. Upload it in the WebVTT Transcript field."))
-            return json.loads(content)
-        except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+            if content.startswith(codecs.BOM_UTF8):
+                raise ValidationError(
+                    _("%(field)s transcript must be UTF-8 JSON without a byte order mark."),
+                    params={"field": field_label},
+                )
+            # Parse like the stored-artifact reader, so an accepted upload stays readable after saving.
+            return parsing.read_json_artifact(io.BytesIO(content))
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError, parsing.TranscriptArtifactError):
             raise ValidationError(_("%(field)s transcript is not valid JSON."), params={"field": field_label})
         finally:
             try:

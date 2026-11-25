@@ -333,6 +333,21 @@ class TestTranscriptForm:
         assert form.is_valid() is False
         assert "dote" in form.errors
 
+    @pytest.mark.parametrize(
+        "field_name, content, message",
+        [
+            ("podlove", b'\xef\xbb\xbf{"transcripts": []}', "without a byte order mark"),
+            ("podlove", b'{"transcripts": [], "transcripts": []}', "not valid JSON"),
+            ("dote", b'\xef\xbb\xbf{"lines": []}', "without a byte order mark"),
+            ("dote", b'{"lines": [], "lines": []}', "not valid JSON"),
+        ],
+    )
+    def test_json_upload_must_match_stored_artifact_reader(self, audio, field_name, content, message):
+        upload = SimpleUploadedFile(f"{field_name}.json", content, content_type="application/json")
+        form = TranscriptForm({"audio": audio.id}, {field_name: upload})
+        assert form.is_valid() is False
+        assert message in str(form.errors[field_name])
+
     def test_vtt_valid(self, audio):
         vtt = SimpleUploadedFile(
             "test.vtt",
@@ -437,6 +452,13 @@ class TestTranscriptForm:
         payload = {"transcripts": []}
         file_obj = FlakySeek(json.dumps(payload).encode())
         assert TranscriptForm._load_json(file_obj, field_label="Podlove", max_bytes=1024) == payload
+
+    def test_load_json_accepts_text_stream(self):
+        payload = {"transcripts": []}
+        assert (
+            TranscriptForm._load_json(io.StringIO(json.dumps(payload)), field_label="Podlove", max_bytes=1024)
+            == payload
+        )
 
     def test_read_header_handles_str_and_seek_failure(self):
         class FlakySeek(io.StringIO):
