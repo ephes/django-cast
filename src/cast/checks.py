@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from pathlib import Path
+from stat import S_ISREG
 from typing import Any
 
 from django.apps import AppConfig, apps
@@ -30,10 +31,19 @@ CAST_SETTING_TYPES: tuple[tuple[str, type], ...] = tuple(
 VALID_AUDIO_PLAYERS = frozenset({"podlove", "custom"})
 
 
+def _file_mtime(path: Path) -> float | None:
+    try:
+        info = path.stat()
+    except (FileNotFoundError, NotADirectoryError):
+        # A build or branch switch can remove or replace a path during the scan.
+        return None
+    return info.st_mtime if S_ISREG(info.st_mode) else None
+
+
 def _newest_source_mtime(source_dir: Path) -> float | None:
     """Return the mtime of the most recently modified source file, or None."""
-    mtimes = [p.stat().st_mtime for p in source_dir.rglob("*") if p.is_file() and p.suffix in SOURCE_EXTENSIONS]
-    return max(mtimes) if mtimes else None
+    mtimes = (_file_mtime(path) for path in source_dir.rglob("*") if path.suffix in SOURCE_EXTENSIONS)
+    return max((mtime for mtime in mtimes if mtime is not None), default=None)
 
 
 def _find_stale_assets(base_dir: Path) -> list[str]:
@@ -46,10 +56,13 @@ def _find_stale_assets(base_dir: Path) -> list[str]:
     ]
 
     for source_dir, manifest in pairs:
-        if not source_dir.is_dir() or not manifest.is_file():
+        if not source_dir.is_dir():
+            continue
+        manifest_mtime = _file_mtime(manifest)
+        if manifest_mtime is None:
             continue
         src_mtime = _newest_source_mtime(source_dir)
-        if src_mtime is not None and src_mtime > manifest.stat().st_mtime:
+        if src_mtime is not None and src_mtime > manifest_mtime:
             stale.append(f"{source_dir} is newer than {manifest.name} — run 'just js-build-vite'")
 
     return stale

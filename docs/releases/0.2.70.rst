@@ -61,6 +61,8 @@ Fixes
   limits and active cues when metadata arrives.
 - Preserve gallery item identities in the author editor when it returns
   revision-scoped item IDs alongside the existing gallery block ID.
+- Keep development system checks running when a frontend source file or Vite
+  manifest disappears during the asset freshness check.
 
 - ``import_transcript_glossary`` validates numeric podcast IDs on the same
   write database it uses to look up the podcast.
