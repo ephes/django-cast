@@ -28,6 +28,9 @@ Wagtail login, password, or group restrictions on the page or any ancestor.
 Restricted pages return 404; django-cast does not expose authenticated private
 feeds.
 
+In Django-model repository mode, a feed request returns 404 if its selected
+blog or podcast is deleted before the repository reloads it from the database.
+
 The template receives the following context variables:
 
 - ``blog`` — the Blog or Podcast instance
