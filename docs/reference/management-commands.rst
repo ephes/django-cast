@@ -57,6 +57,10 @@ If two selected episodes share one audio object, the command stops before
 submitting any jobs. Select a single episode for that audio to use its context,
 or select the audio directly with ``--audio-id`` without those episode IDs.
 Repeating the same ``--episode-id`` generates at most one transcript.
+The command checks for a complete transcript on the writer database when each
+audio target reaches its turn. Use ``--force`` to bypass that check.
+If selected audio disappears before its turn, the command reports that audio
+ID as a failed target, processes the remaining targets, and exits with an error.
 
 .. code-block:: bash
 

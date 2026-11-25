@@ -55,6 +55,10 @@ Fixes
   both regular and gallery roles for shared images.
 - Recheck the source and replacement before retiring each obsolete
   rendition. Report changed pairs and retain the old files.
+- Recheck transcript completeness at each target's turn in
+  ``generate_transcripts``, including transcripts finished during an earlier job.
+- Report audio removed during ``generate_transcripts`` as a per-target failure
+  and continue processing the batch.
 
 - Rebuild chapter companions when they reconnect so their controls seek the
   currently bound player.

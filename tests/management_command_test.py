@@ -6,7 +6,6 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from django.core.exceptions import ObjectDoesNotExist
 from django.core.files.base import ContentFile
 from django.core.files.storage import storages
 from django.core.management import CommandError, call_command
@@ -1226,17 +1225,6 @@ def test_generate_transcripts_requires_targets():
         call_command("generate_transcripts")
 
 
-def test_generate_transcripts_get_existing_transcript_handles_missing_relation():
-    class MissingTranscriptAudio:
-        @property
-        def transcript(self):
-            raise ObjectDoesNotExist
-
-    from cast.management.commands.generate_transcripts import Command
-
-    assert Command._get_existing_transcript(audio=MissingTranscriptAudio()) is None
-
-
 def test_generate_transcripts_rejects_unknown_episode_id(mocker):
     queryset = mocker.Mock()
     queryset.select_related.return_value = queryset
@@ -1281,14 +1269,18 @@ def test_generate_transcripts_skips_complete_transcript(mocker, audio):
             ]
         },
     )
-    service_cls = mocker.patch("cast.management.commands.generate_transcripts.VoxhelmTranscriptService")
+    from cast.voxhelm import VoxhelmTranscriptService
+
+    service = VoxhelmTranscriptService(client=mocker.Mock())
+    mocker.patch("cast.management.commands.generate_transcripts.VoxhelmTranscriptService", return_value=service)
+    submit = mocker.spy(service, "submit_for_audio")
     output = StringIO()
 
     call_command("generate_transcripts", "--audio-id", str(audio.pk), stdout=output)
 
     assert "skipped audio=" in output.getvalue()
     assert "processed=1 created=0 updated=0 skipped=1 errors=0" in output.getvalue()
-    service_cls.return_value.generate_for_audio.assert_not_called()
+    submit.assert_not_called()
 
 
 @pytest.mark.django_db
@@ -1316,7 +1308,9 @@ def test_generate_transcripts_does_not_skip_empty_transcript(mocker, audio):
 
     assert "skipped audio=" not in output.getvalue()
     assert "updated audio=" in output.getvalue()
-    service.generate_for_audio.assert_called_once_with(audio, task_ref=f"cast-audio-{audio.pk}", episode=None)
+    service.generate_for_audio.assert_called_once_with(
+        audio, task_ref=f"cast-audio-{audio.pk}", episode=None, skip_complete=True
+    )
 
 
 @pytest.mark.django_db
@@ -1392,7 +1386,9 @@ def test_generate_transcripts_deduplicates_repeated_episode_id(mocker, episode, 
 
     call_command("generate_transcripts", "--episode-id", episode_id, "--episode-id", episode_id, stdout=StringIO())
 
-    service.generate_for_audio.assert_called_once_with(audio, task_ref=f"cast-audio-{audio.pk}", episode=episode)
+    service.generate_for_audio.assert_called_once_with(
+        audio, task_ref=f"cast-audio-{audio.pk}", episode=episode, skip_complete=True
+    )
 
 
 @pytest.mark.django_db
