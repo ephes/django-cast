@@ -21,7 +21,13 @@ from tests.voxhelm.tasks_status_helpers import VALID_DOTE_ARTIFACT, VALID_PODLOV
 def settings_form(instance, **data):
     form_class = modelform_factory(VoxhelmSettings, form=VoxhelmSettingsForm, fields=["api_token", "language"])
     form = form_class(
-        data={"api_token": "", "language": "de", "settings_version": ordinary_settings_version(instance), **data},
+        data={
+            "api_token": "",
+            "language": "de",
+            "settings_version": ordinary_settings_version(instance),
+            "api_token_version": api_token_version(instance.api_token),
+            **data,
+        },
         instance=instance,
     )
     assert form.is_valid(), form.errors
@@ -248,6 +254,29 @@ def test_settings_edit_view_refuses_stale_token_replacement(admin_client, site):
     with TestCase.captureOnCommitCallbacks(execute=True):
         response = admin_client.post(edit_url, {**post, "api_token": "", "language": "de"}, follow=True)
     assert response.status_code == 200
+    setting.refresh_from_db()
+    assert (setting.api_token, setting.language) == ("rotated", "de")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("credential_change", [{"api_token": "replacement"}, {"clear_api_token": "on"}])
+def test_settings_edit_view_requires_submitted_token_fingerprint(admin_client, site, credential_change):
+    setting = VoxhelmSettings.objects.create(site=site, api_token="old-synthetic", language="fr")
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    form = admin_client.get(edit_url).context["form"]
+    post = {"settings_version": form["settings_version"].value(), "language": "de"}
+    VoxhelmSettings.objects.filter(pk=setting.pk).update(api_token="rotated")
+
+    response = admin_client.post(edit_url, {**post, **credential_change})
+
+    assert response.status_code == 200
+    assert "Reload settings before replacing or removing it" in response.content.decode()
+    setting.refresh_from_db()
+    assert (setting.api_token, setting.language) == ("rotated", "fr")
+
+    response = admin_client.post(edit_url, post)
+
+    assert response.status_code == 302
     setting.refresh_from_db()
     assert (setting.api_token, setting.language) == ("rotated", "de")
 

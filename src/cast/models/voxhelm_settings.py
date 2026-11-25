@@ -202,8 +202,7 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
         if isinstance(token_widget, TokenInput):
             token_widget.version_name = self.add_prefix("api_token_version")
             token_widget.version = rendered_version
-        posted_version = self.data.get(self.add_prefix("api_token_version"), "") if self.is_bound else ""
-        self._original_api_token_version = posted_version or rendered_version
+        self._original_api_token_version = self.data.get(self.add_prefix("api_token_version"), "")
         self._describe_effective_boolean_settings()
         if self.instance.pk and self.instance.api_token:
             self.fields["api_token"].help_text = _(

@@ -1,3 +1,4 @@
+import re
 from types import SimpleNamespace
 from urllib.parse import urlencode
 
@@ -13,6 +14,13 @@ from cast.models.voxhelm_settings import ordinary_settings_version
 from cast.views import voxhelm as voxhelm_views
 from cast.voxhelm import TranscriptSubmission, VoxhelmError, build_audio_task_ref
 from cast.wagtail_hooks import GenerateEpisodeTranscriptMenuItem
+
+
+def rendered_voxhelm_versions(response):
+    return {
+        name: re.search(rf'<input[^>]*name="{name}"[^>]*value="([^"]*)"', response.content.decode()).group(1)
+        for name in ("settings_version", "api_token_version")
+    }
 
 
 @pytest.fixture
@@ -71,12 +79,13 @@ def test_voxhelm_settings_edit_masks_and_preserves_token(admin_client, site):
     assert setting.language == "de"
     assert setting.diarization_enabled is False
 
+    versions = rendered_voxhelm_versions(response)
     with TestCase.captureOnCommitCallbacks(execute=True):
         response = admin_client.post(
             edit_url,
             {
+                **versions,
                 "api_token": "replacement-token",
-                "settings_version": ordinary_settings_version(setting),
                 "model": "whisper-1",
                 "language": "de",
                 "diarization_enabled": "true",
@@ -763,19 +772,20 @@ def test_voxhelm_settings_form_has_no_api_base_field(admin_client, site):
 @pytest.mark.parametrize("stored_token", ["stored-key", ""])
 def test_voxhelm_site_token_can_be_cleared(admin_client, site, stored_token):
     setting, _ = VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_token": stored_token})
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    versions = rendered_voxhelm_versions(admin_client.get(edit_url))
     with TestCase.captureOnCommitCallbacks(execute=True):
         response = admin_client.post(
-            reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk)),
+            edit_url,
             {
+                **versions,
                 "api_token": "",
-                "settings_version": ordinary_settings_version(setting),
                 "clear_api_token": "on",
                 "model": "",
                 "language": "",
             },
-            follow=True,
         )
-    assert response.status_code == 200
+    assert response.status_code == 302
     setting.refresh_from_db()
     assert setting.api_token == ""
 

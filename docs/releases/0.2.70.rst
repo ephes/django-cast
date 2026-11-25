@@ -4,6 +4,9 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Programmatic Voxhelm settings form submissions that replace or remove a token
+  on an existing row must include the form's rendered ``api_token_version`` value.
+
 - Editor API Markdown fields now reject fenced or indented code nested in a list
   or block quote with ``400 validation_error`` code ``nested_code`` and its
   source lines. Such code used to pass through rich-text conversion inside the
