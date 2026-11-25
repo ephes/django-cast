@@ -1112,7 +1112,7 @@ def test_media_replace_warns_when_staged_replacement_cleanup_fails(mocker):
 
 def _stub_videos(mocker, videos):
     manager = mocker.Mock()
-    queryset = manager.all.return_value.order_by.return_value
+    queryset = manager.using.return_value.order_by.return_value
     queryset.count.return_value = len(videos)
     queryset.iterator.return_value = iter(videos)
     mocker.patch("cast.management.commands.recalc_video_posters.Video.objects", manager)
@@ -1748,9 +1748,9 @@ def test_recalc_video_posters_streams_ordered_batches(video, mocker):
     )
     expected = [video.pk, *(item.pk for item in extra_videos)]
     failures = {expected[1], expected[3]}
-    queryset = Video.objects.order_by("pk")
-    all_videos = mocker.patch.object(Video.objects, "all")
-    all_videos.return_value.order_by.return_value = queryset
+    queryset = Video.objects.using("default").order_by("pk")
+    using = mocker.patch.object(Video.objects, "using")
+    using.return_value.order_by.return_value = queryset
     mocker.patch.object(recalc_video_posters, "VIDEO_BATCH_SIZE", 2)
     progress = mocker.spy(recalc_video_posters, "track")
     seen = []

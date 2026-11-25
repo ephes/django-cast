@@ -53,6 +53,8 @@ Fixes
 
 - ``import_transcript_glossary`` validates numeric podcast IDs on the same
   write database it uses to look up the podcast.
+- ``recalc_video_posters`` counts and scans videos on the write database, so
+  replica lag cannot hide videos from poster repair.
 
 - Cache editor media permission results only after a successful batch read,
   so conversion retries can resolve references from a failed batch.
