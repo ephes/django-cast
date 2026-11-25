@@ -63,6 +63,10 @@ Fixes
   feeds, omitting item author markup when the owner is absent.
 - Pin the post snapshot queryset to its initial database alias so routing
   changes cannot mix base pages with specific page and media data.
+- Record a failed transcript generation even if its exception message
+  cannot be formatted, so the attempt can be retried.
+- Preserve the upstream transcript generation failure and report unconfirmed
+  status if the writer fails to record the failure.
 
 - Rebuild chapter companions when they reconnect so their controls seek the
   currently bound player.

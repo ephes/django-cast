@@ -501,3 +501,85 @@ def test_generate_for_audio_names_the_job_when_completion_fails(mocker, error, e
 def test_submit_for_audio_requires_saved_audio():
     with pytest.raises(VoxhelmError, match="must be saved"):
         VoxhelmTranscriptService(client=object()).submit_for_audio(SimpleNamespace(pk=None))
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("stage", ["submission", "completion"])
+def test_generation_settles_when_failure_cannot_be_formatted(mocker, audio, stage):
+    from cast.models import TranscriptGeneration
+    from cast.voxhelm import TranscriptGenerationResult
+
+    class UnprintableVoxhelmError(VoxhelmError):
+        def __str__(self):
+            raise RuntimeError("synthetic diagnostic failure")
+
+    failure = UnprintableVoxhelmError()
+    service = VoxhelmTranscriptService(client=SimpleNamespace())
+    submission = TranscriptSubmission("job-7", "https://media.example/audio", "", {})
+    submit = mocker.patch.object(service, "submit_for_audio", return_value=submission)
+    transcript, _ = service._get_or_create_transcript(audio=audio)
+    finish = mocker.patch.object(
+        service,
+        "complete_audio_job",
+        return_value=TranscriptGenerationResult(transcript, False, submission.job_id, submission.source_url),
+    )
+    failing = submit if stage == "submission" else finish
+    failing.side_effect = failure
+
+    with pytest.raises(UnprintableVoxhelmError) as caught:
+        service.generate_for_audio(audio)
+
+    assert caught.value is failure
+    generation = TranscriptGeneration.objects.get(audio=audio)
+    assert generation.status == TranscriptGeneration.Status.FAILED
+    assert "UnprintableVoxhelmError" in generation.error_message
+    assert generation.completed_at is not None
+
+    failing.side_effect = None
+    service.generate_for_audio(audio)
+    generation.refresh_from_db()
+    assert generation.status == TranscriptGeneration.Status.SUCCEEDED
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("entry", ["service", "command"])
+def test_generation_preserves_remote_failure_when_failure_update_raises(mocker, audio, entry):
+    from io import StringIO
+
+    from django.core.management import CommandError, call_command
+    from django.db import OperationalError
+    from django.db.models import QuerySet
+
+    from cast.models import TranscriptGeneration
+
+    primary = VoxhelmConnectionError("synthetic Voxhelm wait failure")
+    settlement = OperationalError("synthetic writer failure")
+    client = SimpleNamespace(wait_for_job=mocker.Mock(side_effect=primary))
+    service = VoxhelmTranscriptService(client=client)
+    submission = TranscriptSubmission("job-7", "https://media.example/audio", "", {})
+    mocker.patch.object(service, "submit_for_audio", return_value=submission)
+    update = QuerySet.update
+
+    def update_or_fail(queryset, **fields):
+        if queryset.model is TranscriptGeneration and fields.get("status") == TranscriptGeneration.Status.FAILED:
+            raise settlement
+        return update(queryset, **fields)
+
+    mocker.patch.object(QuerySet, "update", update_or_fail)
+    if entry == "service":
+        with pytest.raises(VoxhelmConnectionError) as caught:
+            service.generate_for_audio(audio)
+        assert caught.value is primary
+    else:
+        mocker.patch("cast.management.commands.generate_transcripts.VoxhelmTranscriptService", return_value=service)
+        errors = StringIO()
+        with pytest.raises(CommandError, match="1 transcript generations failed"):
+            call_command("generate_transcripts", audio_id=[audio.pk], stdout=StringIO(), stderr=errors)
+        assert "synthetic Voxhelm wait failure" in errors.getvalue()
+        assert "Transcript generation status could not be confirmed (OperationalError)" in errors.getvalue()
+
+    client.wait_for_job.assert_called_once_with(submission.job_id)
+    assert any("status could not be confirmed" in note and "OperationalError" in note for note in primary.__notes__)
+    generation = TranscriptGeneration.objects.get(audio=audio)
+    assert generation.status == TranscriptGeneration.Status.RUNNING
+    assert generation.voxhelm_job_id == submission.job_id

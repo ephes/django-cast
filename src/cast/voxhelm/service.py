@@ -324,6 +324,14 @@ class TranscriptTargetDisappeared(VoxhelmError):
     """The selected audio no longer exists on the generation writer."""
 
 
+def generation_failure_diagnostic(error: BaseException) -> tuple[str, bool]:
+    """Return a bounded diagnostic and whether the exception supplied its message."""
+    try:
+        return str(error)[:2048], True
+    except BaseException:
+        return type.__getattribute__(type(error), "__name__")[:80], False
+
+
 class VoxhelmTranscriptService:
     def __init__(
         self,
@@ -513,14 +521,25 @@ class VoxhelmTranscriptService:
             )
         except BaseException as exc:
             # BaseException: an interrupted or cancelled CLI wait must not leave the row RUNNING.
-            current.update(
-                status=TranscriptGeneration.Status.FAILED,
-                error_message=str(exc),
-                completed_at=timezone.now(),
-                updated_at=timezone.now(),
-            )
-            if isinstance(exc, VoxhelmError) and submission is not None and submission.job_id not in str(exc):
-                raise type(exc)(f"{exc} (Voxhelm job {submission.job_id})") from exc
+            message, formatted = generation_failure_diagnostic(exc)
+            try:
+                current.update(
+                    status=TranscriptGeneration.Status.FAILED,
+                    error_message=message,
+                    completed_at=timezone.now(),
+                    updated_at=timezone.now(),
+                )
+            except Exception as settlement_error:
+                category = type.__getattribute__(type(settlement_error), "__name__")[:80]
+                BaseException.add_note(exc, f"Transcript generation status could not be confirmed ({category}).")
+            else:
+                if (
+                    formatted
+                    and isinstance(exc, VoxhelmError)
+                    and submission is not None
+                    and submission.job_id not in message
+                ):
+                    raise type(exc)(f"{message} (Voxhelm job {submission.job_id})") from exc
             raise
         current.update(
             status=TranscriptGeneration.Status.SUCCEEDED,

@@ -9,7 +9,7 @@ from django.core.management.base import BaseCommand, CommandError
 
 from ...models import Audio, Episode
 from ...voxhelm import VoxhelmError, VoxhelmTranscriptService
-from ...voxhelm.service import TranscriptAlreadyComplete, TranscriptGenerationActive
+from ...voxhelm.service import TranscriptAlreadyComplete, TranscriptGenerationActive, generation_failure_diagnostic
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,10 @@ class Command(BaseCommand):
                 continue
             except VoxhelmError as exc:
                 errors += 1
-                self.stderr.write(f"error audio={audio.pk}: {exc}")
+                message, _ = generation_failure_diagnostic(exc)
+                self.stderr.write(f"error audio={audio.pk}: {message}")
+                for note in getattr(exc, "__notes__", ()):
+                    self.stderr.write(f"error audio={audio.pk}: {note}")
                 continue
 
             for warning in result.warnings:

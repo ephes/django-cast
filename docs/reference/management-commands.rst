@@ -61,6 +61,10 @@ The command checks for a complete transcript on the writer database when each
 audio target reaches its turn. Use ``--force`` to bypass that check.
 If selected audio disappears before its turn, the command reports that audio
 ID as a failed target, processes the remaining targets, and exits with an error.
+Generation failures record a bounded diagnostic or, if the diagnostic cannot
+be formatted, the exception type. If the writer cannot record the failure,
+the command reports that durable status is unconfirmed alongside the original
+failure. Check the generation's recorded status before retrying.
 
 .. code-block:: bash
 
