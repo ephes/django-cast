@@ -14,6 +14,7 @@ from cast.blocks import gallery_item_parts
 from cast.post_body_blocks import configured_content_blocks, default_content_blocks
 
 from .errors import ErrorCollector, flatten_django_validation_error
+from .identities import unique_identities, valid_identity
 from .media_refs import MediaResolution, get_choosable_audio, get_choosable_image, get_choosable_video
 from .richtext import sanitize_block_value
 
@@ -37,6 +38,7 @@ class ConversionContext:
     existing_section: list[dict] | None = None
     path_prefix: str | None = None
     media_resolution: MediaResolution | None = None
+    existing_block: dict | None = None  # the uniquely identified block in this revision
 
     def __post_init__(self) -> None:
         if self.path_prefix is None:
@@ -270,6 +272,11 @@ class VideoConverter(MediaRefConverter):
         )
 
 
+def _gallery_items(value: Any) -> list[Any]:
+    items = value.get("gallery") if isinstance(value, dict) else None
+    return items if isinstance(items, list) else []
+
+
 @dataclass(frozen=True)
 class GalleryConverter:
     name: str = "gallery"
@@ -279,6 +286,9 @@ class GalleryConverter:
         if not isinstance(value, list) or not value:
             errors.add(path, "invalid", "Gallery value must be a non-empty list of image refs.")
             return None
+        existing_value = (ctx.existing_block or {}).get("value")
+        existing_ids = unique_identities(_gallery_items(existing_value))
+        used_ids: set[str] = set()
         items = []
         valid = True
         for index, ref in enumerate(value):
@@ -300,19 +310,29 @@ class GalleryConverter:
                 errors.add(f"{path}.{index}.caption", "invalid", "Caption must be a string of at most 250 characters.")
                 valid = False
                 continue
-            items.append({"id": str(uuid4()), "type": "item", "value": {"image": image_id, "caption": caption}})
+            if "existing_item_id" in ref:
+                identity = ref["existing_item_id"]
+                if not valid_identity(identity) or existing_ids.get(identity) is None or identity in used_ids:
+                    errors.add(
+                        f"{path}.{index}.existing_item_id",
+                        "invalid",
+                        "Item identity must name one existing item in this gallery and revision, used only once.",
+                    )
+                    valid = False
+                    continue
+                used_ids.add(identity)
+            else:
+                identity = str(uuid4())
+            items.append({"id": identity, "type": "item", "value": {"image": image_id, "caption": caption}})
         if not valid:
             return None
         return {"layout": "default", "gallery": items}
 
     def to_author(self, value: Any, *, ctx: ConversionContext) -> Any | Unsupported:
-        items = value.get("gallery", []) if isinstance(value, dict) else []
-        if not (
-            isinstance(items, list)
-            and len(items) > 0
-            and all(isinstance(item, dict) and "value" in item for item in items)
-        ):
+        items = _gallery_items(value)
+        if not items or not all(isinstance(item, dict) and "value" in item for item in items):
             return UNSUPPORTED
+        unique_ids = unique_identities(items) if ctx.existing_block is not None else {}
         result = []
         for item in items:
             image_id, caption = gallery_item_parts(item)
@@ -331,6 +351,9 @@ class GalleryConverter:
             ref = {"id": image_id}
             if caption:
                 ref["caption"] = caption
+            identity = item.get("id")
+            if valid_identity(identity) and unique_ids.get(identity) is not None:
+                ref["existing_item_id"] = identity
             result.append(ref)
         return result
 

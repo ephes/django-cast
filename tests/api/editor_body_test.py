@@ -408,7 +408,9 @@ class TestOverviewToAuthorBlocks:
             {"type": "video", "value": {"id": video.id}},
         ]
         internal = author_blocks_to_overview(author, user=superuser)
-        assert block_values(overview_to_author_blocks(internal)) == block_values(author)
+        returned = overview_to_author_blocks(internal)
+        assert returned[4]["value"][0].pop("existing_item_id") == internal[4]["value"]["gallery"][0]["id"]
+        assert block_values(returned) == block_values(author)
 
     def test_unknown_stored_block_is_placeholder(self):
         internal = [{"type": "embed", "value": "https://example.com"}, {"type": "heading", "value": "h"}]

@@ -112,6 +112,25 @@ describe("AudioController transport", () => {
     expect(audio.currentTime).toBe(9999);
   });
 
+  it("uses live duration for seek bounds and refreshes the active cue on durationchange", () => {
+    const { audio, controller } = setup({ duration: 3, transcript: { cues } });
+    controller.seek(5);
+    expect(audio.currentTime).toBe(3);
+    tick(audio, 3);
+    expect(controller.currentCueIndex).toBe(2);
+    const durations: number[] = [];
+    controller.addEventListener("durationchange", (event) => durations.push((event as CustomEvent).detail.duration));
+
+    audio.duration = 6;
+    audio.emit("durationchange");
+    expect(durations).toEqual([6]);
+    expect(controller.currentCueIndex).toBe(1);
+    controller.seek(5);
+    expect(audio.currentTime).toBe(5);
+    controller.seek(7);
+    expect(audio.currentTime).toBe(6);
+  });
+
   it("seekToCue seeks just inside the cue", () => {
     const { audio, controller } = setup({ duration: 100, transcript: { cues } });
     controller.seekToCue(1);

@@ -17,6 +17,14 @@ export class CastChaptersElement extends CastPlayerView {
   private toggleBtn?: HTMLButtonElement;
 
   protected onController(controller: AudioController): void {
+    this.section?.remove();
+    this.currentLabel?.remove();
+    this.section = undefined;
+    this.body = undefined;
+    this.toggleBtn = undefined;
+    this.currentLabel = undefined;
+    this.buttons = [];
+
     const chapters = controller.getChapters();
     if (chapters.length === 0) {
       return; // render nothing — no empty box, no layout shift
@@ -83,7 +91,6 @@ export class CastChaptersElement extends CastPlayerView {
     const list = document.createElement("ol");
     list.className = "cast-chapters__list";
 
-    this.buttons = [];
     controller.getChapters().forEach((chapter, index) => {
       const item = document.createElement("li");
       const button = document.createElement("button");

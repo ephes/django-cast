@@ -31,25 +31,22 @@ export function getController(id: string): AudioController | undefined {
   return registry.get(id);
 }
 
-// Resolve the controller for `id`, now or when it becomes ready. Returns a
-// cleanup function that removes the pending ready-listener if still waiting.
-export function whenController(id: string, callback: (controller: AudioController) => void): () => void {
-  const existing = registry.get(id);
-  if (existing) {
-    callback(existing);
-    return () => {};
-  }
+// Observe the controller for this ID, including replacements, until canceled.
+export function watchController(id: string, callback: (controller: AudioController) => void): () => void {
+  const notify = () => {
+    const controller = getController(id);
+    if (controller) {
+      callback(controller);
+    }
+  };
   const listener = (event: Event) => {
     const detail = (event as CustomEvent<{ playerId: string }>).detail;
     if (detail?.playerId === id) {
-      document.removeEventListener(PLAYER_READY_EVENT, listener);
-      const controller = registry.get(id);
-      if (controller) {
-        callback(controller);
-      }
+      notify();
     }
   };
   document.addEventListener(PLAYER_READY_EVENT, listener);
+  notify();
   return () => document.removeEventListener(PLAYER_READY_EVENT, listener);
 }
 

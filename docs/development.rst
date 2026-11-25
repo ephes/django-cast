@@ -925,6 +925,10 @@ Frontend build maintenance
 ``just js-build-all`` also builds the comments bundle. Test modules use the
 ``*_test.py`` naming convention. The django-upgrade hook targets Django 5.2.
 
+The Django asset freshness check in DEBUG mode skips source files or manifests
+that disappear during a build or branch switch. Remaining comparable files can
+still trigger ``cast.W001`` when the built assets are stale.
+
 Remote styleguide configuration
 ===============================
 

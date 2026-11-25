@@ -22,17 +22,17 @@ function makePayload(overrides: Partial<PlayerPayload> = {}): PlayerPayload {
 function mount(payload: PlayerPayload, mode = "list") {
   const script = document.createElement("script");
   script.type = "application/json";
-  script.id = "cast-player-data-3";
+  script.id = `cast-player-data-${payload.audioId}`;
   script.textContent = JSON.stringify(payload);
   document.body.appendChild(script);
 
   const player = document.createElement("cast-audio-player");
-  player.id = "cast-player-3";
-  player.setAttribute("data-payload", "cast-player-data-3");
+  player.id = `cast-player-${payload.audioId}`;
+  player.setAttribute("data-payload", `cast-player-data-${payload.audioId}`);
   document.body.appendChild(player);
 
   const chapters = document.createElement("cast-chapters");
-  chapters.setAttribute("for", "cast-player-3");
+  chapters.setAttribute("for", `cast-player-${payload.audioId}`);
   chapters.setAttribute("data-mode", mode);
   document.body.appendChild(chapters);
   return { player: player as HTMLElement & { controller?: any }, chapters };
@@ -77,6 +77,30 @@ describe("cast-chapters", () => {
     const buttons = el.querySelectorAll(".cast-chapters__button");
     expect(buttons).toHaveLength(2);
     expect(buttons[1].textContent).toContain("Body");
+  });
+
+  it("rebuilds the same companion for a different player, including an empty chapter list", () => {
+    const first = mount(makePayload({ chapters }));
+    const second = mount(makePayload({ audioId: 4, chapters: [{ start: 20, title: "Replacement" }] }));
+    const empty = mount(makePayload({ audioId: 5 }));
+    const el = first.chapters;
+
+    el.remove();
+    el.setAttribute("for", second.player.id);
+    document.body.appendChild(el);
+    expect(el.querySelectorAll(".cast-panel__toggle")).toHaveLength(1);
+    el.querySelector<HTMLButtonElement>(".cast-panel__toggle")!.click();
+    const buttons = el.querySelectorAll<HTMLButtonElement>(".cast-chapters__button");
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].textContent).toContain("Replacement");
+    buttons[0].click();
+    expect(first.player.querySelector("audio")!.currentTime).toBe(0);
+    expect(second.player.querySelector("audio")!.currentTime).toBe(20);
+
+    el.remove();
+    el.setAttribute("for", empty.player.id);
+    document.body.appendChild(el);
+    expect(el.children).toHaveLength(0);
   });
 
   it("marks the current chapter on chapterchange", () => {

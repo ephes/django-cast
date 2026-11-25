@@ -1,14 +1,13 @@
 // Base class for the coupled views (<cast-transcript>, <cast-chapters>). Handles
-// resolving the controller by the `for` attribute (now or via the late
-// `cast:player-ready` retry) and precise listener cleanup on disconnect so no
-// controller leaks across htmx swaps.
+// binding by the `for` attribute and retiring controller listeners on replacement
+// or disconnect.
 
 import { AudioController } from "./audio-controller";
-import { whenController } from "./player-registry";
+import { watchController } from "./player-registry";
 
 export abstract class CastPlayerView extends HTMLElement {
   protected controller?: AudioController;
-  private cancelPending?: () => void;
+  private stopWatching?: () => void;
   private listeners: Array<[string, EventListener]> = [];
 
   connectedCallback(): void {
@@ -17,18 +16,23 @@ export abstract class CastPlayerView extends HTMLElement {
       return;
     }
     this.renderInitial();
-    this.cancelPending = whenController(forId, (controller) => {
-      this.cancelPending = undefined;
+    this.stopWatching = watchController(forId, (controller) => {
+      if (this.controller === controller) {
+        return;
+      }
+      this.unbindController();
       this.controller = controller;
       this.onController(controller);
     });
   }
 
   disconnectedCallback(): void {
-    if (this.cancelPending) {
-      this.cancelPending();
-      this.cancelPending = undefined;
-    }
+    this.stopWatching?.();
+    this.stopWatching = undefined;
+    this.unbindController();
+  }
+
+  private unbindController(): void {
     for (const [type, listener] of this.listeners) {
       this.controller?.removeEventListener(type, listener);
     }
@@ -47,6 +51,6 @@ export abstract class CastPlayerView extends HTMLElement {
   // Optional pre-controller render (e.g. a transcript loading state).
   protected renderInitial(): void {}
 
-  // Called once the controller is resolved.
+  // Called when the initial or replacement controller is resolved.
   protected abstract onController(controller: AudioController): void;
 }

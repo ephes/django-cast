@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from typing import Any, TypeGuard
+from typing import Any
 from uuid import uuid4
 
 from ..post_body_blocks import POST_BODY_SECTIONS
 from .blocks import UNSUPPORTED, ConversionContext, content_converters
 from .errors import ContentValidationError, ErrorCollector
+from .identities import unique_identities, valid_identity
 from .media_refs import MediaResolution
 from .placeholders import placeholder_for, resolve_placeholder
 
@@ -24,20 +25,6 @@ def _path_prefix(ctx: ConversionContext) -> str:
     if path_prefix is None:
         raise ValueError("path_prefix is required when section is None")
     return path_prefix
-
-
-def _valid_block_identity(identity: Any) -> TypeGuard[str]:
-    return isinstance(identity, str) and 0 < len(identity) <= 64
-
-
-def _unique_block_identities(section_value: list[Any]) -> dict[str, int | None]:
-    """Map each valid stored ID to its index, or ``None`` when the section repeats it."""
-    identities: dict[str, int | None] = {}
-    for index, stored in enumerate(section_value):
-        identity = stored.get("id") if isinstance(stored, dict) else None
-        if _valid_block_identity(identity):
-            identities[identity] = None if identity in identities else index
-    return identities
 
 
 def _with_media_resolution(ctx: ConversionContext, blocks: list[Any], *, stored: bool) -> ConversionContext:
@@ -69,7 +56,7 @@ def convert_author_blocks(blocks: Any, *, ctx: ConversionContext, errors: ErrorC
     result: list[dict] = []
     converters = content_converters(ctx.section)
     existing = ctx.existing_section or []
-    existing_by_id = _unique_block_identities(existing)
+    existing_by_id = unique_identities(existing)
     used_existing_indexes: set[int] = set()
     for index, block in enumerate(blocks):
         base = f"{path_prefix}.{index}"
@@ -120,7 +107,8 @@ def convert_author_blocks(blocks: Any, *, ctx: ConversionContext, errors: ErrorC
             errors.add(f"{base}.type", "unsupported_block_type", f"Block type {block_type!r} is not supported.")
             continue
         before = len(errors)
-        prepared = converter.to_stream(value, ctx=ctx, path=f"{base}.value", errors=errors)
+        block_ctx = replace(ctx, existing_block=existing[existing_index]) if existing_index is not None else ctx
+        prepared = converter.to_stream(value, ctx=block_ctx, path=f"{base}.value", errors=errors)
         if len(errors) == before:
             converted = {
                 "type": block_type,
@@ -139,7 +127,7 @@ def section_to_author_blocks(section_value: list[dict], *, ctx: ConversionContex
     converters = content_converters(ctx.section)
     # Expose only identities the write side can bind back: a stored ID repeated in
     # the section is ambiguous, so its blocks round-trip as new blocks instead.
-    unique_ids = _unique_block_identities(section_value)
+    unique_ids = unique_identities(section_value)
     for index, block in enumerate(section_value):
         block_type = block.get("type")
         value = block.get("value")
@@ -147,13 +135,15 @@ def section_to_author_blocks(section_value: list[dict], *, ctx: ConversionContex
         if converter is None:
             author.append(placeholder_for(index, block, path_prefix))
             continue
-        author_value = converter.to_author(value, ctx=ctx)
+        identity = block.get("id")
+        preserves_identity = valid_identity(identity) and unique_ids.get(identity) is not None
+        block_ctx = replace(ctx, existing_block=block) if preserves_identity else ctx
+        author_value = converter.to_author(value, ctx=block_ctx)
         if author_value is UNSUPPORTED:
             author.append(placeholder_for(index, block, path_prefix))
         else:
             converted = {"type": block_type, "value": author_value}
-            identity = block.get("id")
-            if _valid_block_identity(identity) and unique_ids.get(identity) is not None:
+            if preserves_identity:
                 converted["existing_block_id"] = identity
             author.append(converted)
     return author

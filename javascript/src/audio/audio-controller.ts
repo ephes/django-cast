@@ -72,10 +72,11 @@ export class AudioController extends EventTarget {
   }
 
   get duration(): number | null {
-    if (isFiniteNumber(this.payload.duration)) {
-      return this.payload.duration;
+    const nativeDuration = this.audio.duration;
+    if (isFiniteNumber(nativeDuration) && nativeDuration >= 0) {
+      return nativeDuration;
     }
-    return isFiniteNumber(this.audio.duration) ? this.audio.duration : null;
+    return isFiniteNumber(this.payload.duration) ? this.payload.duration : null;
   }
 
   get paused(): boolean {

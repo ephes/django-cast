@@ -57,6 +57,10 @@ class TestNewestSourceMtime:
         (tmp_path / "readme.md").write_text("hello")
         assert _newest_source_mtime(tmp_path) is None
 
+    def test_ignores_directories_with_source_extensions(self, tmp_path):
+        (tmp_path / "directory.ts").mkdir()
+        assert _newest_source_mtime(tmp_path) is None
+
     def test_finds_newest_ts_file(self, tmp_path):
         old = tmp_path / "old.ts"
         old.write_text("old")
@@ -147,6 +151,47 @@ class TestCheckAssetFreshness:
         assert len(warnings) == 1
         assert isinstance(warnings[0], Warning)
         assert warnings[0].id == "cast.W001"
+
+    @pytest.mark.parametrize("vanishing", ["source", "manifest"])
+    def test_asset_disappearance_does_not_abort_check(self, settings, asset_tree, mocker, vanishing):
+        settings.DEBUG = True
+        repo, ts_file, manifest = asset_tree
+        mocker.patch("cast.checks.__file__", str(_fake_checks_file(repo)))
+        os.utime(ts_file, (2, 2))
+        extra_source = ts_file.with_name("vanishing.ts")
+        extra_source.touch()
+        target = extra_source if vanishing == "source" else manifest
+        real_stat = Path.stat
+        real_is_file = Path.is_file
+
+        def is_file(path, *args, **kwargs):
+            # The preliminary probe in the old check still sees the file.
+            return path == target or real_is_file(path, *args, **kwargs)
+
+        def stat(path, *args, **kwargs):
+            if path == target:
+                target.unlink()
+            return real_stat(path, *args, **kwargs)
+
+        mocker.patch.object(Path, "is_file", is_file)
+        mocker.patch.object(Path, "stat", stat)
+        warnings = check_asset_freshness(None)
+        assert [warning.id for warning in warnings] == (["cast.W001"] if vanishing == "source" else [])
+
+    @pytest.mark.parametrize("inaccessible", ["source", "manifest"])
+    def test_asset_access_errors_are_visible(self, asset_tree, mocker, inaccessible):
+        repo, ts_file, manifest = asset_tree
+        target = ts_file if inaccessible == "source" else manifest
+        real_stat = Path.stat
+
+        def stat(path, *args, **kwargs):
+            if path == target:
+                raise PermissionError("asset unreadable")
+            return real_stat(path, *args, **kwargs)
+
+        mocker.patch.object(Path, "stat", stat)
+        with pytest.raises(PermissionError, match="asset unreadable"):
+            _find_stale_assets(repo)
 
     def test_no_warning_when_fresh(self, settings, asset_tree, mocker):
         settings.DEBUG = True

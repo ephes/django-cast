@@ -48,7 +48,6 @@ export class CastTranscriptElement extends CastPlayerView {
   private searchInput?: HTMLInputElement;
   private searchStatus?: HTMLElement;
   private followButton?: HTMLButtonElement;
-  private tabbableButton?: HTMLButtonElement;
   private loadingEl?: HTMLElement;
   private cueButtons: HTMLButtonElement[] = [];
   private pendingCues?: readonly Cue[];
@@ -65,6 +64,27 @@ export class CastTranscriptElement extends CastPlayerView {
   private searchSuspended = false;
 
   protected onController(controller: AudioController): void {
+    this.section?.remove();
+    this.section = undefined;
+    this.panelBody = undefined;
+    this.scrollRegion = undefined;
+    this.list = undefined;
+    this.toggleButton = undefined;
+    this.toolsEl = undefined;
+    this.countLabel = undefined;
+    this.searchInput = undefined;
+    this.searchStatus = undefined;
+    this.followButton = undefined;
+    this.loadingEl = undefined;
+    this.pendingCues = undefined;
+    this.cueButtons = [];
+    this.cueSearchRows = [];
+    this.activeIndex = -1;
+    this.matchIndices = [];
+    this.matchCursor = -1;
+    this.activeMatch = undefined;
+    this.searchSuspended = false;
+
     if (!controller.hasTranscript) {
       return; // no transcript at all -> render nothing
     }
@@ -232,7 +252,6 @@ export class CastTranscriptElement extends CastPlayerView {
       writeBool(TABBABLE_STORAGE_KEY, this.tabbable);
       this.applyTabbable();
     });
-    this.tabbableButton = tab;
 
     tools.append(count, search, prev, next, status, follow, tab);
     this.toolsEl = tools;
