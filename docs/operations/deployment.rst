@@ -84,6 +84,8 @@ deployment-managed secrets, set ``CAST_VOXHELM_API_BASE`` and
 always deployment configuration (it is no longer a Wagtail site setting); a
 token stored in Wagtail ``Voxhelm settings`` overrides only the key. To switch
 a site to the deployment key, tick "Remove stored API token" in Wagtail.
+On multi-database deployments, the form checks the stored token on the database
+selected for writing the settings row, then checks it again under the write lock.
 When upgrading past the migration that removed the site-level API base
 (``cast.0088``), set ``CAST_VOXHELM_API_BASE`` in deploy config first: the
 migration logs a warning for every stored site base that differs from it.
