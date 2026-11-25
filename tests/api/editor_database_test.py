@@ -247,3 +247,28 @@ def test_editor_refuses_cross_database_user(api_client, blog, podcast, kind, ope
     response = getattr(api_client, "post" if operation == "create" else "patch")(url, payload, format="json")
     assert response.status_code == 400, response.content
     assert response.json()["errors"]["database"][0]["code"] == "unsupported"
+
+
+@pytest.mark.django_db(transaction=True, databases={"default", "migration_other"})
+def test_editor_error_rolls_back_atomic_request(api_client, monkeypatch):
+    from cast.api.editor.errors import EditorValidationError
+    from cast.api.editor.media import EditorAudioListCreateView
+
+    alias = "migration_other"
+
+    def post(self, request, *args, **kwargs):
+        assert connections[alias].in_atomic_block
+        Tag.objects.using(alias).create(name="Synthetic failed request")
+        raise EditorValidationError({"title": [{"code": "invalid", "message": "Synthetic error."}]})
+
+    monkeypatch.setitem(connections[alias].settings_dict, "ATOMIC_REQUESTS", True)
+    monkeypatch.setattr(EditorAudioListCreateView, "post", post)
+    api_client.force_authenticate(user=get_user_model()(is_active=True, is_staff=True, is_superuser=True))
+    response = api_client.post(reverse("cast:api:editor_media_audios"), {}, format="json")
+
+    assert response.status_code == 400, response.content
+    assert response.json() == {
+        "code": "validation_error",
+        "errors": {"title": [{"code": "invalid", "message": "Synthetic error."}]},
+    }
+    assert not Tag.objects.using(alias).filter(name="Synthetic failed request").exists()

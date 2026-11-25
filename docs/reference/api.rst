@@ -1446,6 +1446,9 @@ admin access and requires no token scope.
 
 **Error envelopes**
 
+Handled editor API exceptions roll back active request transactions on database
+aliases configured with Django's ``ATOMIC_REQUESTS``.
+
 Validation errors (``400 Bad Request``):
 
 .. code-block:: json

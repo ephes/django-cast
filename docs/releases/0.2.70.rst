@@ -40,6 +40,8 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Roll back active ``ATOMIC_REQUESTS`` transactions for handled editor API exceptions.
+
 - Reject multiple selected episodes sharing one audio object in
   ``generate_transcripts`` before submitting jobs. Select one episode or use
   ``--audio-id`` directly.
