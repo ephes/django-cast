@@ -30,7 +30,7 @@ def test_seed_serializes_absent_roots(monkeypatch, command, site):
 
     monkeypatch.setattr(view, "_ensure_blog", ensure_blog)
     monkeypatch.setattr("cast.management.commands.ensure_reference_site._prepare_styleguide_assets", lambda: assets)
-    monkeypatch.setattr("cast.management.commands.ensure_reference_site._styleguide_context", lambda *a: {})
+    monkeypatch.setattr("cast.management.commands.ensure_reference_site._styleguide_context", lambda *a, **kw: {})
 
     def seed(second=False):
         close_old_connections()

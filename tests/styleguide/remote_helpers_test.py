@@ -532,7 +532,7 @@ def test_styleguide_gallery_repository_and_blocks(monkeypatch):
         limit=None,
     )
     assert len(result) == 2
-    assert rendered == [True, True]
+    assert rendered == [None, None]
 
     rendered.clear()
     result_limited = styleguide_view._ensure_styleguide_gallery_blocks(
@@ -540,6 +540,7 @@ def test_styleguide_gallery_repository_and_blocks(monkeypatch):
         repository,
         "bootstrap4",
         limit=1,
+        ensure_renditions=True,
     )
     assert result_limited == ["<block/>"]
     assert rendered == [True]

@@ -67,8 +67,6 @@ class Command(BaseCommand):
         overrides = {}
         if options.get("remote_media"):
             overrides["CAST_STYLEGUIDE_REMOTE_MEDIA"] = True
-        if options.get("with_renditions"):
-            overrides["CAST_STYLEGUIDE_GENERATE_RENDITIONS"] = True
 
         factory = RequestFactory()
         request = cast(HtmxHttpRequest, factory.get("/cast/styleguide/", HTTP_HOST="localhost:8000"))
@@ -84,7 +82,9 @@ class Command(BaseCommand):
                 if options.get("reset"):
                     self._reset_reference_site(self._reference_roots())
                 styleguide_data = _build_styleguide_data(request, assets=assets)
-                _styleguide_context(styleguide_data, request, theme)
+                _styleguide_context(
+                    styleguide_data, request, theme, ensure_renditions=True if options.get("with_renditions") else None
+                )
 
         if options.get("reset"):
             self.stdout.write(self.style.WARNING("Reference site data replaced."))
