@@ -71,9 +71,10 @@ def configuration_payload(*, draft: Episode, audio: Audio | None, site: Site | N
 def generation_payload(generation: TranscriptGeneration | None) -> dict[str, Any] | None:
     if generation is None:
         return None
+    is_stale = generation.is_stale
     return {
-        "status": "interrupted" if generation.is_stale else generation.status,
-        "active": generation.is_active and not generation.is_stale,
+        "status": "interrupted" if is_stale else generation.status,
+        "active": generation.status in generation.ACTIVE_STATUSES and not is_stale,
         "error": generation.error_message,
         "task_ref": generation.task_ref,
         "voxhelm_job_id": generation.voxhelm_job_id,

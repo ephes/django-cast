@@ -75,6 +75,41 @@ def test_routed_editor_revision_failure_rolls_back(settings, api_client, monkeyp
     ContentType.objects.clear_cache()
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize("kind", ["post", "episode"])
+def test_create_projection_failure_rolls_back(api_client, admin_user, blog, podcast, monkeypatch, kind):
+    parent = blog if kind == "post" else podcast
+    parent.refresh_from_db()
+    child_count = parent.numchild
+    revision_count = Revision.objects.count()
+    slug = "synthetic-projection-retry"
+    payload = {"parent": {"id": parent.pk}, "title": "Synthetic draft", "slug": slug, "overview": []}
+    url = reverse(f"cast:api:editor_{kind}_create")
+    api_client.force_authenticate(user=admin_user)
+
+    def fail_projection(self, page, *, user, content_post, revision):
+        assert page.get_parent().pk == parent.pk
+        assert page.latest_revision_id == revision.pk
+        raise RuntimeError("Synthetic projection failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(PostEditorMixin, "_serialize", fail_projection)
+        with pytest.raises(RuntimeError, match="Synthetic projection failure"):
+            api_client.post(url, payload, format="json")
+
+    parent.refresh_from_db()
+    assert parent.numchild == child_count
+    assert not parent.get_children().filter(slug=slug).exists()
+    assert Revision.objects.count() == revision_count
+
+    response = api_client.post(url, payload, format="json")
+    assert response.status_code == 201, response.content
+    parent.refresh_from_db()
+    draft = parent.get_children().get(slug=slug)
+    assert response.json()["id"] == draft.pk
+    assert response.json()["latest_revision_id"] == draft.revisions.get().pk
+
+
 @pytest.fixture
 def replica_parent():
     def create(parent):

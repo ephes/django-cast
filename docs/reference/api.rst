@@ -570,7 +570,9 @@ acquiring the parent write lock, with the fresh user and a new
 permission-resolution cache. A collection move or media grant
 withdrawal committed while creation waits returns ``400`` with the usual
 ``not_found`` field error and rolls back the entire creation. An authorized
-retry can create the draft normally.
+retry can create the draft normally. The first revision and its response data
+are prepared in the same transaction. If preparing that data raises an error,
+creation rolls back and a retry can use the same slug.
 
 Editor page writes, sibling slug checks, revisions and publication use one
 transaction on the routed page write database. Page/revision/related models
@@ -1428,8 +1430,8 @@ Fields:
   ``queued``, ``running``, ``succeeded``, ``failed``, or ``interrupted`` (a
   queued/running generation older than ``CAST_VOXHELM_STALE_AFTER``);
   ``active`` is true only for a queued or running generation that is not
-  interrupted. ``error`` carries the failure message. Poll ``GET`` until
-  ``active`` is false.
+  interrupted. Both fields use the same cutoff check within a response.
+  ``error`` carries the failure message. Poll ``GET`` until ``active`` is false.
 - ``transcript`` is ``null`` until a transcript exists. ``speaker_labels`` are
   the labels stored in the transcript files. ``preview_speaker_labels`` are the
   names an editor sees in the preview after approved speaker mappings and the
@@ -1582,6 +1584,10 @@ Video result shape:
       "edit_url": "/admin/castvideo/edit/43/"
     }
 
+A file URL is returned as a local path, with any query string and fragment.
+When storage cannot supply a URL or supplies one that cannot be parsed, the
+file field is ``null`` and the media item remains in the response.
+
 Upload media::
 
     POST /api/editor/media/images/
@@ -1714,7 +1720,9 @@ Discover upload collections::
 The ``type`` parameter is required and must be one of ``image``, ``audio``, or
 ``video``. Responses use the same pagination envelope. Items include ``id``,
 ``name``, display-only ``breadcrumb``, and ``ancestors`` from root to parent.
-Ancestor names and IDs come from the database used to paginate the collections.
+Page items and their ancestor names and IDs come from the same view of the
+collection tree on the selected read database, even if a collection moves
+while the request runs.
 Discovery returns candidate upload targets; custom permission policies can
 still make a saved audio/video object fail the defensive post-save choose check.
 
