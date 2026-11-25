@@ -104,11 +104,17 @@ def get_obsolete_and_missing_rendition_strings(
     all_image_ids = {image_id for image_id, filter_string in required_renditions}
     renditions = rendition_model.objects if using is None else rendition_model.objects.using(using)
     renditions_queryset = renditions.filter(image__in=all_image_ids)
-    existing_rendition_to_id = {
-        (image_id, filter_spec): pk
-        for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec")
-    }
-    existing_renditions = set(existing_rendition_to_id.keys())
+    # Only retire known gallery thumbnail counterparts whose specs are no
+    # longer required. Other Wagtail specs do not encode cast ownership.
+    obsolete_specs = srgb_counterpart_renditions - required_renditions
+    existing_renditions: set[tuple[int, str]] = set()
+    obsolete_rendition_pks: set[int] = set()
+    for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec"):
+        key = (image_id, filter_spec)
+        if key in required_renditions:
+            existing_renditions.add(key)
+        elif key in obsolete_specs:
+            obsolete_rendition_pks.add(pk)
     # Inspect only required keys, once per storage/key even for repeated images.
     exists: dict[tuple[int, str], bool] = {}
     for rendition in renditions_queryset if check_files else ():
@@ -119,15 +125,6 @@ def get_obsolete_and_missing_rendition_strings(
                 exists[storage_key] = bool(rendition.file.name) and rendition.file.storage.exists(rendition.file.name)
             if not exists[storage_key]:
                 existing_renditions.discard(key)
-    obsolete_renditions_unfiltered = existing_renditions - required_renditions
-
-    # Only remove known predecessor/successor specs from django-cast's gallery thumbnail sRGB policy.
-    # Generic Wagtail filter specs such as ``width-400`` do not encode ownership and must be preserved.
-    obsolete_renditions = obsolete_renditions_unfiltered & srgb_counterpart_renditions
-    obsolete_rendition_pks = {
-        existing_rendition_to_id[(image_id, filter_spec)] for image_id, filter_spec in obsolete_renditions
-    }
-
     # build missing renditions aggregated by image id
     missing_renditions = required_renditions - existing_renditions
     missing_renditions_by_image_id: dict[int, set[str]] = {}  # why mypy?

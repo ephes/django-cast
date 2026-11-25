@@ -44,6 +44,8 @@ Fixes
   if reporting an orphan-file deletion failure raises.
 - Reject rendition inventory inputs from a database other than the explicit
   alias, even when the image IDs exist on both databases.
+- Retire every focal-point row for an obsolete gallery thumbnail counterpart
+  after verifying the replacement policy's renditions.
 
 - Keep code block rendering and editor validation available during highlight
   cache outages.

@@ -93,6 +93,40 @@ def test_sync_repairs_existing_row_with_missing_file(
 
 
 @pytest.mark.django_db
+def test_sync_removes_every_obsolete_gallery_focal_row(post, disk_image, settings):
+    settings.CAST_GALLERY_IMAGE_SLOT_DIMENSIONS = [(40, 40), (10, 10)]
+    settings.CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB = True
+    settings.CAST_IMAGE_FORMATS = ["png"]
+    data = BytesIO()
+    PillowImage.new("RGB", (100, 100), "red").save(data, "PNG")
+    disk_image.file = SimpleUploadedFile("gallery.png", data.getvalue(), "image/png")
+    disk_image.save()
+    gallery = Gallery.objects.create()
+    gallery.images.add(disk_image)
+    post.galleries.add(gallery)
+    gallery.create_renditions()
+
+    replacement = disk_image.renditions.get(filter_spec="width-10|srgb")
+    obsolete = disk_image.get_rendition("width-10")
+    with obsolete.file.open("rb") as file:
+        other_focal_row = disk_image.renditions.create(
+            filter_spec=obsolete.filter_spec,
+            focal_point_key="older-focus",
+            file=SimpleUploadedFile("old-focus.png", file.read()),
+        )
+    unrelated = disk_image.get_rendition("fill-8x8")
+    assert replacement.file.storage.exists(replacement.file.name)
+
+    call_command("sync_renditions", post_slug=post.slug)
+
+    assert not disk_image.renditions.filter(pk__in=[obsolete.pk, other_focal_row.pk]).exists()
+    assert disk_image.renditions.filter(pk=unrelated.pk).exists()
+    assert unrelated.file.storage.exists(unrelated.file.name)
+    assert disk_image.renditions.filter(pk=replacement.pk).exists()
+    assert replacement.file.storage.exists(replacement.file.name)
+
+
+@pytest.mark.django_db
 def test_planning_checks_each_required_storage_key_once(disk_image, mocker):
     image = disk_image
     rendition = image.get_rendition("width-1")

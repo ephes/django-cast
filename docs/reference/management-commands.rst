@@ -163,8 +163,9 @@ as ``CAST_GALLERY_THUMBNAIL_RENDITIONS_SRGB``. Because rendition filter specs
 are part of Wagtail's rendition keys, enabling or disabling gallery thumbnail
 sRGB normalization creates new thumbnail rendition keys; this command creates
 the new files and removes the previous/next sRGB-policy counterpart keys for the
-same thumbnail specs. Uploaded originals, Wagtail admin renditions, and custom
-site renditions with unrelated filter specs are preserved.
+same thumbnail specs, including all focal-point variants of each obsolete key.
+Uploaded originals, Wagtail admin renditions, and custom site renditions with
+unrelated filter specs are preserved.
 
 The command also checks that each required rendition's stored file still
 exists, and regenerates the file for rows whose file was lost. This check makes
@@ -210,8 +211,8 @@ failure rolls back that image's rows and keeps old counterparts for a safe retry
 Each repair and new rendition uses a fresh storage key. After rollback, only
 acknowledged operation-owned files without a surviving row are removed. Cleanup
 diagnostics are best effort. The cleanup continues checking remaining files
-even if a logging handler fails, and the original failure is raised. If storage changes a
-requested name, ownership is uncertain: the returned key is logged and retained
+even if a logging handler fails, and the original failure is raised. If storage
+changes a requested name, ownership is uncertain: the returned key is logged and retained
 for inspection. An uncertain failed save that returns no name cannot be cleaned
 automatically. Successfully committed earlier images remain and are reused on
 retry. Unrelated rendition specifications are preserved.
