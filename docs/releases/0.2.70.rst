@@ -34,6 +34,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Keep code block rendering and editor validation available during highlight
+  cache outages.
+- Continue through the query-free player permalink fallbacks when a cached
+  URL is invalid.
+
 - Close Voxhelm HTTP error streams after bounded detail extraction and
   preserve the HTTP status if reading or closing fails.
 - Let Voxhelm polling retry JSON responses that exceed the decoder's nesting

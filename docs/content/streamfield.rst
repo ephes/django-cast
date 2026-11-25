@@ -81,6 +81,10 @@ Syntax-highlighted code snippets.
 - Automatic language detection
 - Falls back to plain text if language unknown
 
+Rendered HTML is cached by content. If the cache backend raises an error,
+code blocks still render and valid edits can still be saved. A failed cache
+read skips the cache write for that render.
+
 **Example Usage**:
 
 .. code-block:: json

@@ -1128,14 +1128,13 @@ Playing-post URL identity
 
 The shared player payload includes optional ``permalink`` for a playing post,
 resolved against the rendering request, with only HTTP(S) URLs accepted. The
-payload builder never issues new Site or page queries for it: it uses a URL the
-caller already resolved, in this order — an explicit ``permalink`` argument to
-``cast.player.build_player_payload``, the ``page_url`` cast's repositories
-attach to listed and detail posts, cast's request-local page-link URL cache, or
-Wagtail's request-scoped site-root cache. A post rendered without any of those
-(for example a freshly loaded page in an isolated cached-card render) omits the
-permalink instead of adding two Site queries per render; such integrations can
-pass ``permalink=`` when they know the URL. This preserves relative detail-page context URLs and
+payload builder never issues new Site or page queries for it. An explicit
+``permalink`` argument to ``cast.player.build_player_payload`` takes precedence.
+Without an explicit argument, it uses the first valid URL from the post's
+``page_url``, the specific episode's ``page_url``, cast's request-local
+page-link URL cache, or Wagtail's request-scoped site-root cache. If every
+candidate is missing or invalid, the payload omits the permalink.
+This preserves relative detail-page context URLs and
 the actual request scheme/host when the configured Site uses an alias. Share builds its URL from
 that source identity, including optional playback time, even after browser
 history or a persistent dock moves to another page. Integrations without post

@@ -734,6 +734,29 @@ def test_code_block_highlighting_is_cached(mocker):
     assert highlight.call_count == 2
 
 
+@pytest.mark.parametrize("cache_operation", ["get", "set"])
+@pytest.mark.parametrize("block_operation", ["render", "clean"])
+@pytest.mark.parametrize("language", ["python", "unknown"])
+def test_code_block_cache_outage_preserves_output(mocker, cache_operation, block_operation, language):
+    block = CodeBlock()
+    value = block.to_python({"language": language, "source": "x = '<tag>'"})
+    cache = mocker.patch("cast.blocks.cache")
+    cache.get.return_value = None
+
+    operation = getattr(block, block_operation)
+    expected = operation(value)
+    cache.reset_mock()
+    cache_operation_mock = getattr(cache, cache_operation)
+    cache_operation_mock.side_effect = OSError("cache unavailable")
+
+    assert operation(value) == expected
+    cache.get.assert_called_once()
+    if cache_operation == "get":
+        cache.set.assert_not_called()
+    else:
+        cache.set.assert_called_once()
+
+
 def test_code_block_clean_rejects_oversized_source_and_prerenders(settings, mocker):
     from wagtail.blocks import StructBlockValidationError
 
