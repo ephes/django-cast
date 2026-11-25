@@ -844,6 +844,10 @@ common-word list.
   replacement target, using the first spelling in the group. Updated decisions
   follow the existing entries in group order.
 
+Fuzzy matching scores only phrases within the term's eligible word counts.
+A phrase that already spells the term still protects overlapping text, even
+when the spelling itself falls outside those counts.
+
 Editor decisions are stored as such and do not depend on what the current
 glossary still finds. A decision on one occurrence (position, original and
 replacement) wins over a decision for the original in the whole transcript,

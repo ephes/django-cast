@@ -164,6 +164,9 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Index fuzzy glossary candidates once per cue by word count and spelling so
+  each term scores only eligible lengths and canonical overlaps stay protected.
+
 - Fetch only the contributor and link fields needed for Wagtail's link selector,
   without joining the contributor into each link row.
 
