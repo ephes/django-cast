@@ -671,6 +671,8 @@ class _Target:
     text: str
     source: str
     key: str
+    digits: str
+    is_domain: bool
     word_count: int
     normalized: str
     part_keys: frozenset[str]
@@ -685,10 +687,13 @@ class _Target:
             for last in range(first + 1, len(parts) + 1)
             if last - first < len(parts)
         )
+        key = letters_key(target.text)
         return cls(
             target.text,
             target.source,
-            letters_key(target.text),
+            key,
+            _digits(key),
+            _looks_like_domain(target.text),
             _word_count(target.text),
             normalize_phrase(target.text),
             part_keys,
@@ -708,10 +713,9 @@ class _Target:
             return True  # a word split by the recogniser leaves no one- or two-letter piece
         if candidate.key in self.part_keys:
             return True  # a part of the term ("Django" for "DjangoCon") is no error
-        candidate_digits, target_digits = _digits(candidate.key), _digits(self.key)
-        if candidate_digits and target_digits and candidate_digits != target_digits:
+        if candidate.digits and self.digits and candidate.digits != self.digits:
             return True  # a different number names a different thing ("DEP 10", "DEP 19")
-        return _looks_like_domain(candidate.text) != _looks_like_domain(self.text)
+        return candidate.is_domain != self.is_domain
 
 
 @dataclass(frozen=True)
@@ -723,10 +727,14 @@ class _Candidate:
     text: str
     normalized: str
     piece_lengths: tuple[int, ...]
+    digits: str
+    is_domain: bool
 
 
 def _candidates(text: str, max_words: int, language: str) -> list[_Candidate]:
     tokens = list(_TOKEN.finditer(text))
+    # Piece lengths use the original tokens, including any possessive suffix.
+    token_lengths = tuple(len(letters_key(token.group(0))) for token in tokens)
     candidates: list[_Candidate] = []
     for first in range(len(tokens)):
         for words in range(1, max_words + 1):
@@ -744,8 +752,19 @@ def _candidates(text: str, max_words: int, language: str) -> list[_Candidate]:
             key = letters_key(phrase)
             if len(key) < MIN_TARGET_LETTERS:
                 continue
-            pieces = tuple(len(letters_key(token.group(0))) for token in tokens[first : last + 1])
-            candidates.append(_Candidate(start, end, words, key, phrase, normalize_phrase(phrase), pieces))
+            candidates.append(
+                _Candidate(
+                    start,
+                    end,
+                    words,
+                    key,
+                    phrase,
+                    normalize_phrase(phrase),
+                    token_lengths[first : last + 1],
+                    _digits(key),
+                    _looks_like_domain(phrase),
+                )
+            )
     return candidates
 
 

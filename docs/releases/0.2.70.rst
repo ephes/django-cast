@@ -172,6 +172,11 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Reuse original token lengths across overlapping fuzzy glossary candidate
+  windows.
+- Compute digit sequences and domain classification once per fuzzy glossary
+  target and candidate before comparing pairs.
+
 - Index fuzzy glossary candidates once per cue by word count and spelling so
   each term scores only eligible lengths and canonical overlaps stay protected.
 

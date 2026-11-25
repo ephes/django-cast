@@ -851,6 +851,10 @@ common-word list.
 Fuzzy matching scores only phrases within the term's eligible word counts.
 A phrase that already spells the term still protects overlapping text, even
 when the spelling itself falls outside those counts.
+Candidate windows reuse the original token lengths within each cue. A trailing
+possessive suffix is left outside the proposed edit. Matching pairs are
+filtered using precomputed digit sequences and domain classifications. Numbers
+must match when both phrases contain digits, and domains only match domains.
 
 Editor decisions are stored as such and do not depend on what the current
 glossary still finds. A decision on one occurrence (position, original and
