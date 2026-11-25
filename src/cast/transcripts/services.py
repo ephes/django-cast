@@ -130,7 +130,7 @@ def _sync_speaker_mappings(transcript: Transcript, *, using: str) -> None:
     mapping_model = transcript.speaker_mappings.model
     ReviewState = mapping_model.ReviewState
     mappings = mapping_model.objects.using(using)
-    speaker_labels = transcript.get_speaker_labels()
+    speaker_labels = get_speaker_labels(transcript, strict=True)
     seen_labels = set(speaker_labels)
     fingerprint = transcript.mapping_fingerprint()
     now = timezone.now()
@@ -437,25 +437,25 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
     return True
 
 
-def get_speaker_labels(transcript: Transcript) -> list[str]:
-    """Return unique speaker labels used by the Podlove and DOTe transcript files."""
+def get_speaker_labels(transcript: Transcript, *, strict: bool = False) -> list[str]:
+    """Return unique labels, refusing malformed JSON sources during synchronization."""
     labels = set()
-    podlove_data = transcript._load_transcript_json("podlove")
-    for segment in podlove_data.get("transcripts", []):
-        if not isinstance(segment, dict):
+    for field, collection, label_fields in (
+        ("podlove", "transcripts", ("speaker", "voice")),
+        ("dote", "lines", ("speakerDesignation",)),
+    ):
+        data = transcript._load_transcript_json(field, strict=strict)
+        records = data.get(collection, [])
+        if not isinstance(records, list):
+            if strict:
+                raise parsing.TranscriptArtifactError(f"Expected an array at {collection} in {field} transcript JSON.")
             continue
-        for field_name in ("speaker", "voice"):
-            label = parsing.clean_speaker_label(segment.get(field_name))
-            if label:
-                labels.add(label)
-
-    dote_data = transcript._load_transcript_json("dote")
-    for line in dote_data.get("lines", []):
-        if not isinstance(line, dict):
-            continue
-        label = parsing.clean_speaker_label(line.get("speakerDesignation"))
-        if label:
-            labels.add(label)
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            for label_field in label_fields:
+                if label := parsing.clean_speaker_label(record.get(label_field)):
+                    labels.add(label)
     if transcript.vtt:
         labels.update(webvtt.get_speaker_labels(transcript._load_text_file("vtt")))
     return sorted(labels)

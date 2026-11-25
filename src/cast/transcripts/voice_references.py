@@ -96,7 +96,7 @@ def get_clean_runs(podlove_data: dict, *, max_gap_seconds: Decimal) -> list[list
     """Intersect source runs with a sweep of solo intervals, including textless speech.
 
     Half-open intervals make touching endpoints safe. Silent gaps can join runs,
-    but any intervening speech by another label breaks the clean interval.
+    but any intervening speech by another or unidentified speaker breaks the clean interval.
     """
     events: dict[Decimal, Counter[str]] = {}
     for segment in podlove_data.get("transcripts", []):
@@ -109,9 +109,10 @@ def get_clean_runs(podlove_data: dict, *, max_gap_seconds: Decimal) -> list[list
         end = parsing.parse_record_decimal_seconds(
             segment, millisecond_field="end_ms", timestamp_fields=("end", "endTime")
         )
-        if not labels or start is None or end is None or start >= end:
+        if start is None or end is None or start >= end:
             continue
-        for label in labels:
+        # An empty label marks timed speech with no identified speaker.
+        for label in labels or {""}:
             events.setdefault(start, Counter())[label] += 1
             events.setdefault(end, Counter())[label] -= 1
     active: Counter[str] = Counter()
@@ -125,7 +126,7 @@ def get_clean_runs(podlove_data: dict, *, max_gap_seconds: Decimal) -> list[list
                 del active[label]
         if not active:
             continue
-        if len(active) != 1:
+        if len(active) != 1 or "" in active:
             previous_label = None
             continue
         label = next(iter(active))

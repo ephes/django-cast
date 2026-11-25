@@ -244,6 +244,12 @@ upload name is kept in storage and a page-like name could be rendered as a
 document where media is served from the site's own origin. Files that are
 already stored, and files written by Voxhelm, are unaffected.
 
+Podlove and DOTe uploads must be UTF-8 JSON without a byte order mark and
+without repeated object members, and at most 10 MiB even when
+``CAST_TRANSCRIPT_UPLOAD_MAX_BYTES`` is higher, because the stored-artifact
+reader refuses all of these. Such uploads get a field error instead of being
+saved.
+
 Transcript admin permissions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -482,6 +488,15 @@ saves with ``save_transcript_with_derivations(transcript,
 preserve_source_fingerprint=True)`` to keep approvals; code that replaces file
 bytes in place under the same file name calls
 ``Transcript.mark_artifacts_received()`` before saving.
+
+Speaker synchronization expects valid JSON objects, with an array under
+Podlove ``transcripts`` or DOTe ``lines`` when that member is present. A
+storage read error, invalid JSON (syntax, encoding, repeated members, nesting
+or size) or an invalid shape raises ``TranscriptArtifactError`` before any
+mapping rows are updated. A missing stored file still counts as an absent
+artifact.
+An artifact replacement saved with synchronization also rolls back its
+database changes. Replace the malformed artifact before reviewing speakers.
 
 Generated transcript text is stored with the shared audio file and can appear
 on already published episodes as soon as generation completes. Public speaker
@@ -1181,10 +1196,11 @@ anchors continue to fail with 404 when absent, mismatched or unauthorized.
 Voice-reference overlap and sample grouping
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Candidate extraction subtracts speech by other labels across the complete
-source timeline, including unsorted, nested, textless and conflicting-label
-segments. Touching endpoints do not overlap. Only solo portions meeting the
-minimum duration are offered; original transcript timing remains unchanged.
+Candidate extraction subtracts speech by other or unidentified speakers
+across the complete source timeline, including unsorted, nested, textless
+and conflicting-label segments. Touching endpoints do not overlap. A timed
+segment without a speaker label can block a range. Candidates require a
+speaker label and enough solo speech to meet the minimum duration.
 A candidate's text is the full text of its source segments, so a range clipped
 around another speaker can show words spoken outside that range; judge the
 audio, not the text.

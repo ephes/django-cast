@@ -1418,6 +1418,30 @@ def test_generate_transcripts_calls_service_for_episode(mocker, audio):
 
 
 @pytest.mark.django_db
+def test_generate_transcripts_rejects_conflicting_episode_contexts(
+    mocker, episode, podcast_episode_with_same_audio, audio
+):
+    other_episode = podcast_episode_with_same_audio
+    service = mocker.patch("cast.management.commands.generate_transcripts.VoxhelmTranscriptService")
+    message = rf"Audio {audio.pk} is shared by selected episodes {episode.pk} and {other_episode.pk}"
+
+    with pytest.raises(CommandError, match=message):
+        call_command("generate_transcripts", "--episode-id", str(episode.pk), "--episode-id", str(other_episode.pk))
+
+    service.assert_not_called()
+
+
+@pytest.mark.django_db
+def test_generate_transcripts_deduplicates_repeated_episode_id(mocker, episode, audio):
+    service = mocker.patch("cast.management.commands.generate_transcripts.VoxhelmTranscriptService").return_value
+    episode_id = str(episode.pk)
+
+    call_command("generate_transcripts", "--episode-id", episode_id, "--episode-id", episode_id, stdout=StringIO())
+
+    service.generate_for_audio.assert_called_once_with(audio, task_ref=f"cast-audio-{audio.pk}", episode=episode)
+
+
+@pytest.mark.django_db
 def test_generate_transcripts_force_updates_and_uses_unique_task_ref(mocker, audio):
     transcript = create_transcript(audio=audio)
     service = mocker.Mock()

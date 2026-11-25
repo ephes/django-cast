@@ -915,7 +915,8 @@ CAST_TRANSCRIPT_UPLOAD_MAX_BYTES
 Maximum accepted size, in bytes, for each uploaded Podlove JSON, DOTe JSON,
 or WebVTT transcript before parsing. Defaults to ``10485760`` (10 MiB). The
 limit is enforced from the uploaded content rather than a client-reported
-size.
+size. Podlove and DOTe JSON uploads are also refused above the fixed 10 MiB
+limit of the stored-artifact reader, even when this setting is higher.
 
 
 CAST_EDITOR_MEDIA_UPLOAD_LOCK_SECONDS

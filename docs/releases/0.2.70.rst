@@ -40,6 +40,20 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Reject multiple selected episodes sharing one audio object in
+  ``generate_transcripts`` before submitting jobs. Select one episode or use
+  ``--audio-id`` directly.
+
+- Refuse unreadable or malformed Podlove and DOTe JSON during speaker
+  discovery so synchronization preserves approved mappings. Transcript
+  uploads with a UTF-8 byte order mark, repeated JSON members or more than
+  10 MiB of JSON are refused with a field error, and Voxhelm imports with
+  repeated members fail validation, because the stored-artifact reader cannot
+  read them.
+
+- Exclude timed speech without a speaker label from solo voice-reference
+  ranges.
+
 - Validate Voxhelm token changes on the settings write database when database
   routing separates reads and writes.
 

@@ -328,7 +328,7 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
             return None
 
     def sync_speaker_mappings(self, *, using: str | None = None) -> None:
-        """Synchronize durable anonymous-speaker mapping rows with raw artifacts."""
+        """Synchronize mappings, raising TranscriptArtifactError on an invalid JSON envelope."""
         services.sync_speaker_mappings(self, using=using)
 
     def get_speaker_suggestions(self) -> list[dict]:
@@ -604,23 +604,29 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         """
         return services.rewrite_speaker_labels(self, mapping)
 
-    def _load_transcript_json(self, field_name: str) -> dict[str, Any]:
+    def _load_transcript_json(self, field_name: str, *, strict: bool = False) -> dict[str, Any]:
         file_field = getattr(self, field_name)
         if not file_field:
             return {}
         try:
             with file_field.storage.open(file_field.name, "rb") as file:
                 data = parsing.read_json_artifact(file)
+        except FileNotFoundError:
+            # A missing stored file counts as an absent artifact.
+            return {}
         except (
-            FileNotFoundError,
             OSError,
             json.JSONDecodeError,
             UnicodeDecodeError,
             RecursionError,
             parsing.TranscriptArtifactError,
-        ):
+        ) as exc:
+            if strict:
+                raise parsing.TranscriptArtifactError(f"Could not read {field_name} transcript JSON.") from exc
             return {}
         if not isinstance(data, dict):
+            if strict:
+                raise parsing.TranscriptArtifactError(f"Expected an object in {field_name} transcript JSON.")
             return {}
         return data
 

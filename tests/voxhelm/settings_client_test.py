@@ -275,6 +275,8 @@ def test_validate_transcript_artifacts_accepts_valid_artifacts():
     ("artifacts", "message"),
     [
         ({"podlove": b"\xff"}, "podlove artifact was not valid UTF-8 JSON"),
+        ({"podlove": b'{"transcripts": [], "transcripts": []}'}, "podlove artifact was not valid UTF-8 JSON"),
+        ({"dote": b"{not json"}, "dote artifact was not valid UTF-8 JSON"),
         ({"podlove": b"[]"}, "podlove artifact must be a JSON object"),
         ({"podlove": b'{"transcripts": {}}'}, "podlove artifact must include a 'transcripts' list"),
         ({"dote": b'{"lines": ["bad"]}'}, "dote artifact lines must be JSON objects"),

@@ -12,6 +12,7 @@ from wagtail.models import Collection, GroupCollectionPermission
 
 from cast.forms import AudioForm, ChapterMarkForm, FFProbeStartField, TranscriptForm, get_video_form
 from cast.models import Audio, ChapterMark, Transcript, Video
+from cast.transcripts import parsing
 from tests.factories import UserFactory
 
 
@@ -333,6 +334,41 @@ class TestTranscriptForm:
         assert form.is_valid() is False
         assert "dote" in form.errors
 
+    @pytest.mark.parametrize(
+        "field_name, content, message",
+        [
+            ("podlove", b'\xef\xbb\xbf{"transcripts": []}', "without a byte order mark"),
+            ("podlove", b'{"transcripts": [], "transcripts": []}', "not valid JSON"),
+            ("dote", b'\xef\xbb\xbf{"lines": []}', "without a byte order mark"),
+            ("dote", b'{"lines": [], "lines": []}', "not valid JSON"),
+        ],
+    )
+    def test_json_upload_must_match_stored_artifact_reader(self, audio, field_name, content, message):
+        upload = SimpleUploadedFile(f"{field_name}.json", content, content_type="application/json")
+        form = TranscriptForm({"audio": audio.id}, {field_name: upload})
+        assert form.is_valid() is False
+        assert message in str(form.errors[field_name])
+
+    def test_json_upload_over_stored_limit_gets_size_error(self, audio, monkeypatch):
+        monkeypatch.setattr(parsing, "MAX_STORED_TRANSCRIPT_JSON_BYTES", 1024 * 1024)
+        content = b'{"transcripts": [], "padding": "' + b"x" * (1024 * 1024) + b'"}'
+        upload = SimpleUploadedFile("podlove.json", content, content_type="application/json")
+        form = TranscriptForm({"audio": audio.id}, {"podlove": upload})
+        assert form.is_valid() is False
+        assert "exceeds the 1 MiB limit for stored transcript JSON" in str(form.errors["podlove"])
+
+    def test_bom_json_in_vtt_field_points_to_json_field(self, audio):
+        upload = SimpleUploadedFile("test.vtt", b'\xef\xbb\xbf{"transcripts": []}', content_type="text/vtt")
+        form = TranscriptForm({"audio": audio.id}, {"vtt": upload})
+        assert form.is_valid() is False
+        assert "Upload it in the Podlove Transcript field" in str(form.errors["vtt"])
+
+    def test_deeply_nested_json_in_vtt_field_is_a_field_error(self, audio):
+        upload = SimpleUploadedFile("test.vtt", b"[" * 200_000, content_type="text/vtt")
+        form = TranscriptForm({"audio": audio.id}, {"vtt": upload})
+        assert form.is_valid() is False
+        assert "WebVTT transcript is not valid JSON" in str(form.errors["vtt"])
+
     def test_vtt_valid(self, audio):
         vtt = SimpleUploadedFile(
             "test.vtt",
@@ -437,6 +473,13 @@ class TestTranscriptForm:
         payload = {"transcripts": []}
         file_obj = FlakySeek(json.dumps(payload).encode())
         assert TranscriptForm._load_json(file_obj, field_label="Podlove", max_bytes=1024) == payload
+
+    def test_load_json_accepts_text_stream(self):
+        payload = {"transcripts": []}
+        assert (
+            TranscriptForm._load_json(io.StringIO(json.dumps(payload)), field_label="Podlove", max_bytes=1024)
+            == payload
+        )
 
     def test_read_header_handles_str_and_seek_failure(self):
         class FlakySeek(io.StringIO):

@@ -32,6 +32,22 @@ def test_candidates_subtract_all_other_speakers(reverse):
                 )
 
 
+@pytest.mark.parametrize("reverse", [False, True])
+def test_candidates_exclude_timed_unlabelled_speech(reverse):
+    records = [
+        segment(None, 0, 2),
+        segment("A", 2, 32),
+        segment(None, 12, 22, voice="  "),
+        segment("", 32, 34),
+    ]
+    candidates = voice_references.get_candidates({"transcripts": records[::-1] if reverse else records})
+
+    assert [(c.speaker_label, c.start_seconds, c.end_seconds) for c in candidates] == [
+        ("A", Decimal(2), Decimal(12)),
+        ("A", Decimal(22), Decimal(32)),
+    ]
+
+
 def test_candidates_exclude_speech_without_text_and_ambiguous_labels():
     records = [segment("A", 0, 30), segment("B", 8, 22, text=""), segment("A", 22, 30, voice="C")]
     candidates = voice_references.get_candidates({"transcripts": records})

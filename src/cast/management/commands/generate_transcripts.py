@@ -104,7 +104,7 @@ class Command(BaseCommand):
 
     def _resolve_targets(self, *, episode_ids: list[int], audio_ids: list[int]) -> list[TranscriptTarget]:
         targets: list[TranscriptTarget] = []
-        seen_audio_ids: set[int] = set()
+        episode_by_audio_id: dict[int, int] = {}
 
         episodes = list(
             Episode.objects.filter(pk__in=episode_ids).select_related("podcast_audio__transcript").order_by("pk")
@@ -118,10 +118,15 @@ class Command(BaseCommand):
             if episode.podcast_audio_id is None:
                 raise CommandError(f"Episode {episode.pk} has no podcast audio.")
             audio = episode.podcast_audio
-            if audio.pk is None or audio.pk in seen_audio_ids:
+            if audio.pk is None:
                 continue
+            if audio.pk in episode_by_audio_id:
+                raise CommandError(
+                    f"Audio {audio.pk} is shared by selected episodes {episode_by_audio_id[audio.pk]} and {episode.pk}. "
+                    "Select a single --episode-id for this audio or target it directly with --audio-id."
+                )
             targets.append(TranscriptTarget(audio=audio, episode=episode))
-            seen_audio_ids.add(audio.pk)
+            episode_by_audio_id[audio.pk] = episode.pk
 
         direct_audios = list(Audio.objects.filter(pk__in=audio_ids).select_related("transcript").order_by("pk"))
         found_audio_ids = {audio.pk for audio in direct_audios}
@@ -130,9 +135,8 @@ class Command(BaseCommand):
             missing = ", ".join(str(audio_id) for audio_id in missing_audio_ids)
             raise CommandError(f"Unknown audio id(s): {missing}")
         for audio in direct_audios:
-            if audio.pk is None or audio.pk in seen_audio_ids:
+            if audio.pk is None or audio.pk in episode_by_audio_id:
                 continue
             targets.append(TranscriptTarget(audio=audio))
-            seen_audio_ids.add(audio.pk)
 
         return targets

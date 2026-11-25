@@ -177,6 +177,78 @@ class TestTranscriptSpeakerMapping:
         assert mappings["Speaker 3"].active
         assert mappings["Speaker 3"].review_state == TranscriptSpeakerMapping.ReviewState.STALE
 
+    @pytest.mark.parametrize(
+        "field_name, invalid_json",
+        [
+            ("podlove", b'{"transcripts": {"unexpected": []}}'),
+            ("dote", b'{"lines": "unexpected"}'),
+            ("dote", b'{"lines": null}'),
+            ("podlove", b"[]"),
+            ("podlove", b"{not json"),
+            ("dote", b'{"lines": [], "lines": []}'),
+            ("dote", b"\xff\xfe"),
+        ],
+    )
+    def test_sync_refuses_unreadable_speaker_source(self, audio, field_name, invalid_json):
+        transcript = create_transcript(audio=audio, podlove={"transcripts": [{"speaker": "Speaker 1"}]})
+        mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
+        mapping.review_state = TranscriptSpeakerMapping.ReviewState.APPROVED
+        mapping.display_name = "Synthetic speaker"
+        mapping.save()
+        fingerprint = transcript.mapping_fingerprint()
+        last_seen = mapping.last_seen
+
+        field = getattr(transcript, field_name)
+        field.save("invalid.json", ContentFile(invalid_json), save=False)
+        invalid_name = field.name
+        with pytest.raises(parsing.TranscriptArtifactError, match=field_name):
+            save_transcript_with_derivations(transcript)
+
+        transcript.refresh_from_db()
+        mapping.refresh_from_db()
+        assert transcript.mapping_fingerprint() == fingerprint
+        assert mapping.is_current_for_fingerprint(fingerprint)
+        assert mapping.last_seen == last_seen
+
+        # Legacy rows may already point at malformed JSON.
+        Transcript.objects.filter(pk=transcript.pk).update(**{field_name: invalid_name})
+        transcript.refresh_from_db()
+        assert transcript.get_speaker_labels() == ([] if field_name == "podlove" else ["Speaker 1"])
+        with pytest.raises(parsing.TranscriptArtifactError, match=field_name):
+            transcript.sync_speaker_mappings()
+        mapping.refresh_from_db()
+        assert mapping.is_current_for_fingerprint(fingerprint)
+        assert mapping.last_seen == last_seen
+
+    def test_sync_refuses_storage_read_error_but_treats_missing_file_as_absent(self, audio, mocker):
+        transcript = create_transcript(audio=audio, podlove={"transcripts": [{"speaker": "Speaker 1"}]})
+        mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")
+        mapping.review_state = TranscriptSpeakerMapping.ReviewState.APPROVED
+        mapping.save()
+        fingerprint = transcript.mapping_fingerprint()
+        storage = transcript.podlove.storage
+        podlove_name = transcript.podlove.name
+        original_open = storage.open
+
+        def failing_open(name, *args, **kwargs):
+            if name == podlove_name:
+                raise PermissionError(13, "Permission denied")
+            return original_open(name, *args, **kwargs)
+
+        mocker.patch.object(storage, "open", side_effect=failing_open)
+        assert transcript.get_speaker_labels() == []
+        with pytest.raises(parsing.TranscriptArtifactError, match="podlove"):
+            transcript.sync_speaker_mappings()
+        mapping.refresh_from_db()
+        assert mapping.is_current_for_fingerprint(fingerprint)
+
+        mocker.stopall()
+        storage.delete(podlove_name)
+        transcript.sync_speaker_mappings()
+        mapping.refresh_from_db()
+        assert not mapping.active
+        assert mapping.review_state == TranscriptSpeakerMapping.ReviewState.STALE
+
     def test_speaker_mapping_sync_handles_unchanged_and_already_inactive_rows(self, audio, mocker):
         transcript = create_transcript(audio=audio, podlove={"transcripts": [{"speaker": "Speaker 1"}]})
         mapping = transcript.speaker_mappings.get(speaker_label="Speaker 1")

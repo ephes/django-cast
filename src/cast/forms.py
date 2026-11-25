@@ -5,6 +5,8 @@ admin, chapter mark parsing and validation, a theme selection form, and
 a search form that rejects empty queries.
 """
 
+import codecs
+import io
 import json
 import logging
 import math
@@ -438,7 +440,10 @@ class TranscriptForm(BaseCollectionMemberForm):
         header = self._read_header(vtt)
         if header.startswith(("{", "[")):
             data = self._load_json(
-                vtt, field_label="WebVTT", max_bytes=int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
+                vtt,
+                field_label="WebVTT",
+                max_bytes=int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES),
+                stored_reader=False,
             )
             destination = (
                 "Podlove Transcript" if isinstance(data, dict) and "transcripts" in data else "DOTe Transcript"
@@ -471,15 +476,32 @@ class TranscriptForm(BaseCollectionMemberForm):
         return transcript
 
     @staticmethod
-    def _load_json(uploaded_file: UploadedFile | IO[bytes], *, field_label: str, max_bytes: int) -> Any:
+    def _load_json(
+        uploaded_file: UploadedFile | IO[bytes], *, field_label: str, max_bytes: int, stored_reader: bool = True
+    ) -> Any:
         try:
             validate_transcript_upload(uploaded_file, max_bytes=max_bytes)
             uploaded_file.seek(0)
             content = uploaded_file.read(max_bytes + 1)
             if (content.decode("utf-8-sig") if isinstance(content, bytes) else content).lstrip().startswith("WEBVTT"):
                 raise ValidationError(_("This is a WebVTT file. Upload it in the WebVTT Transcript field."))
-            return json.loads(content)
-        except (json.JSONDecodeError, TypeError, UnicodeDecodeError):
+            if not stored_reader:
+                return json.loads(content)  # only identifies the right field for a misplaced JSON upload
+            if isinstance(content, str):
+                content = content.encode("utf-8")
+            if len(content) > parsing.MAX_STORED_TRANSCRIPT_JSON_BYTES:
+                raise ValidationError(
+                    _("%(field)s transcript exceeds the %(limit)s MiB limit for stored transcript JSON."),
+                    params={"field": field_label, "limit": parsing.MAX_STORED_TRANSCRIPT_JSON_BYTES // (1024 * 1024)},
+                )
+            if content.startswith(codecs.BOM_UTF8):
+                raise ValidationError(
+                    _("%(field)s transcript must be UTF-8 JSON without a byte order mark."),
+                    params={"field": field_label},
+                )
+            # Parse like the stored-artifact reader, so an accepted upload stays readable after saving.
+            return parsing.read_json_artifact(io.BytesIO(content))
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError, RecursionError, parsing.TranscriptArtifactError):
             raise ValidationError(_("%(field)s transcript is not valid JSON."), params={"field": field_label})
         finally:
             try:
