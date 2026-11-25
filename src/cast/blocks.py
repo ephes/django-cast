@@ -623,14 +623,26 @@ def render_code_block_html(language: object, source: object) -> str:
     alias = language.strip().lower() if isinstance(language, str) and code_block_language_allowed(language) else "text"
     digest = hashlib.sha256(f"{alias}\0{source}".encode()).hexdigest()
     cache_key = f"cast:code-block:{pygments_version}:{digest}"
-    highlighted = cache.get(cache_key)
-    if not isinstance(highlighted, str):
+    cache_available = True
+    try:
+        cached_html = cache.get(cache_key)
+    except Exception:
+        logger.warning("Could not read code highlighting cache", exc_info=True)
+        cache_available = False
+    else:
+        if isinstance(cached_html, str):
+            return cached_html
+
+    try:
+        lexer = get_lexer_by_name(alias, stripall=True)
+    except ClassNotFound:
+        lexer = get_lexer_by_name("text", stripall=True)
+    highlighted = highlight(source, lexer, HtmlFormatter())
+    if cache_available:
         try:
-            lexer = get_lexer_by_name(alias, stripall=True)
-        except ClassNotFound:
-            lexer = get_lexer_by_name("text", stripall=True)
-        highlighted = highlight(source, lexer, HtmlFormatter())
-        cache.set(cache_key, highlighted, CODE_BLOCK_CACHE_SECONDS)
+            cache.set(cache_key, highlighted, CODE_BLOCK_CACHE_SECONDS)
+        except Exception:
+            logger.warning("Could not write code highlighting cache", exc_info=True)
     return highlighted
 
 
