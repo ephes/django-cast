@@ -368,8 +368,9 @@ edit and delete controls on that comment:
 - Deletion is a **soft delete**, not erasure. The comment is hidden from
   readers but kept in the database, and staff can restore it from the Django
   admin (see :ref:`comments_manual_moderation`). Restoring clears the author
-  deletion timestamp in a single conditional update. Ordinary comment saves
-  leave metadata rows with no deletion timestamp untouched.
+  deletion timestamp in a single conditional update. Partial saves that omit
+  the removal flag and raw fixture loads leave the author deletion timestamp
+  untouched.
 
 Scope and limitations
 ~~~~~~~~~~~~~~~~~~~~~~~

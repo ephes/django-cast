@@ -34,6 +34,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Preserve the author deletion timestamp during unrelated partial comment saves
+  and raw fixture loads.
+
 - Apply the styleguide preview gallery rendition policy per render. The
   ``--with-renditions`` command flag stays local to its invocation.
 - Reject stale Wagtail Voxhelm settings forms after a concurrent change to

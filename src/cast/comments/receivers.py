@@ -69,7 +69,9 @@ def record_owned_comment(
     author_edits.record_owned_id(session, comment.pk)
 
 
-def on_comment_saved(sender: type[Model], instance: Any, **kwargs: Any) -> None:
+def on_comment_saved(
+    sender: type[Model], instance: Any, *, raw: bool, update_fields: frozenset[str] | None, **kwargs: Any
+) -> None:
     """Maintain the ``deleted_at`` invariant for the author-edits feature.
 
     Author deletion sets ``is_removed=True``; un-removing a comment (staff
@@ -78,6 +80,8 @@ def on_comment_saved(sender: type[Model], instance: Any, **kwargs: Any) -> None:
     marker. Keyed on ``is_removed`` alone — not also ``is_public`` — so a plain
     un-remove that leaves the comment non-public still clears the marker.
     """
+    if raw or (update_fields is not None and "is_removed" not in update_fields):
+        return
     if not getattr(instance, "is_removed", False):
         author_edits.clear_deleted(instance.pk)
 
