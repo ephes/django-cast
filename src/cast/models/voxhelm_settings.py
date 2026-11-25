@@ -193,16 +193,17 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
         super().__init__(*args, **kwargs)
         self._initial_settings_version = ordinary_settings_version(self.instance)
         self.initial["settings_version"] = self._initial_settings_version
-        # TokenInput renders the fingerprint of the token stored when the page was
-        # rendered, so a replacement or removal from a page opened before another
-        # administrator's change is refused. It is deliberately not a form field:
-        # Wagtail would render an unclaimed field a second time, empty.
-        rendered_version = api_token_version(self.instance.api_token)
+        version_name = self.add_prefix("api_token_version")
+        self._original_api_token_version = self.data.get(version_name, "")
+        # Keep the submitted fingerprint on errors so retrying a stale edit
+        # cannot authorize a change to the current token. This is deliberately
+        # not a form field: Wagtail would render an unclaimed field a second time.
         token_widget = self.fields["api_token"].widget
         if isinstance(token_widget, TokenInput):
-            token_widget.version_name = self.add_prefix("api_token_version")
-            token_widget.version = rendered_version
-        self._original_api_token_version = self.data.get(self.add_prefix("api_token_version"), "")
+            token_widget.version_name = version_name
+            token_widget.version = (
+                self._original_api_token_version if self.is_bound else api_token_version(self.instance.api_token)
+            )
         self._describe_effective_boolean_settings()
         if self.instance.pk and self.instance.api_token:
             self.fields["api_token"].help_text = _(
@@ -257,8 +258,13 @@ class VoxhelmSettingsForm(WagtailAdminModelForm):
             else:
                 cleaned_data["api_token"] = ""
         if self._token_replacement() is not None and self.instance.pk is not None:
+            _save_kwargs, using = normalize_model_save_arguments(self.instance, (), {})
             stored = (
-                type(self.instance).objects.filter(pk=self.instance.pk).values_list("api_token", flat=True).first()
+                type(self.instance)
+                .objects.using(using)
+                .filter(pk=self.instance.pk)
+                .values_list("api_token", flat=True)
+                .first()
             )
             if stored is not None and api_token_version(stored) != self._original_api_token_version:
                 self.add_error("api_token", TOKEN_CONFLICT_MESSAGE)

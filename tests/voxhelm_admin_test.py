@@ -791,6 +791,37 @@ def test_voxhelm_site_token_can_be_cleared(admin_client, site, stored_token):
 
 
 @pytest.mark.django_db
+def test_voxhelm_stale_token_removal_stays_stale_on_resubmit(admin_client, site):
+    setting = VoxhelmSettings.objects.create(site=site, api_token="original-synthetic")
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    stale_versions = rendered_voxhelm_versions(admin_client.get(edit_url))
+    fresh_versions = rendered_voxhelm_versions(admin_client.get(edit_url))
+    with TestCase.captureOnCommitCallbacks(execute=True):
+        rotation = admin_client.post(edit_url, {**fresh_versions, "api_token": "rotated-synthetic"})
+    assert rotation.status_code == 302
+
+    removal = {"clear_api_token": "on"}
+    response = admin_client.post(edit_url, {**stale_versions, **removal})
+    assert response.status_code == 200
+    assert "Reload settings before replacing or removing it" in response.content.decode()
+    assert response.context["form"]["clear_api_token"].value() is True
+    setting.refresh_from_db()
+    assert setting.api_token == "rotated-synthetic"
+
+    retry_versions = rendered_voxhelm_versions(response)
+    response = admin_client.post(edit_url, {**retry_versions, **removal})
+    assert response.status_code == 200
+    assert "Reload settings before replacing or removing it" in response.content.decode()
+    setting.refresh_from_db()
+    assert setting.api_token == "rotated-synthetic"
+    assert retry_versions == stale_versions
+    assert (
+        rendered_voxhelm_versions(admin_client.get(edit_url))["api_token_version"]
+        != stale_versions["api_token_version"]
+    )
+
+
+@pytest.mark.django_db
 def test_voxhelm_site_token_clear_conflicts_with_new_token(admin_client, site):
     setting, _ = VoxhelmSettings.objects.update_or_create(site=site, defaults={"api_token": "stored-key"})
     with TestCase.captureOnCommitCallbacks(execute=True):

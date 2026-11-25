@@ -4,11 +4,13 @@ import re
 from io import StringIO
 
 import pytest
+from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.core.management import call_command
 from django.forms import modelform_factory
 from django.test import TestCase
 from django.urls import reverse
+from wagtail.models import Locale, Page, Site
 
 from cast.models import TranscriptGeneration, VoxhelmSettings
 from cast.models.voxhelm_settings import TokenInput, VoxhelmSettingsForm, api_token_version, ordinary_settings_version
@@ -47,6 +49,26 @@ def test_blank_form_preserves_token_at_save(site, current_token, commit):
     setting.refresh_from_db()
     assert setting.api_token == current_token
     assert setting.language == "de"
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_form_validates_token_on_the_write_database(site):
+    alias = "migration_other"
+    locale, _ = Locale.objects.using(alias).get_or_create(language_code="en")
+    page_type = ContentType.objects.db_manager(alias).get_for_model(Page)
+    (root,) = Page.objects.using(alias).bulk_create(
+        [Page(title="Writer root", slug="writer-root", path="9999", depth=1, locale=locale, content_type=page_type)]
+    )
+    other_site = Site.objects.using(alias).create(hostname="writer.example", root_page=root)
+    default = VoxhelmSettings.objects.create(site=site, api_token="default-synthetic")
+    writer = VoxhelmSettings.objects.using(alias).create(pk=default.pk, site=other_site, api_token="writer-synthetic")
+
+    settings_form(writer, api_token="replacement-synthetic").save()
+
+    writer.refresh_from_db()
+    default.refresh_from_db()
+    assert (writer.api_token, writer.language) == ("replacement-synthetic", "de")
+    assert (default.api_token, default.language) == ("default-synthetic", "")
 
 
 @pytest.mark.django_db
