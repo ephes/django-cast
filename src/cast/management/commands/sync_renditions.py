@@ -1,9 +1,12 @@
 from argparse import ArgumentParser, RawTextHelpFormatter
-from typing import Any
+from collections import defaultdict
+from collections.abc import Iterator
+from typing import Any, NamedTuple
 
 from django.core.files.storage import Storage
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 from django.db import transaction
+from django.db.models import F, QuerySet
 from rich.progress import track
 from wagtail.images.models import Filter, Image, Rendition
 
@@ -15,6 +18,46 @@ from ...models.image_renditions import (
     get_obsolete_and_missing_rendition_strings,
     repair_missing_rendition_files,
 )
+from ...renditions import ImageType, get_srgb_counterpart_filter_spec
+
+BATCH_SIZE = 200
+ImageIdentity = tuple[str, int, int, int | None, int | None, int | None, int | None]
+
+
+def image_batches(images: QuerySet[Image], ids: list[int]) -> Iterator[dict[int, Image]]:
+    for start in range(0, len(ids), BATCH_SIZE):
+        requested = ids[start : start + BATCH_SIZE]
+        batch = images.in_bulk(requested)
+        if missing := set(requested) - batch.keys():
+            raise CommandError(f"Images disappeared during rendition synchronization: {sorted(missing)}.")
+        yield batch
+
+
+class RenditionIdentity(NamedTuple):
+    pk: int
+    spec: str
+    focal_key: str
+    name: str
+
+    @classmethod
+    def from_row(cls, rendition: Rendition) -> "RenditionIdentity":
+        return cls(rendition.pk, rendition.filter_spec, rendition.focal_point_key, rendition.file.name)
+
+
+def source_identity(image: Image) -> ImageIdentity:
+    return (
+        image.file.name,
+        image.width,
+        image.height,
+        image.focal_point_x,
+        image.focal_point_y,
+        image.focal_point_width,
+        image.focal_point_height,
+    )
+
+
+def file_exists(rendition: Rendition) -> bool:
+    return bool(rendition.file.name) and rendition.file.storage.exists(rendition.file.name)
 
 
 class Command(BaseCommand):
@@ -62,16 +105,39 @@ By default all posts are synced.
         if (post_slug is not None or blog_slug is not None) and not posts_queryset.exists():
             raise CommandError("No posts found for the supplied selectors.")
 
-        posts_queryset = posts_queryset.prefetch_related("images", "galleries__images")
-        all_images = Post.get_all_images_from_queryset(posts_queryset)
-        obsolete_renditions, missing_renditions = get_obsolete_and_missing_rendition_strings(
-            all_images, check_files=True
-        )
-        missing_rendition_items = list(missing_renditions.items())
-        print("len missing renditions: ", len(missing_rendition_items))
-        for image_id, filter_specs in track(missing_rendition_items, description="create missing renditions"):
-            image = Image.objects.get(id=image_id)
-            using = image._state.db or "default"
+        using = posts_queryset.db
+        posts = posts_queryset.using(using).prefetch_related("images", "galleries__images")
+        roles: dict[int, set[ImageType]] = defaultdict(set)
+        for role, image in Post.get_all_images_from_queryset(posts.iterator(chunk_size=BATCH_SIZE)):
+            roles[image.pk].add(role)
+
+        images = Image.objects.using(using)
+        obsolete_by_image: dict[int, list[RenditionIdentity]] = defaultdict(list)
+        renditions = Rendition.objects.using(using)
+        missing_renditions: dict[int, set[str]] = {}
+        for batch in image_batches(images, sorted(roles)):
+            obsolete, missing = get_obsolete_and_missing_rendition_strings(
+                ((role, image) for image_id, image in batch.items() for role in sorted(roles[image_id])),
+                using=using,
+                check_files=True,
+            )
+            for row in renditions.filter(pk__in=obsolete).iterator(chunk_size=BATCH_SIZE):
+                obsolete_by_image[row.image_id].append(RenditionIdentity.from_row(row))
+            missing_renditions.update(missing)
+
+        print("len missing renditions: ", len(missing_renditions))
+        work_ids = missing_renditions.keys() | obsolete_by_image.keys()
+        batches = image_batches(images, sorted(work_ids))
+        # Keep only identities after verification. All repairs must finish
+        # before any old counterpart is retired.
+        verified: dict[int, tuple[ImageIdentity, list[tuple[RenditionIdentity, RenditionIdentity]]]] = {}
+        for image in track(
+            (image for batch in batches for image in batch.values()),
+            total=len(work_ids),
+            description="create missing renditions",
+        ):
+            image_id = image.pk
+            filter_specs = missing_renditions.get(image_id, set())
             written: list[tuple[Storage, str]] = []
             try:
                 with transaction.atomic(using=using):
@@ -83,21 +149,63 @@ By default all posts are synced.
                     for filter_spec in required - present:
                         create_rendition_with_receipt(image, Filter(filter_spec), written)
                     # Read the writer's rows directly, never an old shared cache entry.
-                    rows = {r.filter_spec: r for r in image.renditions.filter(filter_spec__in=required)}
+                    pairs = []
+                    for old in obsolete_by_image.get(image_id, ()):
+                        counterpart = get_srgb_counterpart_filter_spec(old.spec)
+                        assert counterpart is not None
+                        pairs.append((old, clean_filter(Filter(counterpart)).spec))
+                    required.update(spec for _, spec in pairs)
+                    rows = {
+                        r.filter_spec: r
+                        for r in renditions.filter(image_id=image_id, filter_spec__in=required)
+                        if r.focal_point_key == Filter(r.filter_spec).get_cache_key(image)
+                    }
                     for filter_spec in required:
                         rendition = rows.get(filter_spec)
-                        if (
-                            rendition is None
-                            or not rendition.file.name
-                            or not rendition.file.storage.exists(rendition.file.name)
-                        ):
+                        if rendition is None or not file_exists(rendition):
                             raise CommandError(
                                 f"Required replacement {filter_spec} for image {image_id} was not saved."
                             )
+                    if pairs:
+                        verified[image_id] = (
+                            source_identity(image),
+                            [(old, RenditionIdentity.from_row(rows[spec])) for old, spec in pairs],
+                        )
             except RenditionCacheInvalidationError as error:
                 raise CommandError(str(error)) from error
             except BaseException:
                 discard_unreferenced_rendition_files(written, using=using)
                 raise
-        # Keep all old counterparts until every planned replacement is usable.
-        Rendition.objects.filter(id__in=obsolete_renditions).delete()
+
+        conflicts = 0
+        for image_id, (source, pairs) in verified.items():
+            with transaction.atomic(using=using):
+                image_query = images.filter(pk=image_id)
+                # Lock the source on SQLite as well as databases with row locks.
+                locked = image_query.update(title=F("title"))
+                current = image_query.get() if locked else None
+                rows_by_id = (
+                    renditions.select_for_update()
+                    .filter(image_id=image_id)
+                    .in_bulk({identity.pk for pair in pairs for identity in pair})
+                )
+                for old, replacement in pairs:
+                    old_row = rows_by_id.get(old.pk)
+                    new_row = rows_by_id.get(replacement.pk)
+                    if (
+                        current is None
+                        or source_identity(current) != source
+                        or old_row is None
+                        or RenditionIdentity.from_row(old_row) != old
+                        or new_row is None
+                        or RenditionIdentity.from_row(new_row) != replacement
+                        # Wagtail's deletion hook would also delete a shared file.
+                        or old.name == replacement.name
+                        or not file_exists(new_row)
+                    ):
+                        conflicts += 1
+                        self.stderr.write(f"Rendition retirement conflict for image {image_id}, rendition {old.pk}.")
+                        continue
+                    old_row.delete(using=using)
+        if conflicts:
+            raise CommandError(f"{conflicts} rendition retirement conflict(s). Rerun sync_renditions.")

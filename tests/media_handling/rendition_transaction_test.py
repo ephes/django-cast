@@ -16,16 +16,17 @@ def test_sync_compensates_completed_writes_after_rollback(
     post, disk_image, mocker, first, failure, cleanup_fails, caplog
 ):
     image = disk_image
-    old = image.get_rendition("fill-1x1")
+    post.images.add(disk_image)
+    old = image.get_rendition("width-1")
     old_bytes = Path(old.file.path).read_bytes()
-    missing = image.get_rendition("width-1") if first == "repair" else None
+    missing = image.get_rendition("width-1|srgb") if first == "repair" else None
     if missing:
         missing.file.storage.delete(missing.file.name)
     before_rows = list(image.renditions.order_by("pk").values_list("pk", "file"))
     before_files = {p for p in Path(image.file.storage.location).rglob("*") if p.is_file()}
     mocker.patch(
         "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
-        return_value=({old.pk}, {image.pk: ["width-1", "height-1"]}),
+        return_value=({old.pk}, {image.pk: ["width-1|srgb", "height-1"]}),
     )
     generate = Image.generate_rendition_file
     generated = []
@@ -45,7 +46,7 @@ def test_sync_compensates_completed_writes_after_rollback(
         if (
             failure == "verification"
             and len(generated) == 2
-            and image.renditions.filter(filter_spec__in=["width-1", "height-1"]).count() == 2
+            and image.renditions.filter(filter_spec__in=["width-1|srgb", "height-1"]).count() == 2
         ):
             raise RuntimeError("synthetic later failure")
         return exists(name)
@@ -186,6 +187,7 @@ def test_repair_invalidates_only_after_writer_commit(disk_image, alias, rollback
 def test_committed_cache_failure_keeps_repaired_bytes(post, disk_image, mocker, entry):
     from cast.models.image_renditions import RenditionCacheInvalidationError, create_missing_renditions_for_images
 
+    post.images.add(disk_image)
     row = disk_image.get_rendition("width-1")
     old_name = row.file.name
     row.file.storage.delete(old_name)
@@ -238,6 +240,7 @@ def test_unrelated_commit_callback_failure_keeps_committed_creation(post, disk_i
         "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
         return_value=(set(), {disk_image.pk: ["width-1"]}),
     )
+    post.images.add(disk_image)
     save = Rendition.save
 
     def fail_callback():
@@ -268,3 +271,53 @@ def test_creation_reuses_a_row_present_after_inventory(disk_image, mocker):
     assert create_rendition_with_receipt(disk_image, Filter("width-1"), receipt).pk == row.pk
     assert receipt == []
     generate.assert_not_called()
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("change", ["row", "file", "source", "old", "shared-file"])
+def test_sync_revalidates_first_replacement_after_another_image(disk_image, post, mocker, change):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import connection
+
+    first = disk_image
+    second = Image.objects.create(title="Later", file=first.file.name, collection=first.collection)
+    post.images.add(first, second)
+    old = first.get_rendition("width-1")
+    spec = "width-1|srgb"
+    missing = {first.pk: {spec}, second.pk: {"width-1"}}
+    if change == "shared-file":
+        first.renditions.create(filter_spec=spec, file=old.file.name, width=1, height=1)
+        missing.pop(first.pk)
+    mocker.patch(
+        "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
+        return_value=({old.pk}, missing),
+    )
+
+    def change_first():
+        try:
+            replacement = first.renditions.get(filter_spec=spec)
+            if change == "row":
+                replacement.delete()
+            elif change == "file":
+                replacement.file.delete(save=False)
+            elif change == "source":
+                Image.objects.filter(pk=first.pk).update(focal_point_x=1)
+            elif change == "old":
+                Rendition.objects.filter(pk=old.pk).update(focal_point_key="changed")
+        finally:
+            connection.close()
+
+    def pause_after_first(items, **kwargs):
+        images = {image.pk: image for image in items}
+        yield images[first.pk]
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            pool.submit(change_first).result(timeout=10)
+        yield images[second.pk]
+
+    mocker.patch("cast.management.commands.sync_renditions.track", pause_after_first)
+    with pytest.raises(CommandError, match="retirement conflict"):
+        call_command("sync_renditions", post_slug=post.slug)
+    assert second.renditions.filter(filter_spec="width-1").exists()
+    assert Rendition.objects.filter(pk=old.pk).exists()
+    assert old.file.storage.exists(old.file.name)

@@ -673,68 +673,22 @@ def test_sync_renditions_rejects_missing_blog_slug():
 
 
 @pytest.mark.django_db
-def test_sync_renditions_with_post_slug_deletes_obsolete_and_builds_missing(mocker, post, image):
-    filter_qs = mocker.patch("cast.management.commands.sync_renditions.Rendition.objects.filter")
-    filter_qs.return_value.delete.return_value = None
-    get_missing = mocker.patch(
+@pytest.mark.parametrize("selector", ["post_slug", "blog_slug", None])
+def test_sync_renditions_repairs_and_retires_counterpart_for_selected_posts(mocker, blog, post, disk_image, selector):
+    post.images.add(disk_image)
+    old = disk_image.get_rendition("width-1")
+    spec = "width-1|srgb"
+    plan = mocker.patch(
         "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
-        return_value=([123], {image.id: ["fill-1x1"]}),
+        return_value=({old.pk}, {disk_image.pk: {spec}}),
     )
-    mocker.patch("cast.management.commands.sync_renditions.track", side_effect=lambda items, description=None: items)
-    image_get = mocker.patch("cast.management.commands.sync_renditions.Image.objects.get", return_value=image)
-    from cast.models.image_renditions import create_rendition_with_receipt
+    options = {} if selector is None else {selector: post.slug if selector == "post_slug" else blog.slug}
+    call_command("sync_renditions", **options)
 
-    create = mocker.patch(
-        "cast.management.commands.sync_renditions.create_rendition_with_receipt", wraps=create_rendition_with_receipt
-    )
-
-    call_command("sync_renditions", post_slug=post.slug)
-
-    get_missing.assert_called_once()
-    filter_qs.assert_called_once_with(id__in=[123])
-    image_get.assert_called_once_with(id=image.id)
-    assert create.call_args.args[0] is image
-    assert create.call_args.args[1].spec == "fill-1x1"
-
-
-@pytest.mark.django_db
-def test_sync_renditions_with_unique_blog_slug_syncs_descendants(mocker, blog, post, image):
-    filter_qs = mocker.patch("cast.management.commands.sync_renditions.Rendition.objects.filter")
-    filter_qs.return_value.delete.return_value = None
-    mocker.patch(
-        "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
-        return_value=([321], {image.id: ["fill-2x2"]}),
-    )
-    mocker.patch("cast.management.commands.sync_renditions.track", side_effect=lambda items, description=None: items)
-    mocker.patch("cast.management.commands.sync_renditions.Image.objects.get", return_value=image)
-    from cast.models.image_renditions import create_rendition_with_receipt
-
-    create = mocker.patch(
-        "cast.management.commands.sync_renditions.create_rendition_with_receipt", wraps=create_rendition_with_receipt
-    )
-
-    call_command("sync_renditions", blog_slug=blog.slug)
-
-    filter_qs.assert_called_once_with(id__in=[321])
-    assert create.call_args.args[1].spec == "fill-2x2"
-
-
-@pytest.mark.django_db
-def test_sync_renditions_without_filters_uses_all_posts(mocker):
-    mocked_queryset = mocker.Mock()
-    mocked_queryset.prefetch_related.return_value = mocked_queryset
-    all_posts = mocker.patch("cast.management.commands.sync_renditions.Post.objects.all", return_value=mocked_queryset)
-    mocker.patch("cast.management.commands.sync_renditions.Post.get_all_images_from_queryset", return_value=iter(()))
-    mocker.patch(
-        "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
-        return_value=([], {}),
-    )
-    mocker.patch("cast.management.commands.sync_renditions.Rendition.objects.filter")
-    mocker.patch("cast.management.commands.sync_renditions.track", side_effect=lambda items, description=None: items)
-
-    call_command("sync_renditions")
-
-    all_posts.assert_called_once_with()
+    plan.assert_called_once()
+    assert not disk_image.renditions.filter(pk=old.pk).exists()
+    new = disk_image.renditions.get(filter_spec=spec)
+    assert new.file.storage.exists(new.file.name)
 
 
 def test_media_replace_dry_run_with_yes_warns_and_does_not_write(mocker):

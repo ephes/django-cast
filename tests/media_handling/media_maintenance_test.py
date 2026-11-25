@@ -56,7 +56,7 @@ def test_combined_rendition_selectors_intersect_blog_and_post(mocker, blog, post
     other_post.images.add(image)
     seen = []
 
-    def plan(images, *, check_files=False):
+    def plan(images, *, using, check_files=False):
         assert check_files
         seen.extend(images)
         return set(), {}
@@ -79,7 +79,7 @@ def test_rendition_sync_pins_blog_in_one_select(mocker, blog, post, image):
         Blog.objects.filter(pk=blog.pk).update(slug="renamed-sync-blog")
         return descendant_of(selected_blog)
 
-    def plan(images, *, check_files):
+    def plan(images, *, using, check_files):
         assert check_files
         assert [(kind, current.pk) for kind, current in images] == [("regular", image.pk)]
         return set(), {}
@@ -122,6 +122,7 @@ def test_rendition_failure_retains_old_bytes_and_successful_retry_retires_only_c
     mocker, post, disk_image, django_capture_on_commit_callbacks
 ):
     image = disk_image
+    post.images.add(image)
     old = image.get_rendition("width-1")
     unrelated = image.get_rendition("height-1")
     old_pk, old_path = old.pk, old.file.path
@@ -129,7 +130,7 @@ def test_rendition_failure_retains_old_bytes_and_successful_retry_retires_only_c
     unrelated_path = unrelated.file.path
     mocker.patch(
         "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
-        return_value=({old_pk}, {image.pk: {"fill-2x2"}}),
+        return_value=({old_pk}, {image.pk: {"width-1|srgb"}}),
     )
     original_generate = Image.generate_rendition_file
     failing = mocker.patch.object(Image, "generate_rendition_file", side_effect=OSError("synthetic image failure"))
@@ -144,20 +145,21 @@ def test_rendition_failure_retains_old_bytes_and_successful_retry_retires_only_c
     assert not Rendition.objects.filter(pk=old_pk).exists()
     assert not image.file.storage.exists(old.file.name)
     assert Path(unrelated_path).read_bytes()
-    new = image.renditions.get(filter_spec="fill-2x2")
+    new = image.renditions.get(filter_spec="width-1|srgb")
     assert new.file.storage.exists(new.file.name)
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("fault", ["omitted", "unsaved", "missing-file", "empty-name"])
 def test_rendition_verification_failure_keeps_obsolete_file(mocker, post, disk_image, fault):
+    post.images.add(disk_image)
     old = disk_image.get_rendition("width-1")
     old_pk, old_name = old.pk, old.file.name
     mocker.patch(
         "cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings",
-        return_value=({old_pk}, {disk_image.pk: {"fill-2x2"}}),
+        return_value=({old_pk}, {disk_image.pk: {"width-1|srgb"}}),
     )
-    replacement = Rendition(image=disk_image, filter_spec="fill-2x2", file="missing.png", width=1, height=1)
+    replacement = Rendition(image=disk_image, filter_spec="width-1|srgb", file="missing.png", width=1, height=1)
     if fault in {"missing-file", "empty-name"}:
         if fault == "empty-name":
             replacement.file.name = ""
@@ -168,3 +170,60 @@ def test_rendition_verification_failure_keeps_obsolete_file(mocker, post, disk_i
         call_command("sync_renditions", post_slug=post.slug)
     assert Rendition.objects.filter(pk=old_pk).exists()
     assert old.file.storage.exists(old_name)
+
+
+@pytest.mark.django_db
+def test_sync_discovers_shared_images_by_role_and_hydrates_in_batches(mocker, blog, post, image):
+    from cast.models import Gallery
+
+    other = Image.objects.create(title="Other", file=image.file.name, collection=image.collection)
+    third = Image.objects.create(title="Third", file=image.file.name, collection=image.collection)
+    gallery = Gallery.objects.create()
+    gallery.images.add(image, other, third)
+    for index in range(4):
+        page = post if index == 0 else blog.add_child(instance=Post(title=f"Shared {index}"))
+        page.images.add(image)
+        page.galleries.add(gallery)
+
+    mocker.patch("cast.management.commands.sync_renditions.BATCH_SIZE", 2, create=True)
+    seen = []
+    repaired = []
+
+    def plan(images, **kwargs):
+        variants = [(kind, item.pk) for kind, item in images]
+        seen.extend(variants)
+        return set(), {image_id: set() for _, image_id in variants}
+
+    def repair(item, *args, **kwargs):
+        repaired.append(item.pk)
+        return set()
+
+    mocker.patch("cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings", plan)
+    mocker.patch("cast.management.commands.sync_renditions.repair_missing_rendition_files", repair)
+    with CaptureQueriesContext(connection) as queries:
+        call_command("sync_renditions", stdout=StringIO())
+
+    assert sorted(seen) == sorted(
+        [("regular", image.pk), ("gallery", image.pk), ("gallery", other.pk), ("gallery", third.pk)]
+    )
+    assert sorted(repaired) == sorted([image.pk, other.pk, third.pk])
+    relation_table = Post.images.through._meta.db_table
+    assert sum(f'JOIN "{relation_table}"' in q["sql"] for q in queries) == 2
+    image_batches = [q["sql"] for q in queries if 'FROM "wagtailimages_image" WHERE' in q["sql"]]
+    assert len(image_batches) == 4
+    assert all(" IN (" in sql for sql in image_batches)
+
+
+@pytest.mark.django_db
+def test_disappeared_image_after_inventory_fails_before_rendition_retirement(mocker, post, disk_image):
+    post.images.add(disk_image)
+    image_id = disk_image.pk
+
+    def plan(images, **kwargs):
+        assert next(images)[1].pk == image_id
+        disk_image.delete()
+        return set(), {image_id: {"width-1"}}
+
+    mocker.patch("cast.management.commands.sync_renditions.get_obsolete_and_missing_rendition_strings", plan)
+    with pytest.raises(CommandError, match=rf"Images disappeared during rendition synchronization: \[{image_id}\]"):
+        call_command("sync_renditions", post_slug=post.slug)

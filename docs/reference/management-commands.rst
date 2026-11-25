@@ -176,9 +176,14 @@ Uploaded originals, Wagtail admin renditions, and custom site renditions with
 unrelated filter specs are preserved.
 
 The command also checks that each required rendition's stored file still
-exists, and regenerates the file for rows whose file was lost. This check makes
-one storage request per required rendition, so it runs only here: publication
-and gallery rendition creation compare database rows only.
+exists, and regenerates the file for rows whose file was lost. Only this
+command checks stored files. Publication and gallery rendition creation
+compare database rows. The command discovers post images and loads repair
+images in batches, preserving every
+role of a shared image. Before it deletes an obsolete rendition, it rechecks
+the source and the exact verified replacement on the writer database.
+A changed pair is reported as a conflict and its old rendition is retained.
+Rerun the command to reconcile the current files.
 
 Run this as a one-off migration step after a deployment that changes rendition
 specifications or policy; it is not required for every normal application

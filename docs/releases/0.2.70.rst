@@ -51,6 +51,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Batch image discovery and repair loading in ``sync_renditions``, preserving
+  both regular and gallery roles for shared images.
+- Recheck the source and replacement before retiring each obsolete
+  rendition. Report changed pairs and retain the old files.
+
 - Rebuild chapter companions when they reconnect so their controls seek the
   currently bound player.
 - Rebuild transcript companions on reconnection with fresh search and cue
