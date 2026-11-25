@@ -53,6 +53,11 @@ episode context so enabled diarization can use that episode's contributor count
 as the speaker-count hint. Jobs that send known-speaker voice references omit
 the hint.
 
+If two selected episodes share one audio object, the command stops before
+submitting any jobs. Select a single episode for that audio to use its context,
+or select the audio directly with ``--audio-id`` without those episode IDs.
+Repeating the same ``--episode-id`` generates at most one transcript.
+
 .. code-block:: bash
 
     # Generate a transcript for one episode

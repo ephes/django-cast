@@ -40,6 +40,10 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Reject multiple selected episodes sharing one audio object in
+  ``generate_transcripts`` before submitting jobs. Select one episode or use
+  ``--audio-id`` directly.
+
 - Validate Voxhelm token changes on the settings write database when database
   routing separates reads and writes.
 
