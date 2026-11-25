@@ -49,7 +49,7 @@ from .models import (
 )
 from .transcripts.generation_status import get_transcript_generation_status_context
 from .transcripts.glossary import has_common_words
-from .views.voxhelm import user_can_generate_transcript_for_episode
+from .views.voxhelm import VoxhelmSettingsEditView, user_can_generate_transcript_for_episode
 from .voxhelm import voxhelm_configured
 
 _T = TypeVar("_T")
@@ -80,6 +80,19 @@ def register_admin_urls() -> list:
         path("contributors/", include((contributors, "cast-contributors"), namespace="cast-contributors")),
         path("transcript/", include((transcript, "cast-transcript"), namespace="cast-transcript")),
         path("voxhelm/", include((voxhelm, "cast-voxhelm"), namespace="cast-voxhelm")),
+    ]
+
+
+@hooks.register("register_admin_urls", order=-1)
+def register_voxhelm_settings_edit_url() -> list:
+    # Match this setting before Wagtail's generic settings route. The stock
+    # namespace still supplies the canonical URL for reverse and redirects.
+    return [
+        path(
+            "settings/cast/voxhelmsettings/<int:pk>/",
+            VoxhelmSettingsEditView.as_view(),
+            {"app_name": "cast", "model_name": "voxhelmsettings"},
+        )
     ]
 
 

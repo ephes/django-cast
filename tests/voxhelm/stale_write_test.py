@@ -307,6 +307,39 @@ def test_ordinary_fields_are_rechecked_at_save(site):
     assert (setting.language, setting.api_token) == ("de", "old-synthetic")
 
 
+@pytest.mark.django_db
+def test_guarded_save_reports_deleted_settings_as_conflict(site):
+    setting = VoxhelmSettings.objects.create(site=site, language="fr")
+    pending = settings_form(setting).save(commit=False)
+    VoxhelmSettings.objects.filter(pk=setting.pk).delete()
+
+    with pytest.raises(ValidationError, match="Reload settings before saving"):
+        pending.save()
+
+    assert not VoxhelmSettings.objects.filter(site=site).exists()
+
+
+@pytest.mark.django_db
+def test_settings_edit_view_reports_deletion_after_validation(admin_client, site, monkeypatch):
+    setting = VoxhelmSettings.objects.create(site=site, language="fr")
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    version = admin_client.get(edit_url).context["form"]["settings_version"].value()
+    validate = VoxhelmSettingsForm.is_valid
+
+    def delete_after_validation(form):
+        valid = validate(form)
+        if valid:
+            VoxhelmSettings.objects.filter(pk=setting.pk).delete()
+        return valid
+
+    monkeypatch.setattr(VoxhelmSettingsForm, "is_valid", delete_after_validation)
+    response = admin_client.post(edit_url, {"settings_version": version, "language": "de"})
+
+    assert response.status_code == 200
+    assert "Reload settings before saving" in response.content.decode()
+    assert not VoxhelmSettings.objects.filter(site=site).exists()
+
+
 def test_token_input_without_form_renders_only_the_password_field():
     html = TokenInput().render("api_token", "secret-synthetic")
     assert 'type="password"' in html

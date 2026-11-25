@@ -102,15 +102,20 @@ class VoxhelmSettings(BaseSiteSetting):
         with transaction.atomic(using=using):
             current = type(self).objects.using(using).filter(pk=self.pk)
             # Obtain the write lock before reading, including on SQLite.
-            current.update(api_token=models.F("api_token"))
+            if not current.update(api_token=models.F("api_token")):
+                raise VoxhelmSettingsConflict(SETTINGS_CONFLICT_MESSAGE)
             stored = current.get()
             if not constant_time_compare(settings_version, ordinary_settings_version(stored)):
-                raise ValidationError(SETTINGS_CONFLICT_MESSAGE)
+                raise VoxhelmSettingsConflict(SETTINGS_CONFLICT_MESSAGE)
             if replacement is not None and api_token_version(stored.api_token) != token_version:
-                raise ValidationError(TOKEN_CONFLICT_MESSAGE)
+                raise VoxhelmSettingsConflict({"api_token": TOKEN_CONFLICT_MESSAGE})
             self.api_token = stored.api_token if replacement is None else replacement
             super().save(**kwargs)
         del self._settings_save_intent
+
+
+class VoxhelmSettingsConflict(ValidationError):
+    """A previously validated edit no longer matches persisted settings."""
 
 
 SETTINGS_CONFLICT_MESSAGE = _("The Voxhelm settings changed. Reload settings before saving.")

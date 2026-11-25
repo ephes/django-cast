@@ -354,7 +354,8 @@ submission preserves the token stored when the save runs, including a rotation
 or removal by another administrator. The form carries an opaque fingerprint of
 the token stored when the page was rendered (never the token itself); replacing
 or removing the token from a page opened before another administrator changed it
-shows a form error. Reload settings and retry.
+shows a form error. If the settings row is removed before the save, Wagtail
+reports an edit conflict and discards the stale write. Reload settings and retry.
 
 Production sites can also keep the Voxhelm token in deployment-managed Django
 settings or environment variables instead of the Wagtail database. django-cast
