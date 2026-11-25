@@ -47,6 +47,9 @@ Fixes
 - Refuse malformed Podlove and DOTe JSON shapes during speaker discovery so
   synchronization preserves approved mappings.
 
+- Exclude timed speech without a speaker label from solo voice-reference
+  ranges.
+
 - Validate Voxhelm token changes on the settings write database when database
   routing separates reads and writes.
 

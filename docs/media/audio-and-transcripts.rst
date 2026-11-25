@@ -1187,10 +1187,11 @@ anchors continue to fail with 404 when absent, mismatched or unauthorized.
 Voice-reference overlap and sample grouping
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Candidate extraction subtracts speech by other labels across the complete
-source timeline, including unsorted, nested, textless and conflicting-label
-segments. Touching endpoints do not overlap. Only solo portions meeting the
-minimum duration are offered; original transcript timing remains unchanged.
+Candidate extraction subtracts speech by other or unidentified speakers
+across the complete source timeline, including unsorted, nested, textless
+and conflicting-label segments. Touching endpoints do not overlap. A timed
+segment without a speaker label can block a range. Candidates require a
+speaker label and enough solo speech to meet the minimum duration.
 A candidate's text is the full text of its source segments, so a range clipped
 around another speaker can show words spoken outside that range; judge the
 audio, not the text.
