@@ -68,7 +68,7 @@ def get_srcset_images_for_slots(
                     if image_format == rendition_filters.original_format:
                         url, width = image.file.url, image.width
                     elif (rendition := renditions.get(f"format-{image_format}")) is not None:
-                        url, width = rendition.url, rendition.width
+                        url, width = rendition.url, rendition.width or image.width
                     else:
                         continue
                     src[image_format] = url

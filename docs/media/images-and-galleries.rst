@@ -354,7 +354,10 @@ The full rendering pipeline works as follows:
 4. The ``get_image_for_slot()`` method produces an ``ImageForSlot`` object
    that is attached to the image and passed to the template context. If several
    slots fall back to the original, they reuse the same storage URL in their
-   ``src`` and ``srcset`` values and keep the dimensions calculated for each slot.
+   ``src`` and ``srcset`` values and keep the display dimensions calculated for
+   each slot. The ``srcset`` width descriptors use the dimensions of the stored
+   rendition, including full-size format conversions. If older cached data
+   lacks a width for a format-only rendition, the original width is used.
 5. Theme templates use the ``ImageForSlot`` attributes to render
    ``<picture>`` elements with appropriate ``<source>`` and ``<img>`` tags.
 

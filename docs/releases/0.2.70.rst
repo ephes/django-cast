@@ -38,6 +38,8 @@ Fixes
   when generating feeds from legacy data.
 - Emit a single stable podcast RSS build date using stored publication dates
   and omit it when no date is available.
+- Use the converted image's intrinsic width in ``srcset`` for format-only
+  renditions while preserving each slot's display width.
 
 - Keep code block rendering and editor validation available during highlight
   cache outages.
