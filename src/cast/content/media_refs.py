@@ -127,10 +127,11 @@ class MediaResolution:
         visible = policy.instances_user_has_permission_for(self.user, "choose").using(alias)
         for offset in range(0, len(missing), self.batch_size):
             batch = missing[offset : offset + self.batch_size]
-            cached.update(dict.fromkeys(batch))
-            cached.update(
+            results: dict[int, Any] = dict.fromkeys(batch)
+            results.update(
                 {obj.pk: obj for obj in queryset.using(alias).filter(pk__in=batch).filter(pk__in=visible.values("pk"))}
             )
+            cached.update(results)
 
         return cached
 

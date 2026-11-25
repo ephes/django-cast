@@ -687,7 +687,9 @@ Built-in image, audio, video and gallery references are resolved in batches of
 at most 500 distinct IDs. Permission results, including denied IDs, are reused
 only within one conversion, user and routed database, shared across overview
 and detail by the editor. Repeated denied references still report every block's
-validation path. A subsequent request re-evaluates choose permissions.
+validation path. The cache records matches and misses after a batch is read
+successfully, so a retry within the conversion re-reads failed batches and
+reuses completed ones. A subsequent request re-evaluates choose permissions.
 
 Stored body blocks that this API version cannot safely edit are returned as
 ``{"type": "unsupported", "value": {"stored_type": "...", "position":

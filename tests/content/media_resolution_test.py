@@ -1,6 +1,6 @@
 import pytest
 from django.contrib.auth import get_user_model
-from django.db import connection
+from django.db import OperationalError, connection, connections
 from django.test.utils import CaptureQueriesContext
 from wagtail.images import get_image_model
 from wagtail.models import Collection
@@ -75,6 +75,49 @@ def test_resolution_separates_equal_ids_on_different_databases(settings, image):
     other = resolution.resolve("image", image.pk)
     assert other._state.db == "migration_other"
     assert other.title == "Other synthetic image"
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_failed_media_batch_can_be_retried(settings):
+    alias = "migration_other"
+    model = get_image_model()
+    collection = Collection.objects.using(alias).create(name="Synthetic", path="9999", depth=1, numchild=0)
+    image = model(pk=3, title="Synthetic image", file="synthetic.png", width=1, height=1, collection=collection)
+    model.objects.using(alias).bulk_create([image])
+
+    class ImageRouter:
+        def db_for_read(self, model, **hints):
+            if model is get_image_model():
+                return alias
+
+    settings.DATABASE_ROUTERS = [ImageRouter()]
+    resolution = MediaResolution(UserFactory(is_superuser=True))
+    resolution.batch_size = 2
+    refs = [{"type": "image", "value": {"id": image_id}} for image_id in range(1, 5)]
+    batches = []
+
+    def fail_second_batch(execute, sql, params, many, context):
+        batches.append(params)
+        if len(batches) == 2:
+            raise OperationalError("Synthetic media read failure")
+        return execute(sql, params, many, context)
+
+    writer = connections[alias]
+    with (
+        writer.execute_wrapper(fail_second_batch),
+        pytest.raises(OperationalError, match="Synthetic media read failure"),
+    ):
+        resolution.prefetch(refs, stored=False)
+
+    with CaptureQueriesContext(writer) as queries:
+        resolution.prefetch(refs, stored=False)
+        resolved = resolution.resolve("image", image.pk)
+        assert resolved is not None
+        assert resolved._state.db == alias
+        assert resolved.title == image.title
+        for missing_id in (1, 2, 4):
+            assert resolution.resolve("image", missing_id) is None
+    assert len(queries) == 1
 
 
 @pytest.mark.django_db
