@@ -997,6 +997,33 @@ class TestReceivers:
         comment.save()
         assert str(comment.pk) not in author_edits.deleted_comment_pks()
 
+    @pytest.mark.parametrize("concrete", [False, True])
+    def test_stale_partial_save_preserves_author_deletion(self, comment, concrete):
+        sender = comment._meta.concrete_model if concrete else type(comment)
+        stale = sender.objects.get(pk=comment.pk)
+        comment.is_removed = True
+        comment.is_public = False
+        comment.save()
+        author_edits.mark_deleted(comment)
+
+        stale.comment = "Edited by staff"
+        stale.save(update_fields=["comment"])
+
+        comment.refresh_from_db()
+        assert comment.is_removed and not comment.is_public
+        assert comment.comment == "Edited by staff"
+        assert str(comment.pk) in author_edits.deleted_comment_pks()
+
+    @pytest.mark.parametrize("concrete", [False, True])
+    def test_raw_save_preserves_preloaded_author_metadata(self, comment, concrete):
+        sender = comment._meta.concrete_model if concrete else type(comment)
+        author_edits.mark_deleted(comment)
+        fixture_comment = sender.objects.get(pk=comment.pk)
+
+        fixture_comment.save_base(raw=True)
+
+        assert str(comment.pk) in author_edits.deleted_comment_pks()
+
     def test_saving_comment_only_updates_metadata_when_restoring(self, comment):
         from django.db import connection
 
@@ -1019,7 +1046,7 @@ class TestReceivers:
             comment.save(update_fields=["is_removed"])
             comment.save(update_fields=["comment"])
 
-        assert affected_rows == [1, 0]
+        assert affected_rows == [1]
         meta = CommentAuthorMeta.objects.get(comment_pk=str(comment.pk))
         assert meta.deleted_at is None
         assert meta.edited is True

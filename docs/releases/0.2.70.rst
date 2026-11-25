@@ -4,6 +4,9 @@
 Upgrade actions
 ~~~~~~~~~~~~~~~
 
+- Programmatic Voxhelm settings form submissions that replace or remove a token
+  on an existing row must include the form's rendered ``api_token_version`` value.
+
 - Editor API Markdown fields now reject fenced or indented code nested in a list
   or block quote with ``400 validation_error`` code ``nested_code`` and its
   source lines. Such code used to pass through rich-text conversion inside the
@@ -19,6 +22,9 @@ Features
 Security and hardening
 ~~~~~~~~~~~~~~~~~~~~~~
 
+- Use the admitted comment for flag confirmation and check its visibility under
+  the comment row lock before recording a flag.
+
 - Return 404 on slug-based feed and episode routes when Wagtail cannot resolve
   a site root for the request. Wagtail's configured default site still applies.
 
@@ -33,6 +39,11 @@ Security and hardening
 
 Fixes
 ~~~~~
+
+- Report a Voxhelm settings row removed during an edit as a conflict in Wagtail.
+
+- Preserve the author deletion timestamp during unrelated partial comment saves
+  and raw fixture loads.
 
 - Apply the styleguide preview gallery rendition policy per render. The
   ``--with-renditions`` command flag stays local to its invocation.

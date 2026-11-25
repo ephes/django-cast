@@ -352,9 +352,11 @@ blank to keep the stored token, enter a new token to replace it, or tick
 "Remove stored API token" to delete it and use the deployment key. A blank
 submission preserves the token stored when the save runs, including a rotation
 or removal by another administrator. The form carries an opaque fingerprint of
-the token stored when the page was rendered (never the token itself); replacing
-or removing the token from a page opened before another administrator changed it
-shows a form error. Reload settings and retry.
+the token stored when the page was rendered (never the token itself). Replacing
+or removing a token on an existing settings row requires that submitted
+fingerprint. A missing or stale fingerprint produces a form error. If the
+settings row is removed before the save, Wagtail reports an edit conflict and
+discards the stale write. Reload settings and retry.
 
 Production sites can also keep the Voxhelm token in deployment-managed Django
 settings or environment variables instead of the Wagtail database. django-cast

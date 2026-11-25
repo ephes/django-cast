@@ -12,11 +12,13 @@ from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.http import require_GET, require_http_methods
 from wagtail.admin import messages
+from wagtail.contrib.settings.views import EditView as SettingsEditView
 from wagtail.models import Site
 from wagtail.permission_policies.collections import CollectionOwnershipPermissionPolicy
 
 from ..models import Audio, Episode
 from ..models.transcript_generation import TranscriptGeneration
+from ..models.voxhelm_settings import VoxhelmSettingsConflict, VoxhelmSettingsForm
 from ..transcripts.editing import episode_from_latest_revision
 from ..transcripts.regeneration import StaleRegenerationConfirmation, sign_regeneration
 from ..voxhelm import (
@@ -31,6 +33,18 @@ from ..voxhelm import (
 )
 
 audio_permission_policy = CollectionOwnershipPermissionPolicy(Audio, auth_model=Audio, owner_field_name="user")
+
+
+class VoxhelmSettingsEditView(SettingsEditView):
+    def form_valid(self, form: VoxhelmSettingsForm) -> HttpResponse:
+        try:
+            return super().form_valid(form)
+        except VoxhelmSettingsConflict as conflict:
+            form.add_error(None, conflict)
+            # Wagtail 8 also uses this metadata for invalid-form responses.
+            self.produced_error_code = "validation_error"
+            self.produced_error_message = self.get_error_message()
+            return self.form_invalid(form)
 
 
 def generation_available(*, request: HttpRequest, audio: Audio) -> bool:

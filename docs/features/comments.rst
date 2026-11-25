@@ -41,9 +41,11 @@ or restricted return 404 for visitors who can no longer view the page.
 The comment flag route (``comments-flag``, ``flag/<comment id>/``) still requires
 a login, but it only shows and flags comments that the requester can already
 see: public, not removed, on a target the requester may view. Hidden, removed,
-draft-page and view-restricted comments return 404 for both GET and POST, so
-the confirmation page no longer reveals their author or text. Users with the
-``django_comments.can_moderate`` permission can flag any comment on the site.
+draft-page and view-restricted comments return 404 for both GET and POST.
+The confirmation page uses the same comment that passed the visibility check.
+On POST, databases with row-level locking serialize that check and flag creation
+with changes to the comment. Users with the ``django_comments.can_moderate``
+permission can flag any comment on the site.
 
 .. _comments_configuration:
 
@@ -368,8 +370,9 @@ edit and delete controls on that comment:
 - Deletion is a **soft delete**, not erasure. The comment is hidden from
   readers but kept in the database, and staff can restore it from the Django
   admin (see :ref:`comments_manual_moderation`). Restoring clears the author
-  deletion timestamp in a single conditional update. Ordinary comment saves
-  leave metadata rows with no deletion timestamp untouched.
+  deletion timestamp in a single conditional update. Partial saves that omit
+  the removal flag and raw fixture loads leave the author deletion timestamp
+  untouched.
 
 Scope and limitations
 ~~~~~~~~~~~~~~~~~~~~~~~

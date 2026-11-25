@@ -21,7 +21,13 @@ from tests.voxhelm.tasks_status_helpers import VALID_DOTE_ARTIFACT, VALID_PODLOV
 def settings_form(instance, **data):
     form_class = modelform_factory(VoxhelmSettings, form=VoxhelmSettingsForm, fields=["api_token", "language"])
     form = form_class(
-        data={"api_token": "", "language": "de", "settings_version": ordinary_settings_version(instance), **data},
+        data={
+            "api_token": "",
+            "language": "de",
+            "settings_version": ordinary_settings_version(instance),
+            "api_token_version": api_token_version(instance.api_token),
+            **data,
+        },
         instance=instance,
     )
     assert form.is_valid(), form.errors
@@ -253,6 +259,29 @@ def test_settings_edit_view_refuses_stale_token_replacement(admin_client, site):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize("credential_change", [{"api_token": "replacement"}, {"clear_api_token": "on"}])
+def test_settings_edit_view_requires_submitted_token_fingerprint(admin_client, site, credential_change):
+    setting = VoxhelmSettings.objects.create(site=site, api_token="old-synthetic", language="fr")
+    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    form = admin_client.get(edit_url).context["form"]
+    post = {"settings_version": form["settings_version"].value(), "language": "de"}
+    VoxhelmSettings.objects.filter(pk=setting.pk).update(api_token="rotated")
+
+    response = admin_client.post(edit_url, {**post, **credential_change})
+
+    assert response.status_code == 200
+    assert "Reload settings before replacing or removing it" in response.content.decode()
+    setting.refresh_from_db()
+    assert (setting.api_token, setting.language) == ("rotated", "fr")
+
+    response = admin_client.post(edit_url, post)
+
+    assert response.status_code == 302
+    setting.refresh_from_db()
+    assert (setting.api_token, setting.language) == ("rotated", "de")
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("existing", [True, False])
 def test_settings_edit_view_refuses_stale_ordinary_fields(admin_client, site, existing):
     if existing:
@@ -305,6 +334,40 @@ def test_ordinary_fields_are_rechecked_at_save(site):
         pending.save()
     setting.refresh_from_db()
     assert (setting.language, setting.api_token) == ("de", "old-synthetic")
+
+
+@pytest.mark.django_db
+def test_guarded_save_reports_deleted_settings_as_conflict(site):
+    setting = VoxhelmSettings.objects.create(site=site, language="fr")
+    pending = settings_form(setting).save(commit=False)
+    VoxhelmSettings.objects.filter(pk=setting.pk).delete()
+
+    with pytest.raises(ValidationError, match="Reload settings before saving"):
+        pending.save()
+
+    assert not VoxhelmSettings.objects.filter(site=site).exists()
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("model_name", ["voxhelmsettings", "VoxhelmSettings"])
+def test_settings_edit_view_reports_deletion_after_validation(admin_client, site, monkeypatch, model_name):
+    setting = VoxhelmSettings.objects.create(site=site, language="fr")
+    edit_url = reverse("wagtailsettings:edit", args=("cast", model_name, site.pk))
+    version = admin_client.get(edit_url).context["form"]["settings_version"].value()
+    validate = VoxhelmSettingsForm.is_valid
+
+    def delete_after_validation(form):
+        valid = validate(form)
+        if valid:
+            VoxhelmSettings.objects.filter(pk=setting.pk).delete()
+        return valid
+
+    monkeypatch.setattr(VoxhelmSettingsForm, "is_valid", delete_after_validation)
+    response = admin_client.post(edit_url, {"settings_version": version, "language": "de"})
+
+    assert response.status_code == 200
+    assert "Reload settings before saving" in response.content.decode()
+    assert not VoxhelmSettings.objects.filter(site=site).exists()
 
 
 def test_token_input_without_form_renders_only_the_password_field():
