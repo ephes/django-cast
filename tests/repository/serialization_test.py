@@ -226,7 +226,7 @@ def test_deserialize_blog_without_type_is_rejected(blog):
 
 @pytest.mark.django_db
 def test_serialize_deserialize_blog_roundtrip_podcast(podcast_with_artwork):
-    podcast_with_artwork.itunes_categories = '{"Technology": []}'
+    podcast_with_artwork.itunes_categories = "Technology"
     podcast_with_artwork.keywords = "foo,bar"
     podcast_with_artwork.explicit = 2
     podcast_with_artwork.itunes_type = Podcast.ItunesType.SERIAL

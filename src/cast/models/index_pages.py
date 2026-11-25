@@ -13,6 +13,7 @@ from django.template.response import TemplateResponse
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+from wagtail.admin.forms import WagtailAdminPageForm
 from wagtail.admin.panels import FieldPanel, MultiFieldPanel
 from wagtail.api import APIField
 from wagtail.fields import RichTextField
@@ -319,6 +320,42 @@ def _normalize_itunes_categories(categories: dict[str, Any]) -> dict[str, list[s
     }
 
 
+def _parse_itunes_categories(value: str) -> dict[str, Any] | None:
+    if not value:
+        return {}
+    try:
+        categories = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return categories if isinstance(categories, dict) else None
+
+
+def validate_itunes_categories(value: str) -> None:
+    """Reject category text that is not a JSON mapping of names to name lists."""
+    categories = _parse_itunes_categories(value)
+    if categories is None or categories != _normalize_itunes_categories(categories):
+        raise ValidationError(
+            _("Enter a JSON object mapping category names to lists of subcategory names."),
+            code="invalid_itunes_categories",
+        )
+
+
+class PodcastForm(WagtailAdminPageForm):
+    """Wagtail page form that validates the iTunes category mapping on every submit.
+
+    A podcast that stores a legacy value must have its categories corrected
+    before the editor saves it again. The check lives in editor forms rather
+    than ``Podcast.clean()``: Wagtail runs ``full_clean()`` on every page save,
+    so a model-level check would make internal saves (for example automatic
+    episode numbering) fail for such podcasts. Feeds normalize legacy data.
+    """
+
+    def clean_itunes_categories(self) -> str:
+        value = self.cleaned_data.get("itunes_categories") or ""
+        validate_itunes_categories(value)
+        return value
+
+
 class Podcast(Blog):
     """A podcast is a blog with some extra fields for podcasting."""
 
@@ -429,26 +466,11 @@ class Podcast(Blog):
     objects: PageManager = PageManager()
     aliases_homepage: Any  # don't know why this is needed FIXME
 
-    def _parse_itunes_categories(self) -> dict[str, Any] | None:
-        if not self.itunes_categories:
-            return {}
-        try:
-            categories = json.loads(self.itunes_categories)
-        except json.JSONDecodeError:
-            return None
-        return categories if isinstance(categories, dict) else None
-
-    def clean(self) -> None:
-        super().clean()
-        categories = self._parse_itunes_categories()
-        if categories is None or categories != _normalize_itunes_categories(categories):
-            raise ValidationError(
-                {"itunes_categories": _("Enter a JSON object mapping category names to lists of subcategory names.")}
-            )
+    base_form_class = PodcastForm
 
     @property
     def itunes_categories_parsed(self) -> dict[str, list[str]]:
-        return _normalize_itunes_categories(self._parse_itunes_categories() or {})
+        return _normalize_itunes_categories(_parse_itunes_categories(self.itunes_categories) or {})
 
     def get_context(self, request: HtmxHttpRequest, *args: Any, **kwargs: Any) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)

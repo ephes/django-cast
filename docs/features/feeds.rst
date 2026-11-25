@@ -117,8 +117,12 @@ Additional metadata for podcast feeds:
 - **iTunes Subtitle**: From the blog's subtitle field
 - **iTunes Categories**: Leave blank or enter a JSON object such as
   ``{"Technology": ["Gadgets"], "Arts": []}``. Category and subcategory names
-  must be nonblank text suitable for XML attributes. Feeds omit invalid legacy
-  categories or subcategories and keep the valid entries.
+  must be nonblank text suitable for XML attributes. The Wagtail page editor and
+  the Django admin reject other values on every save, so an editor must correct
+  a stored legacy value before saving the podcast again. Saves outside these
+  forms, for example during automatic episode numbering, still accept legacy
+  values. Feeds omit invalid legacy categories or subcategories and keep the
+  valid entries.
 - **Explicit Content**: Content rating flag
 - **Podcast Type**: Optional ``episodic`` or ``serial`` channel ordering value
   emitted as ``itunes:type`` only when explicitly configured.

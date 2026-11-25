@@ -1,6 +1,7 @@
 import logging
 from typing import TYPE_CHECKING
 
+from django import forms
 from django.contrib import admin, messages
 from django.contrib.admin import ModelAdmin
 from django.db.models import QuerySet
@@ -19,6 +20,7 @@ from .models import (
     SpamFilter,
     Video,
 )
+from .models.index_pages import validate_itunes_categories
 
 if TYPE_CHECKING:
     from django.forms import Form
@@ -39,8 +41,16 @@ class BlogModelAdmin(AdminUserMixin, ModelAdmin):
     fields = ("author", "email", "comments_enabled")
 
 
+class PodcastAdminForm(forms.ModelForm):
+    def clean_itunes_categories(self) -> str:
+        value = self.cleaned_data.get("itunes_categories") or ""
+        validate_itunes_categories(value)
+        return value
+
+
 @admin.register(Podcast)
 class PodcastModelAdmin(AdminUserMixin, ModelAdmin):
+    form = PodcastAdminForm
     list_display = ("title", "owner")
     fields = (
         "itunes_artwork",

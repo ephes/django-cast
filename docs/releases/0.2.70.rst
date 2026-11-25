@@ -34,8 +34,8 @@ Security and hardening
 Fixes
 ~~~~~
 
-- Validate iTunes category mappings in the editor and keep valid category entries
-  when generating feeds from legacy data.
+- Validate iTunes category mappings in the Wagtail editor and Django admin, and
+  keep valid category entries when generating feeds from legacy data.
 - Emit a single stable podcast RSS build date using stored publication dates
   and omit it when no date is available.
 - Use the converted image's intrinsic width in ``srcset`` for format-only
