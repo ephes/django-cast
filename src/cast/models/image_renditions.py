@@ -1,6 +1,7 @@
 import logging
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
+from contextlib import suppress
 from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, TypeAlias
@@ -260,7 +261,8 @@ def discard_unreferenced_rendition_files(written: Iterable[tuple[Storage, str]],
                 continue
             storage.delete(name)
         except Exception:
-            logger.warning("Could not remove orphaned rendition file %s", name, exc_info=True)
+            with suppress(Exception):
+                logger.warning("Could not remove orphaned rendition file %s", name, exc_info=True)
 
 
 def create_missing_renditions_for_posts(posts: Iterable["Post"]) -> None:

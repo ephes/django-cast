@@ -209,7 +209,8 @@ verified before any obsolete counterpart is retired. A generation or storage
 failure rolls back that image's rows and keeps old counterparts for a safe retry.
 Each repair and new rendition uses a fresh storage key. After rollback, only
 acknowledged operation-owned files without a surviving row are removed. Cleanup
-errors are logged without replacing the original failure. If storage changes a
+diagnostics are best effort. The cleanup continues checking remaining files
+even if a logging handler fails, and the original failure is raised. If storage changes a
 requested name, ownership is uncertain: the returned key is logged and retained
 for inspection. An uncertain failed save that returns no name cannot be cleaned
 automatically. Successfully committed earlier images remain and are reused on
