@@ -1603,6 +1603,10 @@ its write lock, before constructing the update form or touching storage. A
 concurrent collection or owner change therefore returns the same ``404`` or
 ``403`` as an initially denied request, without changing metadata, tags, chapter
 marks or files.
+The audio lookup must select its write database. With database routers,
+PATCH requires audio writes, collection reads, tag reads, tagged-item writes
+and content types to use that database. Unsupported routing returns
+``400 validation_error`` at ``database`` with code ``unsupported``.
 ``OPTIONS`` lists ``PATCH`` in ``Allow``. It accepts
 ``multipart/form-data``, ``application/x-www-form-urlencoded``, or JSON with any
 of these fields:

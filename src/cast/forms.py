@@ -243,8 +243,9 @@ class AudioForm(BaseCollectionMemberForm):
             "opus": forms.ClearableFileInput,
         }
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, using: str | None = None, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self.using = using
         self.fields["transcript_diarization_mode"].required = False
 
     def clean_transcript_diarization_mode(self) -> str:
@@ -306,7 +307,7 @@ class AudioForm(BaseCollectionMemberForm):
             return
         for cm in chaptermarks:
             cm.audio = audio
-        ChapterMark.objects.sync_chaptermarks(audio, chaptermarks, update_urls=False)
+        ChapterMark.objects.sync_chaptermarks(audio, chaptermarks, update_urls=False, using=self.using)
 
     def save(self, commit: bool = True) -> Audio:
         audio = super().save(commit=False)
@@ -315,7 +316,7 @@ class AudioForm(BaseCollectionMemberForm):
                 # The stored duration describes the replaced files, so drop it and let
                 # save_audio_with_derivations probe the new ones.
                 audio.duration = None
-            save_audio_with_derivations(audio)
+            save_audio_with_derivations(audio, using=self.using)
             self._save_m2m()
             self.save_chaptermarks(audio)
         return audio

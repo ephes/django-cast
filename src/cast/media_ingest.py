@@ -147,7 +147,7 @@ def _rename_uncommitted_files(instance: Any, field_names: tuple[str, ...]) -> No
             field.name = fresh_file_name(field.name)
 
 
-def ingest_upload(form: Any, *, policy: IngestPolicy) -> Any:
+def ingest_upload(form: Any, *, policy: IngestPolicy, using: str | None = None) -> Any:
     """Persist a validated create form under the shared ingest policy.
 
     Probing intentionally stays inside the transaction so the row, form-owned
@@ -155,7 +155,7 @@ def ingest_upload(form: Any, *, policy: IngestPolicy) -> Any:
     """
     instance = form.instance
     _rename_uncommitted_files(instance, policy.file_fields)
-    _, using = normalize_model_save_arguments(instance, (), {})
+    _, using = normalize_model_save_arguments(instance, (), {"using": using})
     probe_budget = nullcontext() if policy.probe_seconds is None else media_probe_budget(policy.probe_seconds)
     is_replacement = instance.pk is not None
     replacement_guard: FileFieldReplacementGuard | None = None

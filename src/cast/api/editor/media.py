@@ -8,7 +8,8 @@ from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.contrib.contenttypes.models import ContentType
+from django.db import router, transaction
 from django.db.models import F, Q, QuerySet
 from django.http import HttpResponse, HttpResponseBase
 from django.urls import NoReverseMatch, reverse
@@ -16,6 +17,7 @@ from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
+from taggit.models import Tag
 from taggit.utils import edit_string_for_tags
 from wagtail.images import get_image_model
 from wagtail.images.forms import get_image_form
@@ -453,6 +455,23 @@ class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
         return Response(serialize_audio(audio, user=request.user), status=status.HTTP_201_CREATED)
 
 
+def _require_audio_write_database(audio: Audio, using: str) -> None:
+    # Wagtail's collection field and taggit resolve their own database routes.
+    # Reject split routing before relying on their queries inside the write transaction.
+    if (
+        audio._state.db != using
+        or router.db_for_write(Audio, instance=audio) != using
+        or router.db_for_read(Collection) != using
+        or router.db_for_read(Tag) != using
+        or router.db_for_read(ContentType) != using
+        or router.db_for_write(ContentType) != using
+        or router.db_for_write(Audio.tags.through, instance=audio) != using
+    ):
+        raise EditorValidationError(
+            {"database": [{"code": "unsupported", "message": "Audio updates require one writable database."}]}
+        )
+
+
 class EditorAudioDetailView(EditorAPIView):
     """Read one selectable audio, or update its metadata and add/replace one audio file."""
 
@@ -496,20 +515,27 @@ class EditorAudioDetailView(EditorAPIView):
             return _with_upload_lock(request.user, lambda: self._patch(request, audio))
         return self._patch(request, audio)
 
-    @transaction.atomic
     def _patch(self, request: Request, audio: Audio) -> Response:
+        using = router.db_for_write(Audio, instance=audio)
+        _require_audio_write_database(audio, using)
+        with transaction.atomic(using=using):
+            return self._patch_locked(request, audio.pk, using=using)
+
+    def _patch_locked(self, request: Request, pk: int, *, using: str) -> Response:
         # Serialize writers of this audio before reading the state the form saves: a no-op
         # update takes the PostgreSQL row lock or the SQLite write lock. Saving an instance
         # read earlier could restore a file name another request just replaced, and the
         # replacement guard would then delete that newer file.
-        if not Audio.objects.filter(pk=audio.pk).update(transcript_diarization_mode=F("transcript_diarization_mode")):
+        queryset = Audio.objects.using(using).filter(pk=pk)
+        if not queryset.update(transcript_diarization_mode=F("transcript_diarization_mode")):
             raise EditorNotFound("Audio not found.")
-        audio = Audio.objects.select_related("collection", "user").get(pk=audio.pk)
+        audio = queryset.select_related("collection", "user").get()
         # Collection/ownership may have changed since the initial unlocked lookup.
         if not audio_permission_policy.user_has_permission_for_instance(request.user, "choose", audio):
             raise EditorNotFound("Audio not found.")
         if not audio_permission_policy.user_has_permission_for_instance(request.user, "change", audio):
             raise EditorPermissionDenied("You cannot change this audio.")
+        _require_audio_write_database(audio, using)
         # A bound ModelForm treats absent fields as cleared, so start from the stored
         # values and overlay only what the request sent.
         form_data: dict[str, Any] = {
@@ -532,12 +558,15 @@ class EditorAudioDetailView(EditorAPIView):
             request.FILES,
             instance=audio,
             user=request.user,
+            using=using,
             sync_chaptermarks="chaptermarks" in request.data,
         )
         if not form.is_valid():
             raise EditorValidationError(_form_errors(form))
+        # Form cleaning can change the instance used as a hint by database routers.
+        _require_audio_write_database(form.instance, using)
         try:
-            audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS))
+            audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS), using=using)
         except (MediaIngestError, FileReplacementConflict) as exc:
             return _audio_ingest_error_response(exc, audio)
         return Response(serialize_audio(audio, user=request.user))

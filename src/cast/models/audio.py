@@ -407,7 +407,9 @@ def sync_chapter_marks(
 
 class ChapterMarkManager(models.Manager):
     @staticmethod
-    def sync_chaptermarks(audio: Audio, from_cms: list["ChapterMark"], *, update_urls: bool = True) -> None:
+    def sync_chaptermarks(
+        audio: Audio, from_cms: list["ChapterMark"], *, update_urls: bool = True, using: str | None = None
+    ) -> None:
         starts = set()
         for cm in from_cms:
             if cm.audio_id != audio.pk:
@@ -416,7 +418,7 @@ class ChapterMarkManager(models.Manager):
             if cm.start in starts:
                 raise ValueError("Duplicate chapter start")
             starts.add(cm.start)
-        using = router.db_for_write(Audio, instance=audio)
+        using = using or router.db_for_write(Audio, instance=audio)
         with transaction.atomic(using=using):
             # A no-op UPDATE takes a row lock on PostgreSQL and a write lock on
             # SQLite *before* reading chapters, avoiding a deferred lock upgrade.
