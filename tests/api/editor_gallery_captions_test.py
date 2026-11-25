@@ -1,12 +1,14 @@
+from uuid import UUID
+
 import pytest
 from django.urls import reverse
 
+from cast.models import Post
 from tests.api.editor_posts_helpers import (
     grant_collection_permission,
     grant_wagtail_admin_access,
     page_permission_user,
 )
-from tests.block_assertions import block_values
 
 
 @pytest.mark.django_db
@@ -24,13 +26,31 @@ def test_gallery_captions_survive_editor_create_get_and_patch(api_client, blog, 
     assert response.status_code == 201, response.json()
     created = response.json()
     url = reverse("cast:api:editor_post_detail", kwargs={"pk": created["id"]})
-    assert block_values(api_client.get(url).json()["overview"]) == block_values(overview)
-    overview[0]["value"][0]["caption"] = "Changed"
+
+    def stored_items():
+        draft = Post.objects.get(pk=created["id"]).get_latest_revision_as_object()
+        return draft.body.raw_data[0]["value"][0]["value"]["gallery"]
+
+    before = api_client.get(url).json()
+    gallery = before["overview"][0]
+    first, second = gallery["value"]
+    first_id, second_id = (item["id"] for item in stored_items())
+    assert first == {"id": image.pk, "caption": "First", "existing_item_id": first_id}
+    assert second == {"id": image.pk, "caption": "Second", "existing_item_id": second_id}
+
+    first["caption"] = "Changed"
+    gallery["value"] = [second, first, {"id": image.pk, "caption": "New"}]
     updated = api_client.patch(
-        url, {"base_revision_id": created["latest_revision_id"], "overview": overview}, format="json"
+        url, {"base_revision_id": before["latest_revision_id"], "overview": [gallery]}, format="json"
     )
-    assert updated.status_code == 200
-    assert block_values(api_client.get(url).json()["overview"]) == block_values(overview)
+    assert updated.status_code == 200, updated.json()
+    items = stored_items()
+    new_id = items[2]["id"]
+    assert str(UUID(new_id)) == new_id
+    assert new_id not in {first_id, second_id}
+    assert [item["id"] for item in items] == [second_id, first_id, new_id]
+    gallery["value"][2]["existing_item_id"] = new_id
+    assert api_client.get(url).json()["overview"] == [gallery]
 
 
 @pytest.mark.django_db

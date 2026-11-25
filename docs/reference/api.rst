@@ -673,8 +673,16 @@ rejected. IDs are nonempty strings of at most 64 characters. A stored ID that
 occurs more than once in a section is ambiguous and is not exposed; those
 blocks round-trip as new blocks with fresh IDs. Omit the field for
 new blocks; conversion allocates a fresh UUID for each new block. Unsupported
-placeholders keep their existing preservation contract and do not accept this field. This does
-not preserve nested ListBlock or gallery-item identities after editing them.
+placeholders keep their existing preservation contract and do not accept this field.
+
+A gallery with an exposed ``existing_block_id`` can also expose
+``existing_item_id`` on each image reference. Return both fields on PATCH to
+keep the same gallery item when editing its caption or reordering it. The image
+reference's ``id`` still identifies the image. Each ``existing_item_id`` must
+be a unique, nonempty string of up to 64 characters identifying an item in that
+gallery in the base revision. A stored item ID repeated within a gallery is
+ambiguous and is omitted. Omit ``existing_item_id`` for new items to allocate
+fresh IDs. Custom ListBlock item IDs are regenerated when their values are edited.
 
 Custom-block read conversion admits at most 32 container levels and 10,000
 visited values per block, including custom API representations. Cyclic or

@@ -59,6 +59,8 @@ Fixes
   replaces the original player.
 - Prefer the browser-reported audio duration once available, updating seek
   limits and active cues when metadata arrives.
+- Preserve gallery item identities in the author editor when it returns
+  revision-scoped item IDs alongside the existing gallery block ID.
 
 - ``import_transcript_glossary`` validates numeric podcast IDs on the same
   write database it uses to look up the podcast.
