@@ -51,6 +51,15 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Rebuild chapter companions when they reconnect so their controls seek the
+  currently bound player.
+- Rebuild transcript companions on reconnection with fresh search and cue
+  state while keeping stored accessibility preferences.
+- Rebind connected chapter and transcript panels when a player with their ID
+  replaces the original player.
+- Prefer the browser-reported audio duration once available, updating seek
+  limits and active cues when metadata arrives.
+
 - ``import_transcript_glossary`` validates numeric podcast IDs on the same
   write database it uses to look up the podcast.
 - ``recalc_video_posters`` counts and scans videos on the write database, so

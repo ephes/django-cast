@@ -202,16 +202,25 @@ current-cue marker legible in high-contrast mode, and a
 transcript and chapter elements read their data from the controller, so a theme
 can relocate them anywhere on the detail page by moving the
 ``<cast-transcript for="...">`` / ``<cast-chapters for="...">`` elements while
-keeping the same ``for=`` id. The transcript is a collapsible panel (search, a
-follow-along auto-scroll toggle, current-cue highlight, and a share-with-time
-control on the transport are built in). Search reuses the folded cue text and
+keeping the same ``for=`` id. Connected companions also follow a replacement
+player registered under that id, including during partial page swaps.
+A reconnected chapter element rebuilds its display from the bound player and
+removes the previous display if the new player has no chapters. The player
+uses the stored duration until the browser reports a usable media duration,
+then updates the seek limits and active cue and chapter.
+
+The transcript is a collapsible panel with search, a follow-along auto-scroll
+toggle, and a current-cue highlight. Search reuses the folded cue text and
 updates highlights only in rows with current or previous matches. Previous and
-Next wrap through matching cues, moving focus without seeking the audio.
+Next wrap through matching cues, moving focus without seeking the audio. The
+player transport includes a share-with-time control.
 
 The panel starts collapsed. It builds rows for inline cues on first open and
 keeps those rows when closed and reopened. For a URL-backed transcript, opening
 the panel starts the load or shows the loading status for a request already in
-progress on the same controller.
+progress on the same controller. Reconnecting the transcript element clears
+its search and rebuilds the collapsed panel. Follow and keyboard navigation
+preferences are restored from local storage.
 
 .. _transcript_overview:
 

@@ -79,6 +79,75 @@ function installLocalStorage(): void {
 }
 
 describe("cast-transcript rendering", () => {
+  it("reconnects with a fresh panel and keeps accessibility preferences", () => {
+    const { player, transcript } = mount(makePayload());
+    openPanel(transcript);
+    transcript.querySelector<HTMLButtonElement>(".cast-transcript__follow")!.click();
+    transcript.querySelector<HTMLButtonElement>(".cast-transcript__tabpref")!.click();
+    const oldSearch = transcript.querySelector<HTMLInputElement>("input[type=search]")!;
+    oldSearch.value = "world";
+    oldSearch.dispatchEvent(new Event("input"));
+    expect(transcript.querySelectorAll("mark")).toHaveLength(2);
+
+    const audio = player.querySelector("audio")!;
+    audio.currentTime = 3;
+    audio.dispatchEvent(new Event("timeupdate"));
+    transcript.remove();
+    document.body.appendChild(transcript);
+
+    expect(transcript.querySelectorAll(".cast-panel__tools")).toHaveLength(1);
+    expect(transcript.contains(oldSearch)).toBe(false);
+    openPanel(transcript);
+    const search = transcript.querySelector<HTMLInputElement>("input[type=search]")!;
+    expect(search.value).toBe("");
+    expect(transcript.querySelector("mark")).toBeNull();
+    expect(transcript.querySelector(".cast-transcript__follow")!.getAttribute("aria-pressed")).toBe("false");
+    expect(transcript.querySelector<HTMLButtonElement>(".cast-transcript__cue")!.tabIndex).toBe(0);
+    expect(transcript.querySelector(".cast-transcript__cue[aria-current=true]")?.textContent).toContain("goodbye world");
+
+    search.value = "another";
+    search.dispatchEvent(new Event("input"));
+    expect(Array.from(transcript.querySelectorAll("mark"), (match) => match.textContent)).toEqual(["another"]);
+  });
+
+  it("rebinds persistent companions when a player is replaced with the same ID", () => {
+    const { player, transcript } = mount(makePayload({ chapters: [{ start: 1, title: "Old chapter" }] }));
+    const oldAudio = player.querySelector("audio")!;
+    const chapters = document.createElement("cast-chapters");
+    chapters.setAttribute("for", player.id);
+    document.body.appendChild(chapters);
+    const oldController = player.controller;
+    const oldChapter = chapters.querySelector(".cast-chapters__button")!;
+    openPanel(transcript);
+    mount(makePayload({ audioId: 6 }));
+    expect(transcript.querySelector(".cast-panel.is-open")).not.toBeNull();
+
+    const payloadId = player.getAttribute("data-payload")!;
+    document.getElementById(payloadId)!.textContent = JSON.stringify(makePayload({
+      chapters: [{ start: 10, title: "New chapter" }],
+      transcript: { cues: [{ start: 10, end: 12, speaker: "", text: "Replacement cue" }] },
+    }));
+    const replacement = document.createElement("cast-audio-player");
+    replacement.id = player.id;
+    replacement.setAttribute("data-payload", payloadId);
+    player.replaceWith(replacement);
+
+    expect(chapters.querySelectorAll(".cast-chapters__button")).toHaveLength(1);
+    expect(chapters.contains(oldChapter)).toBe(false);
+    openPanel(chapters);
+    const chapter = chapters.querySelector<HTMLButtonElement>(".cast-chapters__button")!;
+    expect(chapter.textContent).toContain("New chapter");
+    chapter.click();
+    expect(replacement.querySelector("audio")!.currentTime).toBe(10);
+    expect(oldAudio.currentTime).toBe(0);
+
+    openPanel(transcript);
+    expect(transcript.querySelectorAll(".cast-panel__tools")).toHaveLength(1);
+    expect(transcript.querySelector(".cast-transcript__cue[aria-current=true]")?.textContent).toContain("Replacement cue");
+    oldController.dispatchEvent(new CustomEvent("castpanelopen", { detail: { kind: "chapters" } }));
+    expect(transcript.querySelector(".cast-panel.is-open")).not.toBeNull();
+  });
+
   it("renders cues with textContent only (XSS-safe)", () => {
     const payload = makePayload({
       transcript: { cues: [{ start: 0, end: 1, speaker: "X", text: "<script>alert(1)</script>" }] },
