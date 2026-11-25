@@ -1510,8 +1510,9 @@ deterministic database filter: image and video titles are searched with
 ``icontains``; audio title and subtitle are searched with ``icontains``.
 Repeatable ``tag`` filters match exact stored tag names. Each distinct name must
 match, and repeated names count once. More than 20 distinct names return
-``400 validation_error`` at ``tag`` with code ``too_many``. Results are ordered newest first (images by ``created_at``, audio/video by ``created``),
-then by descending ID. Media file fields use relative URLs; pagination links
+``400 validation_error`` at ``tag`` with code ``too_many``. Results are ordered
+newest first (images by ``created_at``, audio/video by ``created``), then by
+descending ID. Media file fields use relative URLs; pagination links
 may be absolute. Relative media URLs assume the application serves or proxies
 media from the same origin; deployments whose storage requires absolute signed
 CDN URLs should provide a same-origin media path for editor API consumers.
@@ -1605,7 +1606,8 @@ concurrent collection or owner change therefore returns the same ``404`` or
 marks or files.
 The audio lookup must select its write database. With database routers,
 PATCH requires audio writes, collection reads, tag reads, tagged-item writes
-and content types to use that database. Unsupported routing returns
+and content types to use that database. Unsupported routing, including a
+primary/replica router that sends any of these reads to a replica, returns
 ``400 validation_error`` at ``database`` with code ``unsupported``.
 ``OPTIONS`` lists ``PATCH`` in ``Allow``. It accepts
 ``multipart/form-data``, ``application/x-www-form-urlencoded``, or JSON with any

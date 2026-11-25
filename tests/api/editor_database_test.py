@@ -441,3 +441,46 @@ def test_editor_audio_patch_refuses_split_writer_before_lock(settings, api_clien
     assert updated == []
     assert response.status_code == 400, response.content
     assert response.json()["errors"]["database"][0]["code"] == "unsupported"
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("replica_model", ["collection", "tag", "contenttype"])
+def test_editor_audio_patch_refuses_read_replica_routing(settings, api_client, admin_user, audio, replica_model):
+    from wagtail.models import Collection
+
+    replica_models = {"collection": Collection, "tag": Tag, "contenttype": ContentType}
+
+    class PrimaryReplicaRouter:
+        def db_for_read(self, model, **hints):
+            return "migration_other" if model is replica_models[replica_model] else "default"
+
+        def db_for_write(self, model, **hints):
+            return "default"
+
+    original_title = audio.title
+    settings.DATABASE_ROUTERS = [PrimaryReplicaRouter()]
+    ContentType.objects.clear_cache()
+    api_client.force_authenticate(user=admin_user)
+    updated = []
+
+    def record_update(execute, sql, params, many, context):
+        if sql.startswith('UPDATE "cast_audio"'):
+            updated.append(sql)
+        return execute(sql, params, many, context)
+
+    try:
+        with (
+            connections["default"].execute_wrapper(record_update),
+            connections["migration_other"].execute_wrapper(record_update),
+        ):
+            response = api_client.patch(
+                reverse("cast:api:editor_media_audio_detail", args=[audio.pk]), {"title": "Replica"}, format="json"
+            )
+    finally:
+        ContentType.objects.clear_cache()
+
+    assert updated == []
+    assert response.status_code == 400, response.content
+    assert response.json()["errors"]["database"][0]["code"] == "unsupported"
+    audio.refresh_from_db(using="default")
+    assert audio.title == original_title

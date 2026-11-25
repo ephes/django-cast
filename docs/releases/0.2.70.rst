@@ -20,6 +20,13 @@ Upgrade actions
   uses the same predicate. Larger distinct sets return ``400 validation_error``
   at ``tag`` with code ``too_many``.
 
+- Editor audio PATCH now follows the editor page write rules for database
+  routing: the audio row, collections, tags, tagged items and content types must
+  be read and written on one database. Primary/replica routers that send reads
+  of ``Audio``, Wagtail's ``Collection``, taggit's ``Tag`` or ``ContentType`` to
+  a replica now get ``400 validation_error`` at ``database`` with code
+  ``unsupported``. Route those reads to the primary to keep using audio PATCH.
+
 Features
 ~~~~~~~~
 
