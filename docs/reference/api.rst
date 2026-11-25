@@ -682,7 +682,8 @@ reference's ``id`` still identifies the image. Each ``existing_item_id`` must
 be a unique, nonempty string of up to 64 characters identifying an item in that
 gallery in the base revision. A stored item ID repeated within a gallery is
 ambiguous and is omitted. Omit ``existing_item_id`` for new items to allocate
-fresh IDs. Custom ListBlock item IDs are regenerated when their values are edited.
+fresh IDs. Custom ListBlock item IDs are not exposed and are regenerated whenever
+the block is written back.
 
 Custom-block read conversion admits at most 32 container levels and 10,000
 visited values per block, including custom API representations. Cyclic or
