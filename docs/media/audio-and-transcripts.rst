@@ -336,6 +336,10 @@ and a local completion task has been queued. Editors see local
 queued/running/succeeded/failed status on the same Episode and Audio edit
 surfaces while the background worker polls Voxhelm, downloads the artifacts,
 and updates the ``Transcript`` model.
+The worker retries unreadable JSON replies, including replies that exceed the
+decoder's nesting limit, until the polling deadline. HTTP errors report the
+status with a bounded detail, or the HTTP reason if the detail cannot be read.
+The client closes the error response stream after reading the detail.
 
 Site admins can manage the Voxhelm API token and optional model/language
 defaults in ``Settings -> Voxhelm settings``. The API base URL is not a site
@@ -847,6 +851,10 @@ common-word list.
 Fuzzy matching scores only phrases within the term's eligible word counts.
 A phrase that already spells the term still protects overlapping text, even
 when the spelling itself falls outside those counts.
+Candidate windows reuse the original token lengths within each cue. A trailing
+possessive suffix is left outside the proposed edit. Matching pairs are
+filtered using precomputed digit sequences and domain classifications. Numbers
+must match when both phrases contain digits, and domains only match domains.
 
 Editor decisions are stored as such and do not depend on what the current
 glossary still finds. A decision on one occurrence (position, original and

@@ -2,6 +2,7 @@ import io
 import json
 import logging
 from http.client import IncompleteRead, RemoteDisconnected
+from json.scanner import py_make_scanner
 from types import SimpleNamespace
 from urllib.error import HTTPError, URLError
 
@@ -693,18 +694,40 @@ def test_client_http_error_includes_body(mocker):
 
 def test_client_http_error_body_is_bounded(mocker):
     mocker.patch("cast.voxhelm.client.MAX_VOXHELM_ERROR_BYTES", 4)
+    stream = io.BytesIO(b"abcdef")
     error = HTTPError(
         url="https://voxhelm.example/v1/jobs",
         code=500,
         msg="Server Error",
         hdrs=None,
-        fp=io.BytesIO(b"abcdef"),
+        fp=stream,
     )
     mocker.patch("cast.safe_fetch.urlopen", side_effect=error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match=r"500: abcd \[truncated\]"):
         client.request_bytes(method="GET", path="jobs/job-1")
+
+    assert stream.closed
+
+
+def test_client_http_error_preserves_detail_when_close_fails(mocker):
+    stream = io.BytesIO(b"upstream")
+
+    def close():
+        io.BytesIO.close(stream)
+        raise OSError("close failed")
+
+    mocker.patch.object(stream, "close", side_effect=close)
+    error = HTTPError("https://voxhelm.example/v1/jobs", 503, "Service Unavailable", None, stream)
+    mocker.patch("cast.voxhelm.client.open_url", side_effect=error)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmError, match="status 503: upstream") as exc_info:
+        client.request_bytes(method="GET", path="jobs/job-1")
+
+    assert exc_info.value.__cause__ is error
+    assert stream.closed
 
 
 def test_client_http_error_falls_back_to_reason_when_body_is_empty(mocker):
@@ -1031,22 +1054,57 @@ def test_client_request_json_treats_unreadable_body_as_lost_connection(mocker, b
         client.request_json(method="GET", path="jobs/job-1")
 
 
-@pytest.mark.parametrize("read_error", [TimeoutError("timed out"), IncompleteRead(b"par")])
+@pytest.fixture
+def deeply_nested_voxhelm_response(monkeypatch):
+    # The pure-Python scanner is recursive even on runtimes with an iterative C scanner.
+    decoder = json.JSONDecoder()
+    decoder.scan_once = py_make_scanner(decoder)
+    monkeypatch.setattr(json, "_default_decoder", decoder)
+    return FakeResponse(b'{"nested":' + b"[" * 10_000 + b"0" + b"]" * 10_000 + b"}")
+
+
+def test_client_request_json_treats_deep_nesting_as_lost_connection(mocker, deeply_nested_voxhelm_response):
+    mocker.patch("cast.voxhelm.client.open_url", return_value=deeply_nested_voxhelm_response)
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    with pytest.raises(VoxhelmConnectionError, match="incomplete or invalid JSON") as exc_info:
+        client.get_job("job-1")
+
+    assert isinstance(exc_info.value.__cause__, RecursionError)
+
+
+def test_client_wait_for_job_retries_deeply_nested_response(mocker, deeply_nested_voxhelm_response):
+    open_url_mock = mocker.patch(
+        "cast.voxhelm.client.open_url",
+        side_effect=[deeply_nested_voxhelm_response, FakeResponse(b'{"id": "job-1", "state": "succeeded"}')],
+    )
+    mocker.patch("cast.voxhelm.client.sleep")
+    client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
+
+    assert client.wait_for_job("job-1") == {"id": "job-1", "state": "succeeded"}
+    assert open_url_mock.call_count == 2
+
+
+@pytest.mark.parametrize(
+    "read_error", [TimeoutError("timed out"), IncompleteRead(b"par"), ValueError("closed stream")]
+)
 def test_client_http_status_error_survives_lost_error_body(mocker, read_error):
+    stream = io.BytesIO(b"unread")
+    mocker.patch.object(stream, "read", side_effect=read_error)
     error = HTTPError(
         url="https://voxhelm.example/v1/jobs/job-1",
         code=503,
         msg="Service Unavailable",
         hdrs=None,
-        fp=io.BytesIO(b""),
+        fp=stream,
     )
     mocker.patch("cast.safe_fetch.urlopen", side_effect=error)
-    mocker.patch("cast.voxhelm.client.read_http_error_detail", side_effect=read_error)
     client = VoxhelmClient(api_base="https://voxhelm.example", api_key="secret")
 
     with pytest.raises(VoxhelmError, match="status 503: Service Unavailable") as exc_info:
         client.request_bytes(method="GET", path="jobs/job-1")
 
+    assert stream.closed
     assert not isinstance(exc_info.value, VoxhelmConnectionError)
 
 

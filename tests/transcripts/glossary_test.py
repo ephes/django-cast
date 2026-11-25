@@ -378,6 +378,50 @@ def test_find_proposals_rejects_only_eligible_candidate_lengths(monkeypatch):
     assert calls == sum(c.words in target.candidate_word_counts for target in targets for c in candidates)
 
 
+def test_glossary_candidate_windows_reuse_original_token_lengths(mocker):
+    cue = "Nova Quasar’s Observatory"
+    normalize = mocker.spy(glossary, "letters_key")
+    candidates = glossary._candidates(cue, 3, "xx")
+
+    assert [(c.start, c.end, c.key, c.piece_lengths) for c in candidates] == [
+        (0, 4, "nova", (4,)),
+        (0, 11, "novaquasar", (4, 7)),
+        (0, 25, "novaquasarsobservatory", (4, 7, 11)),
+        (5, 11, "quasar", (7,)),
+        (5, 25, "quasarsobservatory", (7, 11)),
+        (14, 25, "observatory", (11,)),
+    ]
+    normalized_texts = [call.args[0] for call in normalize.call_args_list]
+    # The full possessive is used for the token length, while the single-word key is trimmed.
+    assert normalized_texts.count("Quasar’s") == 1
+    assert normalized_texts.count("Nova") == normalized_texts.count("Observatory") == 2
+
+    effective = EffectiveGlossary(episode_terms=["Nova Quasor"], language="xx")
+    assert find_proposals(segments(cue), effective, "xx") == [
+        Proposal(0, 0, 11, "Nova Quasar", "Nova Quasor", "episode", 0.9)
+    ]
+
+
+def test_glossary_rejection_metadata_is_scanned_once_per_candidate_and_target(mocker):
+    cue = "Signel 10, Signel 19, Pulsar Beaconn, Beacon2, orbitx.example, orbitexample"
+    effective = EffectiveGlossary(
+        episode_terms=["Signal 19", "Pulsar Beacon 19", "Beacon", "orbit.example"], language="xx"
+    )
+    # The longest target has three words, so its largest candidate window has four.
+    scan_count = len(glossary._candidates(cue, 4, "xx")) + len(effective.proposal_targets)
+    digits = mocker.spy(glossary, "_digits")
+    domains = mocker.spy(glossary, "_looks_like_domain")
+
+    proposals = find_proposals(segments(cue), effective, "xx")
+    assert [(p.original, p.to) for p in proposals] == [
+        ("Signel 19", "Signal 19"),
+        ("Pulsar Beaconn", "Pulsar Beacon 19"),
+        ("Beacon2", "Beacon"),
+        ("orbitx.example", "orbit.example"),
+    ]
+    assert (digits.call_count, domains.call_count) == (scan_count, scan_count)
+
+
 def test_find_proposals_skips_common_words_and_existing_spellings():
     effective = EffectiveGlossary(
         [ContributorGlossary("Will Roe")],
