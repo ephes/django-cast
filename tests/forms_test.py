@@ -348,6 +348,12 @@ class TestTranscriptForm:
         assert form.is_valid() is False
         assert message in str(form.errors[field_name])
 
+    def test_bom_json_in_vtt_field_points_to_json_field(self, audio):
+        upload = SimpleUploadedFile("test.vtt", b'\xef\xbb\xbf{"transcripts": []}', content_type="text/vtt")
+        form = TranscriptForm({"audio": audio.id}, {"vtt": upload})
+        assert form.is_valid() is False
+        assert "Upload it in the Podlove Transcript field" in str(form.errors["vtt"])
+
     def test_vtt_valid(self, audio):
         vtt = SimpleUploadedFile(
             "test.vtt",

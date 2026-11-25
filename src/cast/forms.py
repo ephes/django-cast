@@ -440,7 +440,10 @@ class TranscriptForm(BaseCollectionMemberForm):
         header = self._read_header(vtt)
         if header.startswith(("{", "[")):
             data = self._load_json(
-                vtt, field_label="WebVTT", max_bytes=int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES)
+                vtt,
+                field_label="WebVTT",
+                max_bytes=int(appsettings.CAST_TRANSCRIPT_UPLOAD_MAX_BYTES),
+                stored_reader=False,
             )
             destination = (
                 "Podlove Transcript" if isinstance(data, dict) and "transcripts" in data else "DOTe Transcript"
@@ -473,13 +476,17 @@ class TranscriptForm(BaseCollectionMemberForm):
         return transcript
 
     @staticmethod
-    def _load_json(uploaded_file: UploadedFile | IO[bytes], *, field_label: str, max_bytes: int) -> Any:
+    def _load_json(
+        uploaded_file: UploadedFile | IO[bytes], *, field_label: str, max_bytes: int, stored_reader: bool = True
+    ) -> Any:
         try:
             validate_transcript_upload(uploaded_file, max_bytes=max_bytes)
             uploaded_file.seek(0)
             content = uploaded_file.read(max_bytes + 1)
             if (content.decode("utf-8-sig") if isinstance(content, bytes) else content).lstrip().startswith("WEBVTT"):
                 raise ValidationError(_("This is a WebVTT file. Upload it in the WebVTT Transcript field."))
+            if not stored_reader:
+                return json.loads(content)  # only identifies the right field for a misplaced JSON upload
             if isinstance(content, str):
                 content = content.encode("utf-8")
             if content.startswith(codecs.BOM_UTF8):

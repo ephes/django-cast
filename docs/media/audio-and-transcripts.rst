@@ -245,8 +245,10 @@ document where media is served from the site's own origin. Files that are
 already stored, and files written by Voxhelm, are unaffected.
 
 Podlove and DOTe uploads must be UTF-8 JSON without a byte order mark and
-without repeated object members, because the stored-artifact reader refuses
-both. Such uploads get a field error instead of being saved.
+without repeated object members, and at most 10 MiB even when
+``CAST_TRANSCRIPT_UPLOAD_MAX_BYTES`` is higher, because the stored-artifact
+reader refuses all of these. Such uploads get a field error instead of being
+saved.
 
 Transcript admin permissions
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
