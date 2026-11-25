@@ -94,8 +94,9 @@ def replica_parent():
 
 @pytest.mark.django_db(databases={"default", "migration_other"})
 @pytest.mark.parametrize("writer_owns_season", [True, False])
-def test_episode_create_resolves_season_on_podcast_database(
-    settings, api_client, admin_user, podcast, replica_parent, monkeypatch, writer_owns_season
+@pytest.mark.parametrize("operation", ["create", "patch"])
+def test_episode_write_resolves_season_on_podcast_database(
+    settings, api_client, admin_user, podcast, replica_parent, monkeypatch, writer_owns_season, operation
 ):
     other_podcast = PodcastFactory(parent=podcast.get_parent())
     season = Season.objects.create(podcast=podcast if writer_owns_season else other_podcast, number=1)
@@ -130,24 +131,42 @@ def test_episode_create_resolves_season_on_podcast_database(
             context.setattr(routing, "use_replica", True)
             return original_apply(self, *args, **kwargs)
 
-    monkeypatch.setattr(EpisodeEditorMixin, "_apply_episode_metadata", apply_metadata)
     api_client.force_authenticate(user=admin_user)
-    response = api_client.post(
-        reverse("cast:api:editor_episode_create"),
-        {"parent": {"id": podcast.pk}, "title": "Routed episode", "overview": [], "season": {"id": season.pk}},
-        format="json",
-    )
+    payload = {"parent": {"id": podcast.pk}, "title": "Routed episode", "overview": []}
+    if operation == "create":
+        payload["season"] = {"id": season.pk}
+        method, url, success_status = api_client.post, reverse("cast:api:editor_episode_create"), 201
+    else:
+        created = api_client.post(reverse("cast:api:editor_episode_create"), payload, format="json")
+        assert created.status_code == 201, created.content
+        episode_id = created.json()["id"]
+        payload = {"base_revision_id": created.json()["latest_revision_id"], "season": {"id": season.pk}}
+        method, url, success_status = (
+            api_client.patch,
+            reverse("cast:api:editor_episode_detail", kwargs={"pk": episode_id}),
+            200,
+        )
+        revisions_before = Revision.objects.using("default").filter(object_id=str(episode_id)).count()
+    monkeypatch.setattr(EpisodeEditorMixin, "_apply_episode_metadata", apply_metadata)
+    response = method(url, payload, format="json")
 
     if writer_owns_season:
-        assert response.status_code == 201, response.content
+        assert response.status_code == success_status, response.content
         assert response.json()["season"] == {"id": season.pk}
-        assert Episode.objects.using("default").get(pk=response.json()["id"]).season_id == season.pk
+        episode = Episode.objects.using("default").get(pk=response.json()["id"])
+        if operation == "create":
+            assert episode.season_id == season.pk
+        else:
+            assert episode.get_latest_revision().as_object().season_id == season.pk
     else:
         assert response.status_code == 400, response.content
         assert response.json()["errors"] == {
             "season": [{"code": "invalid", "message": "The selected season must belong to this episode's podcast."}]
         }
-        assert not Episode.objects.using("default").filter(slug="routed-episode").exists()
+        if operation == "create":
+            assert not Episode.objects.using("default").filter(slug="routed-episode").exists()
+        else:
+            assert Revision.objects.using("default").filter(object_id=str(episode_id)).count() == revisions_before
 
 
 @pytest.mark.django_db(databases={"default", "migration_other"})
