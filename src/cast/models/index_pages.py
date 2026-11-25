@@ -1,9 +1,11 @@
 import json
 import logging
+import re
 import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator
 from django.db import models
 from django.http.request import QueryDict
@@ -302,6 +304,21 @@ class Blog(Page):
         return super().serve(request, *args, **kwargs)
 
 
+_INVALID_XML_TEXT = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\ud800-\udfff\ufffe\uffff]")
+
+
+def _valid_category_label(label: object) -> bool:
+    return isinstance(label, str) and bool(label.strip()) and _INVALID_XML_TEXT.search(label) is None
+
+
+def _normalize_itunes_categories(categories: dict[str, Any]) -> dict[str, list[str]]:
+    return {
+        category: [label for label in subcategories if _valid_category_label(label)]
+        for category, subcategories in categories.items()
+        if _valid_category_label(category) and isinstance(subcategories, list)
+    }
+
+
 class Podcast(Blog):
     """A podcast is a blog with some extra fields for podcasting."""
 
@@ -412,12 +429,26 @@ class Podcast(Blog):
     objects: PageManager = PageManager()
     aliases_homepage: Any  # don't know why this is needed FIXME
 
+    def _parse_itunes_categories(self) -> dict[str, Any] | None:
+        if not self.itunes_categories:
+            return {}
+        try:
+            categories = json.loads(self.itunes_categories)
+        except json.JSONDecodeError:
+            return None
+        return categories if isinstance(categories, dict) else None
+
+    def clean(self) -> None:
+        super().clean()
+        categories = self._parse_itunes_categories()
+        if categories is None or categories != _normalize_itunes_categories(categories):
+            raise ValidationError(
+                {"itunes_categories": _("Enter a JSON object mapping category names to lists of subcategory names.")}
+            )
+
     @property
     def itunes_categories_parsed(self) -> dict[str, list[str]]:
-        try:
-            return json.loads(self.itunes_categories)
-        except json.decoder.JSONDecodeError:
-            return {}
+        return _normalize_itunes_categories(self._parse_itunes_categories() or {})
 
     def get_context(self, request: HtmxHttpRequest, *args: Any, **kwargs: Any) -> ContextDict:
         context = super().get_context(request, *args, **kwargs)

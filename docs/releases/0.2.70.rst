@@ -34,6 +34,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Validate iTunes category mappings in the editor and keep valid category entries
+  when generating feeds from legacy data.
+
 - Keep code block rendering and editor validation available during highlight
   cache outages.
 - Continue through the query-free player permalink fallbacks when a cached

@@ -11,7 +11,7 @@ from django.conf import settings as django_settings
 from django.contrib.sites import models as sites_models
 from django.contrib.sites.models import Site as DjangoSite
 from django.core.cache import cache
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http import Http404
 from django.urls import resolve, reverse
 from wagtail.models import PageViewRestriction
@@ -126,6 +126,49 @@ def test_podcast_feed_artwork_uses_absolute_url(
     assert artwork is not None
     assert artwork.get("href") == expected_url
     assert channel.findtext(image_path) == expected_url
+
+
+@pytest.mark.parametrize(
+    ("stored", "expected"),
+    [
+        ("null", {}),
+        ("not JSON", {}),
+        ('{"Technology": "Gadgets"}', {}),
+        (
+            r'{"Technology": ["Gadgets", 1, null, "", " ", "bad\u0000"], "Arts": [], " ": ["Books"]}',
+            {"Technology": ["Gadgets"], "Arts": []},
+        ),
+    ],
+)
+def test_rss_normalizes_legacy_itunes_categories(client, podcast, use_dummy_cache_backend, stored, expected):
+    Podcast.objects.filter(pk=podcast.pk).update(itunes_categories=stored)
+    url = reverse("cast:podcast_feed_rss", kwargs={"slug": podcast.slug, "audio_format": "mp3"})
+
+    response = client.get(url)
+
+    assert response.status_code == 200
+    category_tag = "{http://www.itunes.com/dtds/podcast-1.0.dtd}category"
+    root = ElementTree.fromstring(response.content)
+    assert {
+        category.get("text"): [child.get("text") for child in category.findall(category_tag)]
+        for category in root.findall(f"./channel/{category_tag}")
+    } == expected
+
+
+@pytest.mark.parametrize(
+    "invalid",
+    ["null", "not JSON", '{"Technology": "Gadgets"}', '{" ": []}', '{"Arts": ["Books", 1]}'],
+)
+def test_podcast_editor_rejects_invalid_itunes_category_shape(podcast, invalid):
+    podcast.itunes_categories = invalid
+    with pytest.raises(ValidationError) as exc:
+        podcast.full_clean()
+    assert "itunes_categories" in exc.value.message_dict
+
+    podcast.itunes_categories = '{"Technology": ["Gadgets"], "Arts": []}'
+    podcast.full_clean()
+    podcast.itunes_categories = ""
+    podcast.full_clean()
 
 
 @pytest.fixture()

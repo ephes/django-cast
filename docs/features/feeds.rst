@@ -112,7 +112,10 @@ Additional metadata for podcast feeds:
   resolve relative storage URLs against the feed request and retain absolute
   artwork URLs from external storage.
 - **iTunes Subtitle**: From the blog's subtitle field
-- **iTunes Categories**: Podcast directory categorization
+- **iTunes Categories**: Leave blank or enter a JSON object such as
+  ``{"Technology": ["Gadgets"], "Arts": []}``. Category and subcategory names
+  must be nonblank text suitable for XML attributes. Feeds omit invalid legacy
+  categories or subcategories and keep the valid entries.
 - **Explicit Content**: Content rating flag
 - **Podcast Type**: Optional ``episodic`` or ``serial`` channel ordering value
   emitted as ``itunes:type`` only when explicitly configured.
