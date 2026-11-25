@@ -10,6 +10,7 @@ from django.core.files.base import ContentFile
 from django.core.files.storage import InMemoryStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError, connection
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework.response import Response
 from taggit.models import Tag
@@ -130,6 +131,42 @@ class TestEditorMediaEndpoints:
         video_response = api_client.get(f"{video_url}?q=Demo&tag=weeknotes", format="json")
         assert video_response.status_code == 200
         assert video_response.json()["results"][0]["id"] == video.id
+
+    def test_repeated_media_tags_reuse_count_joins_and_preserve_and_ordering(self, api_client, superuser):
+        oldest = Audio.objects.create(user=superuser, title="First match")
+        newest = Audio.objects.create(user=superuser, title="Second match")
+        single = Audio.objects.create(user=superuser, title="One tag only")
+        oldest.tags.add("weeknotes", "desk")
+        newest.tags.add("weeknotes", "desk")
+        single.tags.add("weeknotes")
+        api_client.force_authenticate(user=superuser)
+        url = reverse("cast:api:editor_media_audios")
+
+        def fetch(tags):
+            with CaptureQueriesContext(connection) as queries:
+                response = api_client.get(url, {"tag": tags})
+            assert response.status_code == 200, response.content
+            data = response.json()
+            assert data["count"] == 2
+            assert [item["id"] for item in data["results"]] == [newest.pk, oldest.pk]
+            return [query["sql"] for query in queries if "COUNT(" in query["sql"] and "cast_audio" in query["sql"]]
+
+        baseline = fetch(["weeknotes", "desk"])
+        assert len(baseline) == 1
+        assert fetch(["weeknotes"] * 26 + ["desk", "weeknotes"]) == baseline
+
+    def test_media_list_rejects_too_many_distinct_tags_before_counting(self, api_client, superuser):
+        api_client.force_authenticate(user=superuser)
+        url = reverse("cast:api:editor_media_audios")
+        tags = [f"synthetic-{index}" for index in range(21)]
+        at_limit = api_client.get(url, {"tag": tags[:-1]})
+        assert at_limit.status_code == 200, at_limit.content
+
+        with CaptureQueriesContext(connection) as queries:
+            response = api_client.get(url, {"tag": tags})
+        assert response.status_code == 400, response.content
+        assert response.json()["errors"]["tag"][0]["code"] == "too_many"
+        assert not any("cast_audio" in query["sql"] for query in queries)
 
     def test_media_lists_without_query_and_nullable_serialization(self, api_client, superuser, audio, video):
         audio.m4a = None

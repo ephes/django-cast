@@ -276,6 +276,9 @@ def _flat_error(code: str, detail: str, *, http_status: int) -> Response:
     return Response({"code": code, "detail": detail}, status=http_status)
 
 
+MAX_EDITOR_MEDIA_TAG_FILTERS = 20
+
+
 class EditorMediaListMixin:
     pagination_class = StandardResultsSetPagination
     allowed_query_params = {"q", "tag", "page", "pageSize", "format"}
@@ -289,7 +292,16 @@ class EditorMediaListMixin:
         return paginator.get_paginated_response(data)
 
     def _apply_tags(self, queryset: QuerySet, request: Request) -> QuerySet:
-        for tag in request.query_params.getlist("tag"):
+        tags = dict.fromkeys(request.query_params.getlist("tag"))
+        if len(tags) > MAX_EDITOR_MEDIA_TAG_FILTERS:
+            raise EditorValidationError(
+                {
+                    "tag": [
+                        {"code": "too_many", "message": f"Use at most {MAX_EDITOR_MEDIA_TAG_FILTERS} distinct tags."}
+                    ]
+                }
+            )
+        for tag in tags:
             queryset = queryset.filter(tags__name=tag)
         return queryset
 

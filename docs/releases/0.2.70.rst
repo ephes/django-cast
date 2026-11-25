@@ -16,6 +16,10 @@ Upgrade actions
   for more than 100 distinct ``slug`` filters (``too_many``) or a slug longer
   than 50 characters (``max_length``).
 
+- Editor media lists accept up to 20 distinct ``tag`` filters. Repeating a tag
+  uses the same predicate. Larger distinct sets return ``400 validation_error``
+  at ``tag`` with code ``too_many``.
+
 Features
 ~~~~~~~~
 

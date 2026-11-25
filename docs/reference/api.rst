@@ -1508,8 +1508,9 @@ List selectable media::
 The list endpoints return only objects the caller may choose. ``q`` is a
 deterministic database filter: image and video titles are searched with
 ``icontains``; audio title and subtitle are searched with ``icontains``.
-Repeatable ``tag`` filters match exact stored tag names and are ANDed. Results
-are ordered newest first (images by ``created_at``, audio/video by ``created``),
+Repeatable ``tag`` filters match exact stored tag names. Each distinct name must
+match, and repeated names count once. More than 20 distinct names return
+``400 validation_error`` at ``tag`` with code ``too_many``. Results are ordered newest first (images by ``created_at``, audio/video by ``created``),
 then by descending ID. Media file fields use relative URLs; pagination links
 may be absolute. Relative media URLs assume the application serves or proxies
 media from the same origin; deployments whose storage requires absolute signed
