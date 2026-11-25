@@ -84,7 +84,8 @@ def get_obsolete_and_missing_rendition_strings(
     By default only database rows are compared, which keeps publication and
     gallery paths free of per-rendition storage requests. With
     ``check_files=True`` (``sync_renditions``) a required row whose stored file
-    is absent also counts as missing.
+    is absent also counts as missing. If ``using`` is explicit, all
+    database-bound images must come from that alias.
     """
     images_with_type = list(images_with_type)
     aliases = {image._state.db for _, image in images_with_type if hasattr(image, "_state")}
@@ -92,6 +93,8 @@ def get_obsolete_and_missing_rendition_strings(
         if len(aliases) > 1:
             raise ValueError("Rendition inventory requires images from one database.")
         using = next(iter(aliases), None)
+    elif aliases - {None, using}:
+        raise ValueError(f"Rendition inventory requires images from database {using!r}.")
     required_renditions: set[tuple[int, str]] = set()
     srgb_counterpart_renditions: set[tuple[int, str]] = set()
     for image_type, image in images_with_type:

@@ -42,6 +42,8 @@ Fixes
   renditions while preserving each slot's display width.
 - Preserve the original rendition publication error and continue rollback cleanup
   if reporting an orphan-file deletion failure raises.
+- Reject rendition inventory inputs from a database other than the explicit
+  alias, even when the image IDs exist on both databases.
 
 - Keep code block rendering and editor validation available during highlight
   cache outages.

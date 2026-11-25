@@ -11,11 +11,12 @@ from django.core.management import call_command
 from django.db import connections
 from django.test.utils import CaptureQueriesContext
 from PIL import Image as PillowImage
-from wagtail.images.models import Image, Rendition
+from wagtail.images.models import Filter, Image, Rendition
 from wagtail.models import Collection
 
 from cast.models import Gallery
 from cast.models.image_renditions import (
+    create_missing_renditions_for_images,
     create_missing_renditions_for_posts,
     get_all_filterstrings,
     get_obsolete_and_missing_rendition_strings,
@@ -118,6 +119,38 @@ def test_inventory_refuses_mixed_database_identities(disk_image):
     other._state.db = "migration_other"
     with pytest.raises(ValueError, match="one database"):
         get_obsolete_and_missing_rendition_strings([("regular", disk_image), ("regular", other)])
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("include_local", [False, True])
+def test_inventory_rejects_explicit_alias_for_foreign_images(disk_image, settings, include_local):
+    settings.CAST_IMAGE_FORMATS = ["webp"]
+    alias = "migration_other"
+    collection = Collection.get_first_root_node()
+    Collection.objects.using(alias).create(
+        pk=collection.pk, name="Synthetic", path=collection.path, depth=1, numchild=0
+    )
+    other = Image(pk=disk_image.pk, title="Other alias", collection_id=collection.pk, file=disk_image.file.name)
+    other.save(using=alias)
+    disk_image.create_rendition(Filter("format-webp"))
+    other.create_rendition(Filter("format-jpeg"))
+
+    inputs = [("regular", other)]
+    if include_local:
+        inputs.append(("regular", disk_image))
+    with CaptureQueriesContext(connections["default"]) as default_queries:
+        with CaptureQueriesContext(connections[alias]) as other_queries:
+            with pytest.raises(ValueError, match="database"):
+                get_obsolete_and_missing_rendition_strings(inputs, using="default", check_files=True)
+    assert not default_queries
+    assert not other_queries
+
+    assert get_obsolete_and_missing_rendition_strings([("regular", disk_image)], using="default") == (set(), {})
+    plan = get_obsolete_and_missing_rendition_strings([("regular", other)], using=alias, check_files=True)
+    assert plan == (set(), {other.pk: {"format-webp"}})
+    create_missing_renditions_for_images(plan[1], using=alias)
+    assert set(other.renditions.values_list("filter_spec", flat=True)) == {"format-webp", "format-jpeg"}
+    assert list(disk_image.renditions.values_list("filter_spec", flat=True)) == ["format-webp"]
 
 
 @pytest.mark.django_db

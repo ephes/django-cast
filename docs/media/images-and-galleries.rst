@@ -361,6 +361,11 @@ The full rendering pipeline works as follows:
 5. Theme templates use the ``ImageForSlot`` attributes to render
    ``<picture>`` elements with appropriate ``<source>`` and ``<img>`` tags.
 
+Rendition inventory uses a single database. Callers passing an explicit
+``using`` alias to ``get_obsolete_and_missing_rendition_strings()`` must supply
+images bound to that alias. The planner rejects an alias mismatch before
+querying rendition rows.
+
 To create missing renditions in bulk (e.g. after changing slot dimensions,
 image formats, or gallery thumbnail color-profile policy), run this one-off
 management command after deploying the specification change::
