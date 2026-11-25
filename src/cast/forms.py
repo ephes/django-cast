@@ -496,7 +496,7 @@ class TranscriptForm(BaseCollectionMemberForm):
                 )
             # Parse like the stored-artifact reader, so an accepted upload stays readable after saving.
             return parsing.read_json_artifact(io.BytesIO(content))
-        except (json.JSONDecodeError, TypeError, UnicodeDecodeError, parsing.TranscriptArtifactError):
+        except (json.JSONDecodeError, TypeError, UnicodeDecodeError, RecursionError, parsing.TranscriptArtifactError):
             raise ValidationError(_("%(field)s transcript is not valid JSON."), params={"field": field_label})
         finally:
             try:
