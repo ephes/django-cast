@@ -64,7 +64,8 @@ class Command(BaseCommand):
         if using not in connections:
             raise CommandError("Glossary import selected an unknown database.")
         if is_id_selector(identifier):
-            podcast = Podcast.objects.using(using).filter(pk=positive_id(identifier, Podcast)).first()
+            podcast_id = positive_id(identifier, Podcast, using=using)
+            podcast = Podcast.objects.using(using).filter(pk=podcast_id).first()
             if podcast is None:
                 raise CommandError(f"No podcast with id {identifier}.")
             return podcast

@@ -8,12 +8,52 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.core.management import CommandError, call_command
 from PIL import Image
+from wagtail.models import Collection
 
+from cast.management.commands import recalc_video_posters
 from cast.models import Video, get_video_dimensions
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_recalc_counts_and_repairs_videos_on_writer(settings, mocker):
+    writer = "migration_other"
+    user = get_user_model().objects.using(writer).create(username="synthetic-poster-editor")
+    collection, _ = Collection.objects.using(writer).get_or_create(
+        path="0001", defaults={"depth": 1, "numchild": 0, "name": "Synthetic"}
+    )
+    (video,) = Video.objects.using(writer).bulk_create(
+        [Video(user=user, collection=collection, original="synthetic.mp4")]
+    )
+
+    class VideoRouter:
+        def db_for_read(self, model, **hints):
+            if model is Video:
+                return "default"
+
+        def db_for_write(self, model, **hints):
+            if model is Video:
+                return writer
+
+    settings.DATABASE_ROUTERS = [VideoRouter()]
+    assert not Video.objects.exists()
+
+    def generate(instance):
+        instance.poster.name = "synthetic-poster.jpg"
+
+    mocker.patch.object(Video, "_create_poster", generate)
+    progress = mocker.spy(recalc_video_posters, "track")
+    output = StringIO()
+    call_command("recalc_video_posters", stdout=output, stderr=StringIO())
+
+    assert "processed=1 errors=0" in output.getvalue()
+    assert progress.call_args.kwargs["total"] == 1
+    video.refresh_from_db(using=writer)
+    assert video.poster.name == "synthetic-poster.jpg"
 
 
 @pytest.mark.django_db
@@ -115,7 +155,6 @@ def test_recalc_editor_interleaving_across_connections(user, tmp_path, monkeypat
     from concurrent.futures import ThreadPoolExecutor
 
     from django.db import close_old_connections
-    from wagtail.models import Collection
 
     collection = Collection.get_first_root_node() or Collection.add_root(instance=Collection(name="Root"))
     video = Video.objects.create(user=user, collection=collection, title="Synthetic", original="synthetic.mp4")

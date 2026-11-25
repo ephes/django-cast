@@ -6,8 +6,9 @@ from django.core.management.base import CommandError
 from django.db import connections, models, router
 
 
-def positive_id(value: Any, model: type[models.Model]) -> int:
-    using = router.db_for_read(model)
+def positive_id(value: Any, model: type[models.Model], *, using: str | None = None) -> int:
+    if using is None:
+        using = router.db_for_read(model)
     field = model._meta.pk
     while isinstance(field, models.ForeignKey):
         field = field.target_field

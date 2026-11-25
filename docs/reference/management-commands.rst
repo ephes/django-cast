@@ -98,6 +98,9 @@ newline-separated string). Existing terms are matched ignoring case and
 updated; entries that fail validation are skipped and reported on stderr. See
 :ref:`transcript_glossary` for the format and the validation rules.
 
+Numeric podcast IDs are checked against the field range of the write database
+used to look up the podcast.
+
 .. code-block:: bash
 
     python manage.py import_transcript_glossary my-podcast glossary.json --dry-run
@@ -261,9 +264,10 @@ recalc_video_posters
 
 Regenerate poster images for all videos from the video files. Requires
 ``ffmpeg`` to be installed. The command keeps going if one video fails and
-prints a final ``processed=<n> errors=<n>`` summary. It scans videos in
-primary-key order, fetching rows in batches and counting the queryset once for
-the progress display.
+prints a final ``processed=<n> errors=<n>`` summary. It counts and scans videos
+on the write database selected by Django's router for ``Video`` and publishes
+posters on that same database. The scan fetches rows in primary-key order in
+batches, with a single count for the progress display.
 
 A video counts as failed when creating its poster raises an error (for
 example ``ffmpeg`` fails or is missing), when no poster results although one

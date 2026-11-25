@@ -1,6 +1,7 @@
 from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
+from django.db import router
 from rich.progress import track
 
 from ...models import Video
@@ -14,7 +15,8 @@ class Command(BaseCommand):
     def handle(self, *args: Any, **options: Any) -> None:
         total = 0
         errors = 0
-        videos = Video.objects.all().order_by("pk")
+        using = router.db_for_write(Video)
+        videos = Video.objects.using(using).order_by("pk")
         for video in track(
             videos.iterator(chunk_size=VIDEO_BATCH_SIZE),
             total=videos.count(),
