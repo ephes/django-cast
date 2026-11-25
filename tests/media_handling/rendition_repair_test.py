@@ -9,6 +9,7 @@ from django.core.files.storage import FileSystemStorage
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
 from django.db import connections
+from django.db.models import QuerySet
 from django.test.utils import CaptureQueriesContext
 from PIL import Image as PillowImage
 from wagtail.images.models import Filter, Image, Rendition
@@ -130,10 +131,41 @@ def test_sync_removes_every_obsolete_gallery_focal_row(post, disk_image, setting
 def test_planning_checks_each_required_storage_key_once(disk_image, mocker):
     image = disk_image
     rendition = image.get_rendition("width-1")
+    unrelated = image.get_rendition("height-1")
     mocker.patch("cast.models.image_renditions.get_all_filterstrings", return_value=[(image.pk, "width-1")])
     exists = mocker.spy(rendition.file.storage, "exists")
-    assert get_obsolete_and_missing_rendition_strings([("regular", image)] * 20, check_files=True) == (set(), {})
-    assert exists.call_count == 1
+    with CaptureQueriesContext(connections[image._state.db]) as queries:
+        assert get_obsolete_and_missing_rendition_strings([("regular", image)] * 20, check_files=True) == (set(), {})
+    assert len(queries) == 1
+    assert "'width-1'" in queries[0]["sql"]
+    assert unrelated.filter_spec not in queries[0]["sql"]
+    exists.assert_called_once_with(rendition.file.name)
+
+
+@pytest.mark.django_db
+def test_planning_uses_file_name_from_same_read_when_rendition_is_deleted(disk_image, mocker, monkeypatch):
+    image = disk_image
+    row = image.get_rendition("width-1")
+    row.file.storage.delete(row.file.name)
+    mocker.patch("cast.models.image_renditions.get_all_filterstrings", return_value=[(image.pk, row.filter_spec)])
+    original_iter = QuerySet.__iter__
+    deleted = False
+
+    def delete_after_inventory_read(queryset):
+        nonlocal deleted
+        result = original_iter(queryset)
+        if queryset.model is Rendition and not deleted:
+            deleted = True
+            Rendition.objects.filter(pk=row.pk).delete()
+        return result
+
+    monkeypatch.setattr(QuerySet, "__iter__", delete_after_inventory_read)
+    assert get_obsolete_and_missing_rendition_strings([("regular", image)], check_files=True) == (
+        set(),
+        {image.pk: {row.filter_spec}},
+    )
+    assert deleted
+    assert not Rendition.objects.filter(pk=row.pk).exists()
 
 
 @pytest.mark.django_db
@@ -197,6 +229,7 @@ def test_planning_reuses_existence_for_shared_keys_and_handles_empty_names(disk_
     empty = image.get_rendition("fill-1x1")
     empty.file.name = ""
     empty.save(update_fields=["file"])
+    image.renditions.create(filter_spec="width-1", focal_point_key="older-focus", file="", width=1, height=1)
     mocker.patch(
         "cast.models.image_renditions.get_all_filterstrings",
         return_value=[(image.pk, "width-1"), (image.pk, "height-1"), (image.pk, "fill-1x1")],
@@ -204,7 +237,7 @@ def test_planning_reuses_existence_for_shared_keys_and_handles_empty_names(disk_
     exists = mocker.spy(first.file.storage, "exists")
     assert get_obsolete_and_missing_rendition_strings([("regular", image)], check_files=True) == (
         set(),
-        {image.pk: {"fill-1x1"}},
+        {image.pk: {"fill-1x1", "width-1"}},
     )
     assert exists.call_count == 1
 

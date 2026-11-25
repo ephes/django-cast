@@ -228,6 +228,10 @@ Options:
     validated first, including when ``--post-slug`` is also supplied. Any
     explicitly empty selection raises ``CommandError`` before media changes.
 
+For each image batch, the command reads required and obsolete counterpart
+rows and their stored names in one database query. It checks storage only
+for required rows and checks shared file names once per batch.
+
 All planned missing replacements are generated and their saved rows/files
 verified before any obsolete counterpart is retired. A generation or storage
 failure rolls back that image's rows and keeps old counterparts for a safe retry.

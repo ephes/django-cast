@@ -4,12 +4,12 @@ from collections.abc import Iterable, Iterator
 from contextlib import suppress
 from functools import partial
 from pathlib import Path
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias, cast
 from uuid import uuid4
 
 from django.core.files.storage import Storage
 from django.db import router, transaction
-from django.db.models import Prefetch
+from django.db.models import FileField, Prefetch, Q
 from wagtail.images.models import AbstractRendition, Filter, Image, Rendition
 
 from ..renditions import ImageType, RenditionFilters, get_srgb_counterpart_filter_spec
@@ -84,8 +84,9 @@ def get_obsolete_and_missing_rendition_strings(
     By default only database rows are compared, which keeps publication and
     gallery paths free of per-rendition storage requests. With
     ``check_files=True`` (``sync_renditions``) a required row whose stored file
-    is absent also counts as missing. If ``using`` is explicit, all
-    database-bound images must come from that alias.
+    is absent also counts as missing. Keys and file names come from the same
+    row read. If ``using`` is explicit, all database-bound images must come
+    from that alias.
     """
     images_with_type = list(images_with_type)
     aliases = {image._state.db for _, image in images_with_type if hasattr(image, "_state")}
@@ -107,26 +108,43 @@ def get_obsolete_and_missing_rendition_strings(
     # Only retire known gallery thumbnail counterparts whose specs are no
     # longer required. Other Wagtail specs do not encode cast ownership.
     obsolete_specs = srgb_counterpart_renditions - required_renditions
+    columns = ["pk", "image_id", "filter_spec"]
+    storage = None
+    if check_files:
+        specs_by_image: dict[int, set[str]] = defaultdict(set)
+        for image_id, spec in required_renditions | obsolete_specs:
+            specs_by_image[image_id].add(spec)
+        # Images with the same policy can share a clause without admitting
+        # a spec that only belongs to another image.
+        images_by_specs: dict[frozenset[str], list[int]] = defaultdict(list)
+        for image_id, specs in specs_by_image.items():
+            images_by_specs[frozenset(specs)].append(image_id)
+        scope = Q(pk__in=[])
+        for shared_specs, image_ids in images_by_specs.items():
+            scope |= Q(image_id__in=image_ids, filter_spec__in=shared_specs)
+        renditions_queryset = renditions_queryset.filter(scope)
+        columns.append("file")
+        storage = cast(FileField, rendition_model._meta.get_field("file")).storage
+
     existing_renditions: set[tuple[int, str]] = set()
     obsolete_rendition_pks: set[int] = set()
-    for pk, image_id, filter_spec in renditions_queryset.values_list("pk", "image_id", "filter_spec"):
+    missing_files: set[tuple[int, str]] = set()
+    file_exists: dict[str, bool] = {}
+    for pk, image_id, filter_spec, *file_names in renditions_queryset.values_list(*columns):
         key = (image_id, filter_spec)
         if key in required_renditions:
             existing_renditions.add(key)
+            if storage is not None:
+                (name,) = file_names
+                if name not in file_exists:
+                    file_exists[name] = bool(name) and storage.exists(name)
+                # A missing file on any focal-point row triggers repair of the spec.
+                if not file_exists[name]:
+                    missing_files.add(key)
         elif key in obsolete_specs:
             obsolete_rendition_pks.add(pk)
-    # Inspect only required keys, once per storage/key even for repeated images.
-    exists: dict[tuple[int, str], bool] = {}
-    for rendition in renditions_queryset if check_files else ():
-        key = (rendition.image_id, rendition.filter_spec)
-        if key in required_renditions:
-            storage_key = (id(rendition.file.storage), rendition.file.name)
-            if storage_key not in exists:
-                exists[storage_key] = bool(rendition.file.name) and rendition.file.storage.exists(rendition.file.name)
-            if not exists[storage_key]:
-                existing_renditions.discard(key)
     # build missing renditions aggregated by image id
-    missing_renditions = required_renditions - existing_renditions
+    missing_renditions = (required_renditions - existing_renditions) | missing_files
     missing_renditions_by_image_id: dict[int, set[str]] = {}  # why mypy?
     for image_id, filter_spec in missing_renditions:
         missing_renditions_by_image_id.setdefault(image_id, set()).add(filter_spec)
