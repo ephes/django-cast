@@ -349,9 +349,10 @@ def test_guarded_save_reports_deleted_settings_as_conflict(site):
 
 
 @pytest.mark.django_db
-def test_settings_edit_view_reports_deletion_after_validation(admin_client, site, monkeypatch):
+@pytest.mark.parametrize("model_name", ["voxhelmsettings", "VoxhelmSettings"])
+def test_settings_edit_view_reports_deletion_after_validation(admin_client, site, monkeypatch, model_name):
     setting = VoxhelmSettings.objects.create(site=site, language="fr")
-    edit_url = reverse("wagtailsettings:edit", args=("cast", "voxhelmsettings", site.pk))
+    edit_url = reverse("wagtailsettings:edit", args=("cast", model_name, site.pk))
     version = admin_client.get(edit_url).context["form"]["settings_version"].value()
     validate = VoxhelmSettingsForm.is_valid
 

@@ -17,7 +17,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import F, Model
 from django.http import HttpRequest
-from django.urls import include, path, reverse
+from django.urls import include, path, re_path, reverse
 from django.utils.html import escape, format_html
 from django.utils.translation import get_language, gettext_lazy as _
 from taggit.models import Tag
@@ -87,11 +87,12 @@ def register_admin_urls() -> list:
 def register_voxhelm_settings_edit_url() -> list:
     # Match this setting before Wagtail's generic settings route. The stock
     # namespace still supplies the canonical URL for reverse and redirects.
+    # Wagtail resolves model names case-insensitively, so match every casing.
     return [
-        path(
-            "settings/cast/voxhelmsettings/<int:pk>/",
+        re_path(
+            r"^settings/cast/(?P<model_name>(?i:voxhelmsettings))/(?P<pk>[0-9]+)/$",
             VoxhelmSettingsEditView.as_view(),
-            {"app_name": "cast", "model_name": "voxhelmsettings"},
+            {"app_name": "cast"},
         )
     ]
 
