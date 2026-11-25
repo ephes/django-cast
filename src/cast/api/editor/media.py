@@ -8,7 +8,8 @@ from typing import Any, Protocol, cast
 from urllib.parse import urlsplit, urlunsplit
 
 from django.contrib.auth import get_user_model
-from django.db import transaction
+from django.contrib.contenttypes.models import ContentType
+from django.db import router, transaction
 from django.db.models import F, Q, QuerySet
 from django.http import HttpResponse, HttpResponseBase
 from django.urls import NoReverseMatch, reverse
@@ -16,6 +17,7 @@ from rest_framework import status
 from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
+from taggit.models import Tag
 from taggit.utils import edit_string_for_tags
 from wagtail.images import get_image_model
 from wagtail.images.forms import get_image_form
@@ -276,6 +278,9 @@ def _flat_error(code: str, detail: str, *, http_status: int) -> Response:
     return Response({"code": code, "detail": detail}, status=http_status)
 
 
+MAX_EDITOR_MEDIA_TAG_FILTERS = 20
+
+
 class EditorMediaListMixin:
     pagination_class = StandardResultsSetPagination
     allowed_query_params = {"q", "tag", "page", "pageSize", "format"}
@@ -289,7 +294,16 @@ class EditorMediaListMixin:
         return paginator.get_paginated_response(data)
 
     def _apply_tags(self, queryset: QuerySet, request: Request) -> QuerySet:
-        for tag in request.query_params.getlist("tag"):
+        tags = dict.fromkeys(request.query_params.getlist("tag"))
+        if len(tags) > MAX_EDITOR_MEDIA_TAG_FILTERS:
+            raise EditorValidationError(
+                {
+                    "tag": [
+                        {"code": "too_many", "message": f"Use at most {MAX_EDITOR_MEDIA_TAG_FILTERS} distinct tags."}
+                    ]
+                }
+            )
+        for tag in tags:
             queryset = queryset.filter(tags__name=tag)
         return queryset
 
@@ -441,6 +455,23 @@ class EditorAudioListCreateView(EditorMediaListMixin, EditorAPIView):
         return Response(serialize_audio(audio, user=request.user), status=status.HTTP_201_CREATED)
 
 
+def _require_audio_write_database(audio: Audio, using: str) -> None:
+    # Wagtail's collection field and taggit resolve their own database routes.
+    # Reject split routing before relying on their queries inside the write transaction.
+    if (
+        audio._state.db != using
+        or router.db_for_write(Audio, instance=audio) != using
+        or router.db_for_read(Collection) != using
+        or router.db_for_read(Tag) != using
+        or router.db_for_read(ContentType) != using
+        or router.db_for_write(ContentType) != using
+        or router.db_for_write(Audio.tags.through, instance=audio) != using
+    ):
+        raise EditorValidationError(
+            {"database": [{"code": "unsupported", "message": "Audio updates require one writable database."}]}
+        )
+
+
 class EditorAudioDetailView(EditorAPIView):
     """Read one selectable audio, or update its metadata and add/replace one audio file."""
 
@@ -484,20 +515,27 @@ class EditorAudioDetailView(EditorAPIView):
             return _with_upload_lock(request.user, lambda: self._patch(request, audio))
         return self._patch(request, audio)
 
-    @transaction.atomic
     def _patch(self, request: Request, audio: Audio) -> Response:
+        using = router.db_for_write(Audio, instance=audio)
+        _require_audio_write_database(audio, using)
+        with transaction.atomic(using=using):
+            return self._patch_locked(request, audio.pk, using=using)
+
+    def _patch_locked(self, request: Request, pk: int, *, using: str) -> Response:
         # Serialize writers of this audio before reading the state the form saves: a no-op
         # update takes the PostgreSQL row lock or the SQLite write lock. Saving an instance
         # read earlier could restore a file name another request just replaced, and the
         # replacement guard would then delete that newer file.
-        if not Audio.objects.filter(pk=audio.pk).update(transcript_diarization_mode=F("transcript_diarization_mode")):
+        queryset = Audio.objects.using(using).filter(pk=pk)
+        if not queryset.update(transcript_diarization_mode=F("transcript_diarization_mode")):
             raise EditorNotFound("Audio not found.")
-        audio = Audio.objects.select_related("collection", "user").get(pk=audio.pk)
+        audio = queryset.select_related("collection", "user").get()
         # Collection/ownership may have changed since the initial unlocked lookup.
         if not audio_permission_policy.user_has_permission_for_instance(request.user, "choose", audio):
             raise EditorNotFound("Audio not found.")
         if not audio_permission_policy.user_has_permission_for_instance(request.user, "change", audio):
             raise EditorPermissionDenied("You cannot change this audio.")
+        _require_audio_write_database(audio, using)
         # A bound ModelForm treats absent fields as cleared, so start from the stored
         # values and overlay only what the request sent.
         form_data: dict[str, Any] = {
@@ -520,12 +558,15 @@ class EditorAudioDetailView(EditorAPIView):
             request.FILES,
             instance=audio,
             user=request.user,
+            using=using,
             sync_chaptermarks="chaptermarks" in request.data,
         )
         if not form.is_valid():
             raise EditorValidationError(_form_errors(form))
+        # Form cleaning can change the instance used as a hint by database routers.
+        _require_audio_write_database(form.instance, using)
         try:
-            audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS))
+            audio = ingest_upload(form, policy=editor_policy(AUDIO_FILE_FIELDS), using=using)
         except (MediaIngestError, FileReplacementConflict) as exc:
             return _audio_ingest_error_response(exc, audio)
         return Response(serialize_audio(audio, user=request.user))
@@ -632,11 +673,13 @@ class EditorMediaCollectionsView(EditorAPIView):
             raise EditorValidationError({"type": [{"code": "invalid_choice", "message": "Unsupported media type."}]})
 
         paginator = self.pagination_class()
-        page = paginator.paginate_queryset(queryset.order_by("path", "id"), request, view=self)
+        using = queryset.db
+        page = paginator.paginate_queryset(queryset.using(using).order_by("path", "id"), request, view=self)
         assert page is not None
         ancestor_path_set = {path for collection in page for path in _ancestor_paths(collection)}
         ancestors_by_path = {
-            collection.path: collection for collection in Collection.objects.filter(path__in=ancestor_path_set)
+            collection.path: collection
+            for collection in Collection.objects.using(using).filter(path__in=ancestor_path_set)
         }
         return paginator.get_paginated_response(
             [_collection_item(collection, ancestors_by_path=ancestors_by_path) for collection in page]

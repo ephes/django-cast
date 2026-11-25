@@ -84,39 +84,30 @@ def _flatten_drf_errors(detail: Any, prefix: str = "") -> dict[str, list[dict[st
 
 
 def editor_exception_handler(exc: Exception, context: dict[str, Any]) -> Response | None:
+    response = drf_exception_handler(exc, context)
+    if response is None:
+        return None
     if isinstance(exc, EditorValidationError):
-        return Response(
-            {"code": "validation_error", "errors": exc.error_map},
-            status=exc.status_code,
-        )
-    if isinstance(exc, EditorPermissionDenied):
+        response.data = {"code": "validation_error", "errors": exc.error_map}
+    elif isinstance(exc, EditorPermissionDenied):
         data: dict[str, Any] = {"code": "permission_denied", "detail": exc.detail_text}
         if exc.parent_id is not None:
             data["parent_id"] = exc.parent_id
-        return Response(data, status=exc.status_code)
-    if isinstance(exc, EditorNotFound):
-        return Response(
-            {"code": "not_found", "detail": exc.detail_text},
-            status=exc.status_code,
-        )
-    if isinstance(exc, EditorFlatError):
-        return Response({"code": exc.code_text, "detail": exc.detail_text}, status=exc.status_code)
-    if isinstance(exc, DRFNotFound):
-        return Response({"code": "not_found", "detail": str(exc.detail)}, status=status.HTTP_404_NOT_FOUND)
-    if isinstance(exc, EditorRevisionConflict):
-        return Response(
-            {
-                "code": "revision_conflict",
-                "detail": "The page has a newer revision than the submitted base revision.",
-                "current_revision_id": exc.current_revision_id,
-                "submitted_base_revision_id": exc.submitted_base_revision_id,
-                "edit_url": exc.edit_url,
-            },
-            status=exc.status_code,
-        )
-    if isinstance(exc, DRFValidationError):
-        return Response(
-            {"code": "validation_error", "errors": _flatten_drf_errors(exc.detail)},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
-    return drf_exception_handler(exc, context)
+        response.data = data
+    elif isinstance(exc, EditorNotFound):
+        response.data = {"code": "not_found", "detail": exc.detail_text}
+    elif isinstance(exc, EditorFlatError):
+        response.data = {"code": exc.code_text, "detail": exc.detail_text}
+    elif isinstance(exc, DRFNotFound):
+        response.data = {"code": "not_found", "detail": str(exc.detail)}
+    elif isinstance(exc, EditorRevisionConflict):
+        response.data = {
+            "code": "revision_conflict",
+            "detail": "The page has a newer revision than the submitted base revision.",
+            "current_revision_id": exc.current_revision_id,
+            "submitted_base_revision_id": exc.submitted_base_revision_id,
+            "edit_url": exc.edit_url,
+        }
+    elif isinstance(exc, DRFValidationError):
+        response.data = {"code": "validation_error", "errors": _flatten_drf_errors(exc.detail)}
+    return response

@@ -199,5 +199,4 @@ TASKS = {
 DATABASES["migration_other"] = {
     "ENGINE": "django.db.backends.sqlite3",
     "NAME": ":memory:",
-    "TEST": {"NAME": ":memory:"},
 }

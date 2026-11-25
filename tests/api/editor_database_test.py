@@ -247,3 +247,240 @@ def test_editor_refuses_cross_database_user(api_client, blog, podcast, kind, ope
     response = getattr(api_client, "post" if operation == "create" else "patch")(url, payload, format="json")
     assert response.status_code == 400, response.content
     assert response.json()["errors"]["database"][0]["code"] == "unsupported"
+
+
+@pytest.mark.django_db(transaction=True, databases={"default", "migration_other"})
+def test_editor_error_rolls_back_atomic_request(api_client, monkeypatch):
+    from cast.api.editor.errors import EditorValidationError
+    from cast.api.editor.media import EditorAudioListCreateView
+
+    alias = "migration_other"
+
+    def post(self, request, *args, **kwargs):
+        assert connections[alias].in_atomic_block
+        Tag.objects.using(alias).create(name="Synthetic failed request")
+        raise EditorValidationError({"title": [{"code": "invalid", "message": "Synthetic error."}]})
+
+    monkeypatch.setitem(connections[alias].settings_dict, "ATOMIC_REQUESTS", True)
+    monkeypatch.setattr(EditorAudioListCreateView, "post", post)
+    api_client.force_authenticate(user=get_user_model()(is_active=True, is_staff=True, is_superuser=True))
+    response = api_client.post(reverse("cast:api:editor_media_audios"), {}, format="json")
+
+    assert response.status_code == 400, response.content
+    assert response.json() == {
+        "code": "validation_error",
+        "errors": {"title": [{"code": "invalid", "message": "Synthetic error."}]},
+    }
+    assert not Tag.objects.using(alias).filter(name="Synthetic failed request").exists()
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_editor_collections_use_page_database_for_ancestors(api_client, admin_user, monkeypatch):
+    from wagtail.models import Collection
+
+    from cast.api.editor import media
+
+    alias = "migration_other"
+    default_root = Collection.get_first_root_node()
+    with override_settings(DATABASE_ROUTERS=[EditorRouter()]):
+        routed_root, _ = Collection.objects.update_or_create(
+            path=default_root.path, defaults={"name": "Routed root", "depth": 1}
+        )
+        routed_first = routed_root.add_child(name="First routed collection")
+        routed_second = routed_root.add_child(name="Second routed collection")
+    assert routed_root.path == default_root.path
+    assert routed_root.name != default_root.name
+
+    permitted = Collection.objects.using(alias).filter(pk__in=[routed_second.pk, routed_first.pk])
+    monkeypatch.setattr(media, "_usable_image_collections", lambda user: permitted)
+    api_client.force_authenticate(user=admin_user)
+    url = reverse("cast:api:editor_media_collections")
+    for number, child in enumerate((routed_first, routed_second), start=1):
+        response = api_client.get(url, {"type": "image", "pageSize": 1, "page": number})
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["count"] == 2
+        assert data["results"] == [
+            {
+                "id": child.pk,
+                "name": child.name,
+                "breadcrumb": f"{routed_root.name} / {child.name}",
+                "ancestors": [{"id": routed_root.pk, "name": routed_root.name}],
+            }
+        ]
+
+
+@pytest.mark.django_db(transaction=True, databases={"default", "migration_other"})
+def test_editor_audio_patch_uses_one_writer(settings, api_client):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from django.db import OperationalError
+    from wagtail.models import Collection
+
+    from cast.models import Audio
+
+    alias = "migration_other"
+
+    class AudioRouter(EditorRouter):
+        locked = False
+
+        def db_for_read(self, model, **hints):
+            if model is Audio and self.locked:
+                return "default"
+            return alias
+
+    routing = AudioRouter()
+    default_collection = Collection.add_root(name="Default collection")
+    default_user = get_user_model().objects.create(username="default-audio-editor")
+    default_audio = Audio.objects.create(
+        user=default_user, collection=default_collection, title="Default audio", subtitle="Default subtitle"
+    )
+
+    settings.DATABASE_ROUTERS = [routing]
+    ContentType.objects.clear_cache()
+    try:
+        routed_user = get_user_model().objects.create(username="routed-audio-editor", is_staff=True, is_superuser=True)
+        routed_collection = Collection.add_root(name="Routed collection")
+        audio = Audio.objects.create(
+            pk=default_audio.pk,
+            user=routed_user,
+            collection=routed_collection,
+            title="Routed audio",
+            subtitle="Earlier subtitle",
+        )
+        audio.tags.add("routed-tag")
+
+        def write_subtitle(subtitle):
+            try:
+                return Audio.objects.using(alias).filter(pk=audio.pk).update(subtitle=subtitle)
+            finally:
+                connections[alias].close()
+
+        api_client.force_authenticate(user=routed_user)
+        default_updates = []
+        lock_seen = []
+
+        def record_default_update(execute, sql, params, many, context):
+            if sql.startswith('UPDATE "cast_audio"'):
+                default_updates.append(sql)
+            return execute(sql, params, many, context)
+
+        with ThreadPoolExecutor(max_workers=1) as writer:
+
+            def interleave(execute, sql, params, many, context):
+                claiming = (
+                    sql.startswith('UPDATE "cast_audio" SET "transcript_diarization_mode"') and not routing.locked
+                )
+                if claiming:
+                    assert writer.submit(write_subtitle, "Concurrent subtitle").result(timeout=5) == 1
+                result = execute(sql, params, many, context)
+                if claiming:
+                    lock_seen.append(True)
+                    routing.locked = True
+                    with pytest.raises(OperationalError, match="locked"):
+                        writer.submit(write_subtitle, "Blocked subtitle").result(timeout=5)
+                return result
+
+            with (
+                connections[alias].execute_wrapper(interleave),
+                connections["default"].execute_wrapper(record_default_update),
+            ):
+                response = api_client.patch(
+                    reverse("cast:api:editor_media_audio_detail", args=[audio.pk]),
+                    {"title": "Renamed audio", "chaptermarks": "00:00:00 Routed chapter"},
+                    format="json",
+                )
+
+        assert lock_seen == [True]
+        assert default_updates == []
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["title"] == "Renamed audio"
+        assert data["subtitle"] == "Concurrent subtitle"
+        assert data["tags"] == ["routed-tag"]
+        assert data["collection"] == {"id": routed_collection.pk, "name": "Routed collection"}
+        audio.refresh_from_db(using=alias)
+        assert audio.title == "Renamed audio"
+        assert audio.subtitle == "Concurrent subtitle"
+        assert list(audio.chaptermarks.using(alias).values_list("title", flat=True)) == ["Routed chapter"]
+        default_audio.refresh_from_db(using="default")
+        assert default_audio.title == "Default audio"
+        assert default_audio.subtitle == "Default subtitle"
+    finally:
+        ContentType.objects.clear_cache()
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_editor_audio_patch_refuses_split_writer_before_lock(settings, api_client, admin_user, audio):
+    from cast.models import Audio
+
+    class SplitRouter:
+        def db_for_write(self, model, **hints):
+            if model is Audio:
+                return "migration_other"
+            return None
+
+    settings.DATABASE_ROUTERS = [SplitRouter()]
+    api_client.force_authenticate(user=admin_user)
+    updated = []
+
+    def record_update(execute, sql, params, many, context):
+        if sql.startswith('UPDATE "cast_audio"'):
+            updated.append(sql)
+        return execute(sql, params, many, context)
+
+    with (
+        connections["default"].execute_wrapper(record_update),
+        connections["migration_other"].execute_wrapper(record_update),
+    ):
+        response = api_client.patch(
+            reverse("cast:api:editor_media_audio_detail", args=[audio.pk]), {"title": "Wrong writer"}, format="json"
+        )
+
+    assert updated == []
+    assert response.status_code == 400, response.content
+    assert response.json()["errors"]["database"][0]["code"] == "unsupported"
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+@pytest.mark.parametrize("replica_model", ["collection", "tag", "contenttype"])
+def test_editor_audio_patch_refuses_read_replica_routing(settings, api_client, admin_user, audio, replica_model):
+    from wagtail.models import Collection
+
+    replica_models = {"collection": Collection, "tag": Tag, "contenttype": ContentType}
+
+    class PrimaryReplicaRouter:
+        def db_for_read(self, model, **hints):
+            return "migration_other" if model is replica_models[replica_model] else "default"
+
+        def db_for_write(self, model, **hints):
+            return "default"
+
+    original_title = audio.title
+    settings.DATABASE_ROUTERS = [PrimaryReplicaRouter()]
+    ContentType.objects.clear_cache()
+    api_client.force_authenticate(user=admin_user)
+    updated = []
+
+    def record_update(execute, sql, params, many, context):
+        if sql.startswith('UPDATE "cast_audio"'):
+            updated.append(sql)
+        return execute(sql, params, many, context)
+
+    try:
+        with (
+            connections["default"].execute_wrapper(record_update),
+            connections["migration_other"].execute_wrapper(record_update),
+        ):
+            response = api_client.patch(
+                reverse("cast:api:editor_media_audio_detail", args=[audio.pk]), {"title": "Replica"}, format="json"
+            )
+    finally:
+        ContentType.objects.clear_cache()
+
+    assert updated == []
+    assert response.status_code == 400, response.content
+    assert response.json()["errors"]["database"][0]["code"] == "unsupported"
+    audio.refresh_from_db(using="default")
+    assert audio.title == original_title

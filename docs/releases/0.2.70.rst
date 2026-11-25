@@ -16,6 +16,17 @@ Upgrade actions
   for more than 100 distinct ``slug`` filters (``too_many``) or a slug longer
   than 50 characters (``max_length``).
 
+- Editor media lists accept up to 20 distinct ``tag`` filters. Repeating a tag
+  uses the same predicate. Larger distinct sets return ``400 validation_error``
+  at ``tag`` with code ``too_many``.
+
+- Editor audio PATCH now follows the editor page write rules for database
+  routing: the audio row, collections, tags, tagged items and content types must
+  be read and written on one database. Primary/replica routers that send reads
+  of ``Audio``, Wagtail's ``Collection``, taggit's ``Tag`` or ``ContentType`` to
+  a replica now get ``400 validation_error`` at ``database`` with code
+  ``unsupported``. Route those reads to the primary to keep using audio PATCH.
+
 Features
 ~~~~~~~~
 
@@ -39,6 +50,11 @@ Security and hardening
 
 Fixes
 ~~~~~
+
+- Roll back active ``ATOMIC_REQUESTS`` transactions for handled editor API exceptions.
+- Read editor collection breadcrumbs from the same database as the collection page.
+- Hold the editor audio PATCH lock and reload on the admitted write database.
+  Unsupported split routing returns a ``database`` validation error.
 
 - Reject multiple selected episodes sharing one audio object in
   ``generate_transcripts`` before submitting jobs. Select one episode or use
