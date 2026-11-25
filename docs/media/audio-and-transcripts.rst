@@ -484,10 +484,11 @@ bytes in place under the same file name calls
 ``Transcript.mark_artifacts_received()`` before saving.
 
 Speaker synchronization expects valid JSON objects, with an array under
-Podlove ``transcripts`` or DOTe ``lines`` when that member is present. Invalid
-JSON (syntax, encoding, repeated members, nesting or size) or an invalid shape
-raises ``TranscriptArtifactError`` before any mapping rows are updated. A
-missing stored file still counts as an absent artifact.
+Podlove ``transcripts`` or DOTe ``lines`` when that member is present. A
+storage read error, invalid JSON (syntax, encoding, repeated members, nesting
+or size) or an invalid shape raises ``TranscriptArtifactError`` before any
+mapping rows are updated. A missing stored file still counts as an absent
+artifact.
 An artifact replacement saved with synchronization also rolls back its
 database changes. Replace the malformed artifact before reviewing speakers.
 

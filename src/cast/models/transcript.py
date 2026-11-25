@@ -611,10 +611,16 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         try:
             with file_field.storage.open(file_field.name, "rb") as file:
                 data = parsing.read_json_artifact(file)
-        except OSError:
-            # A missing or unreadable stored file counts as an absent artifact.
+        except FileNotFoundError:
+            # A missing stored file counts as an absent artifact.
             return {}
-        except (json.JSONDecodeError, UnicodeDecodeError, RecursionError, parsing.TranscriptArtifactError) as exc:
+        except (
+            OSError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+            RecursionError,
+            parsing.TranscriptArtifactError,
+        ) as exc:
             if strict:
                 raise parsing.TranscriptArtifactError(f"Could not read {field_name} transcript JSON.") from exc
             return {}
