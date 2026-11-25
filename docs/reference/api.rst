@@ -570,7 +570,9 @@ acquiring the parent write lock, with the fresh user and a new
 permission-resolution cache. A collection move or media grant
 withdrawal committed while creation waits returns ``400`` with the usual
 ``not_found`` field error and rolls back the entire creation. An authorized
-retry can create the draft normally.
+retry can create the draft normally. The first revision and its response data
+are prepared in the same transaction. If preparing that data raises an error,
+creation rolls back and a retry can use the same slug.
 
 Editor page writes, sibling slug checks, revisions and publication use one
 transaction on the routed page write database. Page/revision/related models
@@ -1581,6 +1583,10 @@ Video result shape:
       "tags": ["weeknotes"],
       "edit_url": "/admin/castvideo/edit/43/"
     }
+
+A file URL is returned as a local path, with any query string and fragment.
+When storage cannot supply a URL or supplies one that cannot be parsed, the
+file field is ``null`` and the media item remains in the response.
 
 Upload media::
 

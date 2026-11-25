@@ -85,9 +85,9 @@ def _relative_field_url(field: Any) -> str | None:
         return None
     try:
         url = field.url
+        parsed = urlsplit(url)
     except ValueError:
         return None
-    parsed = urlsplit(url)
     if parsed.scheme or parsed.netloc:
         return urlunsplit(("", "", parsed.path, parsed.query, parsed.fragment))
     return url

@@ -655,11 +655,9 @@ class PostCreateView(PostEditorMixin, EditorAPIView):
                 # in memory; flush them so the created page row and first revision agree.
                 post.save()
             revision = post.save_revision(user=user)
+            payload = self._serialize(post, user=user, content_post=post, revision=revision)
 
-        return Response(
-            self._serialize(post, user=user, content_post=post, revision=revision),
-            status=status.HTTP_201_CREATED,
-        )
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class PostDetailView(PostEditorMixin, EditorAPIView):
@@ -979,11 +977,9 @@ class EpisodeCreateView(EpisodeEditorMixin, EditorAPIView):
             if data["tags"] or categories:
                 episode.save()
             revision = episode.save_revision(user=user)
+            payload = self._serialize(episode, user=user, content_post=episode, revision=revision)
 
-        return Response(
-            self._serialize(episode, user=user, content_post=episode, revision=revision),
-            status=status.HTTP_201_CREATED,
-        )
+        return Response(payload, status=status.HTTP_201_CREATED)
 
 
 class EpisodeDetailView(EpisodeEditorMixin, EditorAPIView):

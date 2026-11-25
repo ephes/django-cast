@@ -132,6 +132,26 @@ class TestEditorMediaEndpoints:
         assert video_response.status_code == 200
         assert video_response.json()["results"][0]["id"] == video.id
 
+    def test_media_list_falls_back_for_unparseable_storage_url(self, api_client, superuser, monkeypatch):
+        class LegacyStorage(InMemoryStorage):
+            def url(self, name):
+                if name == "legacy.mp3":
+                    return "https://[storage.example.test/legacy.mp3"
+                return f"https://storage.example.test/media/{name}?token=synthetic#start"
+
+        monkeypatch.setattr(Audio._meta.get_field("mp3"), "storage", LegacyStorage())
+        legacy = Audio.objects.create(user=superuser, title="Legacy file", mp3="legacy.mp3")
+        current = Audio.objects.create(user=superuser, title="Current file", mp3="current.mp3")
+        api_client.force_authenticate(user=superuser)
+
+        response = api_client.get(reverse("cast:api:editor_media_audios"))
+
+        assert response.status_code == 200, response.content
+        assert [(item["id"], item["mp3"]) for item in response.json()["results"]] == [
+            (current.pk, "/media/current.mp3?token=synthetic#start"),
+            (legacy.pk, None),
+        ]
+
     def test_repeated_media_tags_reuse_count_joins_and_preserve_and_ordering(self, api_client, superuser):
         oldest = Audio.objects.create(user=superuser, title="First match")
         newest = Audio.objects.create(user=superuser, title="Second match")

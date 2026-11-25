@@ -51,6 +51,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Roll back editor post and episode creation if preparing the response fails,
+  so the original slug can be retried.
+- Return a null file URL for a malformed storage URL in the editor media
+  library, so the rest of the list remains available.
+
 - Return 404 when the Django-model feed repository reloads a blog or podcast
   that was deleted after feed routing selected it.
 - Batch image discovery and repair loading in ``sync_renditions``, preserving
