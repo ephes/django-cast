@@ -69,19 +69,62 @@ def test_video_model_admin_calc_poster(mocker):
     assert processed_video.calc_poster
 
 
-def test_cache_file_sizes():
-    class SpyAudio:
-        cached = False
+@pytest.mark.django_db
+def test_cache_file_sizes_refreshes_stored_sizes(audio):
+    Audio.objects.filter(pk=audio.pk).update(data={"size": {"m4a": 1}, "size_file_names": {"m4a": audio.m4a.name}})
 
-        def size_to_metadata(self):
-            self.cached = True
+    cache_file_sizes(None, None, Audio.objects.filter(pk=audio.pk))
 
-        def save(self):
-            pass
+    audio.refresh_from_db()
+    assert audio.data["size"] == {"m4a": audio.m4a.size}
+    assert audio.data["size_file_names"] == {"m4a": audio.m4a.name}
 
-    spy = SpyAudio()
-    cache_file_sizes(None, None, [spy])
-    assert spy.cached
+
+@pytest.mark.django_db
+def test_cache_file_sizes_keeps_editor_saves_made_during_the_probe(audio, mocker):
+    original_name = audio.m4a.name
+    stale = Audio.objects.get(pk=audio.pk)
+    stale.data = {"size": {"m4a": 1}, "size_file_names": {"m4a": original_name}}
+    newer_data = {
+        "editor": "kept",
+        "size": {"m4a": 999, "mp3": 5},
+        "size_file_names": {"m4a": "cast_audio/replacement.m4a", "mp3": "cast_audio/other.mp3"},
+    }
+
+    def editor_saves_during_probe(name):
+        Audio.objects.filter(pk=audio.pk).update(
+            title="edited title", m4a="cast_audio/replacement.m4a", mp3="cast_audio/other.mp3", data=newer_data
+        )
+        return 123
+
+    mocker.patch.object(stale.m4a.storage, "size", side_effect=editor_saves_during_probe)
+
+    cache_file_sizes(None, None, [stale])
+
+    current = Audio.objects.get(pk=audio.pk)
+    assert current.title == "edited title"
+    assert current.m4a.name == "cast_audio/replacement.m4a"
+    assert current.mp3.name == "cast_audio/other.mp3"
+    assert current.data == newer_data
+
+
+@pytest.mark.django_db
+def test_cache_file_sizes_merges_only_probed_size_keys(audio, mocker):
+    stale = Audio.objects.get(pk=audio.pk)
+    newer_data = {"editor": "kept", "size": {}, "size_file_names": {}}
+
+    def editor_saves_during_probe(name):
+        Audio.objects.filter(pk=audio.pk).update(title="edited title", data=newer_data)
+        return 123
+
+    mocker.patch.object(stale.m4a.storage, "size", side_effect=editor_saves_during_probe)
+
+    cache_file_sizes(None, None, [stale])
+
+    current = Audio.objects.get(pk=audio.pk)
+    assert current.title == "edited title"
+    assert current.data == {"editor": "kept", "size": {"m4a": 123}, "size_file_names": {"m4a": audio.m4a.name}}
+    assert stale.data == current.data
 
 
 def test_audio_model_admin_uses_derivation_service(mocker, audio):

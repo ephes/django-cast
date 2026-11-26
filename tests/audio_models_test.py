@@ -227,6 +227,39 @@ class TestAudioModel:
 
         assert "m4a" not in audio.data["size"]
 
+    def test_refresh_file_size_cache_retires_missing_and_cleared_files(self, audio, mocker):
+        Audio.objects.filter(pk=audio.pk).update(
+            data={"size": {"m4a": 1, "mp3": 2}, "size_file_names": {"m4a": audio.m4a.name, "mp3": "gone.mp3"}}
+        )
+        mocker.patch.object(audio.m4a.storage, "size", side_effect=FileNotFoundError)
+
+        assert audio.refresh_file_size_cache() is True
+
+        audio.refresh_from_db()
+        assert audio.data == {"size": {}, "size_file_names": {}}
+
+    def test_refresh_file_size_cache_skips_write_when_unchanged(self, audio):
+        audio.refresh_file_size_cache()
+        modified = Audio.objects.get(pk=audio.pk).modified
+
+        assert audio.refresh_file_size_cache(using="default") is False
+        assert Audio.objects.get(pk=audio.pk).modified == modified
+
+    def test_refresh_file_size_cache_replaces_non_object_metadata(self, audio):
+        Audio.objects.filter(pk=audio.pk).update(data=["legacy"])
+
+        audio.refresh_file_size_cache()
+
+        audio.refresh_from_db()
+        assert audio.data == {"size": {"m4a": audio.m4a.size}, "size_file_names": {"m4a": audio.m4a.name}}
+
+    def test_refresh_file_size_cache_rejects_deleted_audio(self, audio):
+        stale = Audio.objects.get(pk=audio.pk)
+        Audio.objects.filter(pk=audio.pk).delete()
+
+        with pytest.raises(Audio.DoesNotExist):
+            stale.refresh_file_size_cache()
+
     def test_read_audio_file_size_from_cache(self, audio):
         # when size is not in cache, it should be read from file
         expected_file_size = audio.m4a.size

@@ -3,6 +3,7 @@ import logging
 import re
 import subprocess
 from collections.abc import Iterable
+from copy import deepcopy
 from datetime import time, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from pathlib import Path
@@ -12,6 +13,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.storage import Storage
 from django.db import models, router, transaction
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from taggit.managers import TaggableManager
@@ -350,6 +352,50 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             except (OSError, ValueError):
                 # Missing/unreadable current files must retire their previous size.
                 pass
+
+    def refresh_file_size_cache(self, *, using: str | None = None) -> bool:
+        """Probe file sizes and merge only the probed size keys into the stored row.
+
+        Storage is probed before the row lock. Under the lock, only formats whose
+        stored file name still equals the probed name get new size keys; titles,
+        replaced files and other metadata saved meanwhile are left untouched.
+        Returns whether the stored metadata changed.
+        """
+        probes: dict[str, tuple[str, int | None]] = {}
+        for audio_format in self.audio_formats:
+            field = getattr(self, audio_format)
+            size: int | None = None
+            if field:
+                try:
+                    size = field.size
+                except (OSError, ValueError):
+                    # Missing/unreadable current files must retire their previous size.
+                    size = None
+            probes[audio_format] = (field.name or "" if field else "", size)
+        using = using or router.db_for_write(Audio, instance=self)
+        with transaction.atomic(using=using):
+            rows = Audio.objects.using(using).filter(pk=self.pk)
+            # Lock the row before reading, like ChapterMarkManager.sync_chaptermarks.
+            if not rows.update(title=models.F("title")):
+                raise Audio.DoesNotExist
+            current = rows.values(*self.audio_formats, "data").get()
+            stored_data = current["data"] if isinstance(current["data"], dict) else {}
+            data = deepcopy(stored_data)
+            sizes = data.setdefault("size", {})
+            names = data.setdefault("size_file_names", {})
+            for audio_format, (name, size) in probes.items():
+                if (current[audio_format] or "") != name:
+                    continue  # replaced meanwhile; the replacing save owns that size
+                sizes.pop(audio_format, None)
+                names.pop(audio_format, None)
+                if name and size is not None:
+                    sizes[audio_format] = size
+                    names[audio_format] = name
+            changed = data != stored_data
+            if changed:
+                rows.update(data=data, modified=timezone.now())
+        self.data = data
+        return changed
 
     def get_file_size(self, audio_format: str) -> int:
         """Return a size bound to the current file name, without I/O on a cache hit."""

@@ -51,6 +51,10 @@ Security and hardening
 Fixes
 ~~~~~
 
+- The "Cache file sizes" admin action no longer writes back a stale audio row.
+  It merges only the probed size entries under a row lock and skips formats
+  whose file was replaced meanwhile, so concurrent editor changes survive.
+
 - Preserve literal arrows (``-->``) in WebVTT text when manually correcting a
   passage, matching the stored Podlove and DOTe text.
 
