@@ -51,6 +51,10 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Count verified media sync copies and refreshes even if stage cleanup fails.
+  Reporting failures no longer interrupt recovery cleanup or mask the
+  original storage error.
+
 - Roll back editor post and episode creation if preparing the response fails,
   so the original slug can be retried.
 - Return a null file URL for a malformed storage URL in the editor media

@@ -365,20 +365,24 @@ def test_media_backup_refresh_keeps_backup_copy_when_storage_does_not_overwrite(
     assert "saved copy as video_1.mp4 instead of requested video.mp4" in error_output.getvalue()
 
 
-def test_media_backup_refresh_reports_staged_copy_that_cannot_be_removed(mocker):
-    production = StubOverwriteStorage({"video.mp4": b"new!"})
-    backup = StubOverwriteStorage({"video.mp4": b"old!"})
-    patch_backup_storages(mocker, production, backup)
-    mocker.patch.object(backup, "delete", side_effect=RuntimeError("denied"))
-    error_output = StringIO()
+@pytest.mark.parametrize("refresh", [False, True])
+def test_media_backup_counts_verified_publication_when_stage_delete_fails(mocker, refresh):
+    path = "video.mp4"
+    source = StubOverwriteStorage({path: b"new"})
+    target = StubOverwriteStorage({path: b"old"} if refresh else {})
+    patch_backup_storages(mocker, source, target)
+    mocker.patch.object(target, "delete", side_effect=OSError("synthetic delete failure"))
+    output, errors = StringIO(), StringIO()
+    call_command("media_backup", refresh_changed=refresh, stdout=output, stderr=errors)
 
-    with pytest.raises(CommandError):
-        call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
-
-    assert backup._files["video.mp4"] == b"new!"
-    assert "error syncing video.mp4: could not remove staged copy video.mp4.django-cast-refresh-" in (
-        error_output.getvalue()
-    )
+    (key,) = target.staged()
+    assert target._files == {path: b"new", key: b"new"}
+    assert f"copied={int(not refresh)} refreshed={int(refresh)} unchanged=0 errors=0" in output.getvalue()
+    assert f"could not remove staged copy {key}" in errors.getvalue()
+    output = StringIO()
+    call_command("media_backup", refresh_changed=refresh, stdout=output)
+    assert "copied=0 refreshed=0 unchanged=1 errors=0" in output.getvalue()
+    assert target.saved == [key, path]
 
 
 def test_sync_media_files_counts_refresh_errors_without_reporter():
@@ -1723,3 +1727,57 @@ def test_recalc_video_posters_streams_ordered_batches(video, mocker):
     assert "processed=5 errors=2" in output.getvalue()
     for pk in failures:
         assert f"error recalculating poster for video {pk}:" in errors.getvalue()
+
+
+@pytest.mark.parametrize("sink", ["callback", "logger"])
+def test_refresh_cleans_owned_stages_when_recovery_reporting_fails(mocker, sink):
+    from cast.management.commands import storage_backend as media
+
+    path = "video.mp4"
+    source = StubOverwriteStorage({path: b"new"})
+    target = StubOverwriteStorage({path: b"old"})
+    original_save = target.save
+    overwrite_error = OSError("partial overwrite")
+    report = mocker.Mock(side_effect=RuntimeError("diagnostics unavailable"))
+    if sink == "logger":
+        mocker.patch.object(media.logger, "warning", report)
+
+    def save(name, content):
+        if name == path:
+            raise overwrite_error
+        original_save(name, content)
+        renamed = name.removesuffix(".tmp") + "_renamed.tmp"
+        target._files[renamed] = target._files[name]
+        return renamed
+
+    mocker.patch.object(target, "save", side_effect=save)
+    with pytest.raises(OSError, match="partial overwrite") as exc:
+        media.refresh_existing_file(source, target, path, report_error=report if sink == "callback" else None)
+
+    (key,) = target.staged()
+    assert target._files[key] == b"new"
+    assert target.deleted == target.saved
+    assert exc.value is overwrite_error
+    assert any(key in note for note in exc.value.__notes__)
+    report.assert_called_once()
+
+
+def test_sync_continues_when_error_reporting_fails(mocker):
+    from cast.management.commands.storage_backend import sync_media_files
+
+    source = StubOverwriteStorage({"bad.mp4": b"bad", "good.mp4": b"good"})
+    target = StubOverwriteStorage()
+    original_open = source.open
+    report = mocker.Mock(side_effect=OSError("diagnostics unavailable"))
+
+    def open_file(name, mode):
+        if name == "bad.mp4":
+            raise OSError("unreadable source")
+        return original_open(name, mode)
+
+    mocker.patch.object(source, "open", side_effect=open_file)
+    result = sync_media_files(source, target, report_error=report)
+
+    assert (result.copied, result.errors) == (1, 1)
+    assert target._files == {"good.mp4": b"good"}
+    report.assert_called_once_with("error syncing bad.mp4: unreadable source")

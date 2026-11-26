@@ -7,7 +7,7 @@ import re
 import stat
 import tempfile
 from collections.abc import Callable, Generator, Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import monotonic
@@ -292,23 +292,37 @@ def publish_staged_file(
             raise RuntimeError(f"published copy {path} failed content verification")
         staged_names.discard(path)
     except BaseException as primary_error:
+        warnings = []
         if recovery_name is not None:
             staged_names.discard(recovery_name)
             message = f"complete recovery copy retained at {recovery_name}; inspect before retry or manual deletion"
             primary_error.add_note(message)
-            logger.warning(message)
-            if report_error is not None:
-                report_error(message)
+            warnings.append(message)
         try:
             remove_staged_copies(target_storage, staged_names)
         except RuntimeError as cleanup_error:
             primary_error.add_note(str(cleanup_error))
-            logger.warning("Refresh staging cleanup failed: %s", cleanup_error)
-            if report_error is not None:
-                report_error(f"warning: refresh staging cleanup failed: {cleanup_error}")
+            warnings.append(f"warning: refresh staging cleanup failed: {cleanup_error}")
+        for message in warnings:
+            report_sync_message(message, report_error, always_log=True)
         raise
     else:
-        remove_staged_copies(target_storage, staged_names)
+        try:
+            remove_staged_copies(target_storage, staged_names)
+        except RuntimeError as cleanup_error:
+            report_sync_message(
+                f"warning: sync published {path}, but staging cleanup failed: {cleanup_error}", report_error
+            )
+
+
+def report_sync_message(message: str, report_error: Callable[[str], None] | None, *, always_log: bool = False) -> None:
+    if report_error is not None:
+        with suppress(Exception):
+            report_error(message)
+            if not always_log:
+                return
+    with suppress(Exception):
+        logger.warning(message)
 
 
 def sync_media_files(
@@ -331,10 +345,7 @@ def sync_media_files(
         for num, path in enumerate(storage_walk_paths(source_storage)):
             if is_media_staging_key(path):
                 message = f"skipped reserved media staging key {path}; inspect and remove manually"
-                if report_error is not None:
-                    report_error(message)
-                else:
-                    logger.warning(message)
+                report_sync_message(message, report_error)
                 continue
             try:
                 # Even an unchanged decision must not observe another writer's
@@ -354,19 +365,13 @@ def sync_media_files(
             except Exception as exc:
                 result.errors += 1
                 message = f"error syncing {path}: {exc}"
-                if report_error is not None:
-                    report_error(message)
-                else:
-                    logger.warning(message)
+                report_sync_message(message, report_error)
             if num % 100 == 0:  # pragma: no cover
                 print(".", end="", flush=True)
     except StorageInventoryError as exc:
         result.errors += 1
         message = f"incomplete storage inventory: {exc}"
-        if report_error is not None:
-            report_error(message)
-        else:
-            logger.warning(message)
+        report_sync_message(message, report_error)
     return result
 
 

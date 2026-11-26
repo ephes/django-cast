@@ -372,12 +372,12 @@ Options:
     the path is reported as an error and the verified stage is retained for
     recovery. A final overwrite that raises also retains the stage. A save
     under a generated name keeps no stage.
-    Verified publication removes its stage. Cleanup attempts every other
-    requested and returned staging name even if another deletion fails. Leftover
-    names and deletion failures are logged and reported on command stderr when publication has
-    already failed, preserving the original publication exception; cleanup failure
-    after successful publication is itself an error. Inspect the reported keys
-    and remove recoverable leftovers manually.
+    Verified publication attempts to remove its stage. A deletion failure
+    reports the leftover key as a warning while the copy still counts as
+    copied or refreshed. On publication failure, cleanup attempts every
+    owned staging name except the verified recovery key. Recovery and cleanup
+    details are attached to the original exception before diagnostics are
+    emitted. Inspect reported leftovers before removing them manually.
 
     The final overwrite itself is only as safe as the backup storage backend
     makes it. Object storage replaces an object atomically, so a failed
