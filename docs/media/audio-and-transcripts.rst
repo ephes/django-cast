@@ -522,6 +522,8 @@ speaker labels. The stored transcript files are not rewritten by this mapping
 or sanitization step. One-off display names cannot duplicate a raw transcript
 speaker label; this keeps an approved one-off name from accidentally allowing an
 unmapped anonymous label with the same text.
+When no episode is specified, the allowed contributor names and one-off names
+are collected using the same set of live, unrestricted episodes for the audio.
 
 WebVTT speaker labels come from cue voice spans (``<v Speaker 1>``) and from
 generic ``Speaker N:`` cue prefixes. Read-time mapping, sanitization, and the

@@ -100,7 +100,7 @@ def public_speaker_labels_for_transcript(transcript: Any, *, episode: Any | None
     labels: set[str] = set()
     for live_episode in live_episodes:
         labels.update(public_speaker_labels_for_episode(live_episode, audio=audio) or set())
-    labels.update(public_one_off_speaker_labels_for_transcript(transcript))
+    labels.update(_one_off_speaker_labels_for_episodes(transcript, live_episodes))
     return labels
 
 
@@ -212,6 +212,10 @@ def _public_contributor_ids(episodes: list[Any]) -> set[int]:
 
 def public_one_off_speaker_labels_for_transcript(transcript: Any, *, episode: Any | None = None) -> set[str]:
     episodes = _public_episode_contexts_for_transcript(transcript, episode=episode)
+    return _one_off_speaker_labels_for_episodes(transcript, episodes)
+
+
+def _one_off_speaker_labels_for_episodes(transcript: Any, episodes: list[Any] | None) -> set[str]:
     if not episodes:
         return set()
     raw_speaker_labels = _current_raw_speaker_labels(transcript)
