@@ -202,6 +202,43 @@ def test_contributor_link_options(admin_client):
     assert all('"short_bio"' not in sql and '"transcript_variants"' not in sql for sql in selects)
 
 
+@pytest.mark.django_db(databases=["default", "migration_other"])
+def test_contributor_link_options_use_contributor_read_alias(admin_client, settings):
+    class SplitRouter:
+        def db_for_read(self, model, **hints):
+            if model is Contributor:
+                return "migration_other"
+            if model is ContributorLink:
+                return "default"
+            return None
+
+        def allow_relation(self, left, right, **hints):
+            if isinstance(left, (Contributor, ContributorLink)) and isinstance(right, (Contributor, ContributorLink)):
+                return True
+            return None
+
+    primary = Contributor.objects.create(display_name="Primary guest", slug="guest")
+    ContributorLink.objects.create(
+        pk=101, contributor=primary, service=ContributorLink.SERVICE_YOUTUBE, url="https://example.com/video"
+    )
+    replica = Contributor.objects.using("migration_other").create(
+        pk=primary.pk, display_name="Replica host", slug="guest", default_role=EpisodeContributor.ROLE_HOST
+    )
+    link = ContributorLink.objects.using("migration_other").create(
+        pk=102, contributor=replica, service=ContributorLink.SERVICE_WEBSITE, url="https://example.com/host"
+    )
+    settings.DATABASE_ROUTERS = [SplitRouter()]
+
+    response = admin_client.get(reverse("cast-contributors:links"), {"contributor_id": replica.pk})
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "defaultLinkId": str(link.pk),
+        "defaultRole": EpisodeContributor.ROLE_HOST,
+        "links": [{"contributorId": str(replica.pk), "text": "Replica host: Website", "value": str(link.pk)}],
+    }
+
+
 @pytest.mark.django_db
 @pytest.mark.parametrize("contributor_id", ["invalid", -1])
 def test_contributor_link_options_with_invalid_or_missing_contributor_id(admin_client, contributor_id):

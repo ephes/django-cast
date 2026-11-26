@@ -31,7 +31,9 @@ def link_options(request: HttpRequest) -> JsonResponse:
         return JsonResponse(empty_data)
 
     ordered_links = list(
-        contributor.links.only("id", "contributor", "service").order_by(F("sort_order").asc(nulls_last=True), "pk")
+        contributor.links.using(contributor._state.db)
+        .only("id", "contributor", "service")
+        .order_by(F("sort_order").asc(nulls_last=True), "pk")
     )
 
     data: dict[str, str | list[dict[str, Any]]] = {
