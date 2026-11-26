@@ -279,7 +279,10 @@ Comprehensive audio file management with multiple format support.
 **Key Methods:**
 
 - ``create_duration()``: Calculates duration using ffprobe
-- ``size_to_metadata()``: Caches file sizes
+- ``refresh_file_size_cache()``: Probes file sizes and merges only those size
+  entries into the stored row (used by the "Cache file sizes" admin action)
+- ``size_to_metadata()``: In-memory size helper used by
+  ``save_audio_with_derivations()``; do not save a stale instance after it
 - ``get_file_size(format)``: Returns size for specific format
 - ``get_chaptermark_data_from_file()``: Extracts embedded chapters
 

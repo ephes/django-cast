@@ -186,7 +186,7 @@ Example admin action:
     @admin.action(description="Cache file sizes")
     def cache_file_sizes(modeladmin, request, queryset):
         for audio in queryset:
-            audio.cache_audio_file_sizes()
+            audio.refresh_file_size_cache()
 
 Database Optimization
 =====================

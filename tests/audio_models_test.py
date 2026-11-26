@@ -227,6 +227,39 @@ class TestAudioModel:
 
         assert "m4a" not in audio.data["size"]
 
+    def test_refresh_file_size_cache_retires_missing_and_cleared_files(self, audio, mocker):
+        Audio.objects.filter(pk=audio.pk).update(
+            data={"size": {"m4a": 1, "mp3": 2}, "size_file_names": {"m4a": audio.m4a.name, "mp3": "gone.mp3"}}
+        )
+        mocker.patch.object(audio.m4a.storage, "size", side_effect=FileNotFoundError)
+
+        assert audio.refresh_file_size_cache() is True
+
+        audio.refresh_from_db()
+        assert audio.data == {"size": {}, "size_file_names": {}}
+
+    def test_refresh_file_size_cache_skips_write_when_unchanged(self, audio):
+        audio.refresh_file_size_cache()
+        modified = Audio.objects.get(pk=audio.pk).modified
+
+        assert audio.refresh_file_size_cache(using="default") is False
+        assert Audio.objects.get(pk=audio.pk).modified == modified
+
+    def test_refresh_file_size_cache_replaces_non_object_metadata(self, audio):
+        Audio.objects.filter(pk=audio.pk).update(data=["legacy"])
+
+        audio.refresh_file_size_cache()
+
+        audio.refresh_from_db()
+        assert audio.data == {"size": {"m4a": audio.m4a.size}, "size_file_names": {"m4a": audio.m4a.name}}
+
+    def test_refresh_file_size_cache_rejects_deleted_audio(self, audio):
+        stale = Audio.objects.get(pk=audio.pk)
+        Audio.objects.filter(pk=audio.pk).delete()
+
+        with pytest.raises(Audio.DoesNotExist):
+            stale.refresh_file_size_cache()
+
     def test_read_audio_file_size_from_cache(self, audio):
         # when size is not in cache, it should be read from file
         expected_file_size = audio.m4a.size
@@ -438,6 +471,53 @@ def test_chapter_sync_rolls_back_second_save(chapter_audio, monkeypatch):
     assert len(calls) == 2
     assert list(audio.chaptermarks.order_by("start").values()) == before
     assert audio.chaptermarks.get(pk=old.pk).title == "Original"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_chapter_sync_retry_after_rollback_keeps_unrelated_rows(chapter_audio, monkeypatch):
+    audio = chapter_audio
+    other = Audio.objects.create(user=audio.user, title="Other")
+    incoming = [
+        ChapterMark(audio=audio, start="00:00:00", title="First", link="https://example.test/first"),
+        ChapterMark(audio=audio, start="00:01:00", title="Second"),
+    ]
+    original_save = ChapterMark.save
+    fail = {"title": "Second"}
+
+    def fail_second(self, *args, **kwargs):
+        if self.title == fail["title"]:
+            raise RuntimeError("synthetic second-save failure")
+        original_save(self, *args, **kwargs)
+
+    monkeypatch.setattr(ChapterMark, "save", fail_second)
+    with pytest.raises(RuntimeError, match="second-save"):
+        ChapterMark.objects.sync_chaptermarks(audio, incoming)
+    assert not audio.chaptermarks.exists()
+    assert [(cm.pk, cm.start) for cm in incoming] == [(None, "00:00:00"), (None, "00:01:00")]
+
+    unrelated = ChapterMark.objects.create(audio=other, start="00:00:00", title="Unrelated")
+    fail["title"] = None
+    ChapterMark.objects.sync_chaptermarks(audio, incoming, update_urls=False)
+
+    assert list(audio.chaptermarks.order_by("start").values_list("title", "link")) == [
+        ("First", "https://example.test/first"),
+        ("Second", None),
+    ]
+    unrelated.refresh_from_db()
+    assert (unrelated.audio_id, unrelated.title) == (other.pk, "Unrelated")
+    assert [cm.pk for cm in incoming] == [None, None]
+
+
+@pytest.mark.django_db
+def test_chapter_sync_does_not_copy_stored_urls_onto_inputs(audio):
+    old = ChapterMark.objects.create(audio=audio, start=time(0), title="Intro", link="https://example.test/kept")
+    incoming = ChapterMark(audio=audio, start="00:00:00", title="Renamed", link=None)
+
+    ChapterMark.objects.sync_chaptermarks(audio, [incoming], update_urls=False)
+
+    old.refresh_from_db()
+    assert (old.title, old.link) == ("Renamed", "https://example.test/kept")
+    assert (incoming.pk, incoming.start, incoming.link) == (None, "00:00:00", None)
 
 
 @pytest.mark.django_db(transaction=True)

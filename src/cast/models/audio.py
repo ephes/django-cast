@@ -3,6 +3,7 @@ import logging
 import re
 import subprocess
 from collections.abc import Iterable
+from copy import deepcopy
 from datetime import time, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from pathlib import Path
@@ -12,6 +13,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.storage import Storage
 from django.db import models, router, transaction
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from model_utils.models import TimeStampedModel
 from taggit.managers import TaggableManager
@@ -351,6 +353,50 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
                 # Missing/unreadable current files must retire their previous size.
                 pass
 
+    def refresh_file_size_cache(self, *, using: str | None = None) -> bool:
+        """Probe file sizes and merge only the probed size keys into the stored row.
+
+        Storage is probed before the row lock. Under the lock, only formats whose
+        stored file name still equals the probed name get new size keys; titles,
+        replaced files and other metadata saved meanwhile are left untouched.
+        Returns whether the stored metadata changed.
+        """
+        probes: dict[str, tuple[str, int | None]] = {}
+        for audio_format in self.audio_formats:
+            field = getattr(self, audio_format)
+            size: int | None = None
+            if field:
+                try:
+                    size = field.size
+                except (OSError, ValueError):
+                    # Missing/unreadable current files must retire their previous size.
+                    size = None
+            probes[audio_format] = (field.name or "" if field else "", size)
+        using = using or router.db_for_write(Audio, instance=self)
+        with transaction.atomic(using=using):
+            rows = Audio.objects.using(using).filter(pk=self.pk)
+            # Lock the row before reading, like ChapterMarkManager.sync_chaptermarks.
+            if not rows.update(title=models.F("title")):
+                raise Audio.DoesNotExist
+            current = rows.values(*self.audio_formats, "data").get()
+            stored_data = current["data"] if isinstance(current["data"], dict) else {}
+            data = deepcopy(stored_data)
+            sizes = data.setdefault("size", {})
+            names = data.setdefault("size_file_names", {})
+            for audio_format, (name, size) in probes.items():
+                if (current[audio_format] or "") != name:
+                    continue  # replaced meanwhile; the replacing save owns that size
+                sizes.pop(audio_format, None)
+                names.pop(audio_format, None)
+                if name and size is not None:
+                    sizes[audio_format] = size
+                    names[audio_format] = name
+            changed = data != stored_data
+            if changed:
+                rows.update(data=data, modified=timezone.now())
+        self.data = data
+        return changed
+
     def get_file_size(self, audio_format: str) -> int:
         """Return a size bound to the current file name, without I/O on a cache hit."""
         file_field = getattr(self, audio_format)
@@ -399,8 +445,17 @@ def sync_chapter_marks(
         else:
             cm_from_db = start_from_database[cm.start]
             if cm.has_changed(cm_from_db):
-                cm.pk = cm_from_db.pk  # to be able to just call cm.save() later on
-                to_update.append(cm)
+                # A separate instance keeps the stored pk off the caller's input.
+                to_update.append(
+                    ChapterMark(
+                        pk=cm_from_db.pk,
+                        audio_id=cm.audio_id,
+                        start=cm.start,
+                        title=cm.title,
+                        link=cm.link,
+                        image=cm.image,
+                    )
+                )
     to_remove = [cm for cm in from_database if cm.start not in start_from_cms]
     return to_add, to_update, to_remove
 
@@ -410,14 +465,19 @@ class ChapterMarkManager(models.Manager):
     def sync_chaptermarks(
         audio: Audio, from_cms: list["ChapterMark"], *, update_urls: bool = True, using: str | None = None
     ) -> None:
+        # Persist separate instances: a rolled-back write must not leave pks,
+        # normalized starts or stored URLs on the caller's (retryable) inputs.
+        start_field = ChapterMark._meta.get_field("start")
+        pending: list[ChapterMark] = []
         starts = set()
         for cm in from_cms:
             if cm.audio_id != audio.pk:
                 raise ValueError("Chapter marks must belong to the synchronized audio")
-            cm.start = ChapterMark._meta.get_field("start").to_python(cm.start)
-            if cm.start in starts:
+            start = start_field.to_python(cm.start)
+            if start in starts:
                 raise ValueError("Duplicate chapter start")
-            starts.add(cm.start)
+            starts.add(start)
+            pending.append(ChapterMark(audio_id=audio.pk, start=start, title=cm.title, link=cm.link, image=cm.image))
         using = using or router.db_for_write(Audio, instance=audio)
         with transaction.atomic(using=using):
             # A no-op UPDATE takes a row lock on PostgreSQL and a write lock on
@@ -427,10 +487,10 @@ class ChapterMarkManager(models.Manager):
             from_db = list(ChapterMark.objects.using(using).filter(audio_id=audio.pk))
             if not update_urls:
                 by_start = {cm.start: cm for cm in from_db}
-                for cm in from_cms:
+                for cm in pending:
                     if cm.start in by_start:
                         cm.link, cm.image = by_start[cm.start].link, by_start[cm.start].image
-            to_add, to_update, to_remove = sync_chapter_marks(from_db, from_cms)
+            to_add, to_update, to_remove = sync_chapter_marks(from_db, pending)
             for cm in to_add + to_update:
                 cm.save(using=using)
             for cm in to_remove:

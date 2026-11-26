@@ -19,6 +19,11 @@ update the cache in bulk:
 2. Select the audio objects to update
 3. Choose "Cache file sizes" from the action dropdown
 
+The action probes storage first and then writes only the ``size`` and
+``size_file_names`` entries of formats whose stored file name is unchanged.
+Titles, replaced files and other metadata saved by an editor while the action
+runs are kept.
+
 .. image:: ../images/cache_file_sizes_admin_action.png
    :width: 800
    :alt: Show the admin action to update the file size cache
