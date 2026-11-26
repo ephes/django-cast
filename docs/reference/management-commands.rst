@@ -414,11 +414,14 @@ Backup and restore reserve keys ending in
 sync and replacement data. Backup and restore also recognize legacy
 ``.django-cast-replace-<32 lowercase hexadecimal characters>.tmp`` keys. Both
 patterns allow Django-generated ``_<alphanumeric>`` suffixes before ``.tmp``.
-If a backend returns an unreserved staging name, publication fails and cleanup
-attempts to remove the stage. Reserved source keys are skipped in every sync
-mode and reported by name. They remain on the source storage. Similar names outside this precise pattern remain
-ordinary media. Inspect leftovers before removing them manually; arbitrary
-backend-renamed temporary keys from older versions require manual inspection too.
+For backup, restore, and replacement, a backend must return the requested staging
+key, allowing Django's relative-path normalization and an alphanumeric rename
+before ``.tmp`` or before the full compound extension. Publication reports any
+other receipt as an error, leaves that key untouched, and attempts to clean up
+the requested stage. Reserved source keys are skipped in every sync mode and
+reported by name. They remain on the source storage. Similar names outside this
+precise pattern remain ordinary media. Inspect reported leftovers before
+removing them manually.
 
 media_restore
 -------------
@@ -479,9 +482,10 @@ requested path; if the backend auto-generates a different name, the generated
 file is removed, the original path is left untouched, and the path is reported
 as an error.
 
-A failed replacement does not stop the run: the remaining paths are still
-attempted. If the published object cannot be read back or its bytes differ,
-the command reports the verified staging key it retained for recovery.
+A replacement error leaves the remaining paths eligible for processing. If an
+overwrite raises, including on cancellation or when closing the staging reader,
+the command reports the verified staging key it retained for recovery. It also
+retains the stage if the published object cannot be read back or its bytes differ.
 Inspect that key before retrying or deleting it manually. Other staging keys
 are cleaned up, including partial writes whose save failed before returning a
 name. Cleanup failures are reported separately. After printing the summary, the

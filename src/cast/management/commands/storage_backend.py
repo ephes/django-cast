@@ -10,7 +10,7 @@ from collections.abc import Callable, Generator, Iterator
 from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
 from io import BufferedReader, RawIOBase
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from time import monotonic
 from typing import Any
 from uuid import uuid4
@@ -177,6 +177,23 @@ def temporary_refresh_path(path: str) -> str:
 
 def is_media_staging_key(path: str) -> bool:
     return re.search(r"\.django-cast-(?:refresh|replace)-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
+
+
+def validate_media_stage_receipt(requested: str, returned: str) -> None:
+    """Allow the requested key and Django's alphanumeric rename of that key."""
+    if returned == requested:
+        return
+    # FileSystemStorage returns a normalized relative path.
+    normalized = PurePosixPath(requested.replace("\\", "/")).as_posix()
+    if returned == normalized:
+        return
+    for key in {requested, normalized}:
+        # Django's default Storage may preserve the entire compound extension.
+        for extension in (".tmp", "".join(PurePosixPath(key).suffixes)):
+            stem = re.escape(key.removesuffix(extension))
+            if re.fullmatch(rf"{stem}_[A-Za-z0-9]+{re.escape(extension)}", returned):
+                return
+    raise RuntimeError(f"storage returned unowned staging key {returned}")
 
 
 def has_gzip_encoding(handle: Any) -> bool:
@@ -351,11 +368,10 @@ def publish_staged_file(
     try:
         with open_media_for_save(source_storage, path) as in_f:
             staged_name = target_storage.save(requested_stage, in_f)
-        staged_names.add(staged_name)
+            validate_media_stage_receipt(requested_stage, staged_name)
+            staged_names.add(staged_name)
         if not target_storage.exists(staged_name):
             raise RuntimeError(f"staged copy {staged_name} was not saved")
-        if not is_media_staging_key(staged_name):
-            raise RuntimeError(f"storage returned non-reserved staging key {staged_name}")
         if content_digest(target_storage, staged_name) != source_before:
             raise RuntimeError(f"staged copy {staged_name} failed content verification")
         if content_digest(source_storage, path) != source_before:

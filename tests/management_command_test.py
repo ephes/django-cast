@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 from django.core.files.base import ContentFile
-from django.core.files.storage import storages
+from django.core.files.storage import FileSystemStorage, storages
 from django.core.management import CommandError, call_command
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
@@ -329,14 +329,16 @@ def test_media_backup_refresh_keeps_backup_copy_when_staged_copy_is_missing(mock
     production = StubOverwriteStorage({"video.mp4": b"new!"})
     backup = StubOverwriteStorage({"video.mp4": b"old!"})
     patch_backup_storages(mocker, production, backup)
-    mocker.patch.object(backup, "save", return_value="missing-stage.tmp")
+    stage = "video.mp4.django-cast-refresh-" + "a" * 32 + ".tmp"
+    mocker.patch("cast.management.commands.storage_backend.temporary_refresh_path", return_value=stage)
+    mocker.patch.object(backup, "save", return_value=stage)
     error_output = StringIO()
 
     with pytest.raises(CommandError):
         call_command("media_backup", refresh_changed=True, stdout=StringIO(), stderr=error_output)
 
     assert backup._files == {"video.mp4": b"old!"}
-    assert "error syncing video.mp4: staged copy missing-stage.tmp was not saved" in error_output.getvalue()
+    assert f"error syncing video.mp4: staged copy {stage} was not saved" in error_output.getvalue()
 
 
 @pytest.mark.parametrize("generated_copy_exists", [True, False])
@@ -504,6 +506,24 @@ def test_media_replace_yes_saves_when_target_is_missing_in_production(mocker):
 
     assert production.saved[-1] == "foo.jpg"
     assert production._files["foo.jpg"] == b"new"
+
+
+def test_media_replace_accepts_filesystem_normalized_stage_for_missing_target(mocker, tmp_path):
+    local_path = tmp_path / "local"
+    local_path.mkdir()
+    (local_path / "foo.jpg").write_bytes(b"replacement")
+    local = FileSystemStorage(location=local_path)
+    production_path = tmp_path / "production"
+    production = FileSystemStorage(location=production_path)
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage", return_value=(production, object())
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+
+    call_command("media_replace", "./foo.jpg", yes=True, stdout=StringIO(), stderr=StringIO())
+
+    assert (production_path / "foo.jpg").read_bytes() == b"replacement"
+    assert sorted(path.name for path in production_path.iterdir()) == ["foo.jpg"]
 
 
 def test_media_replace_without_yes_and_only_missing_paths_does_not_error(mocker):
@@ -774,6 +794,7 @@ def test_media_replace_continues_after_failure_and_exits_nonzero(mocker):
 
     def fail_final_save_of_bad(path, content):
         if path == "bad.jpg":
+            production.add(path, content.read(3))
             raise RuntimeError("boom")
         return original_save(path, content)
 
@@ -785,13 +806,43 @@ def test_media_replace_continues_after_failure_and_exits_nonzero(mocker):
     # the failure is reported through the exit status, not swallowed
     assert err.value.returncode == 1
     # the independent replacement after the failure was still attempted and succeeded
-    assert production._files == {"bad.jpg": b"old bad", "good.jpg": b"new good"}
-    # both staged objects were cleaned up
-    assert len(production.deleted) == 2
-    assert all(".django-cast-refresh-" in path for path in production.deleted)
+    bad_stage, good_stage, _ = production.saved
+    assert production._files == {"bad.jpg": b"new", "good.jpg": b"new good", bad_stage: b"new bad"}
+    assert production.deleted == [good_stage]
+    assert f"complete recovery copy retained at {bad_stage}" in error_output.getvalue()
     assert "error replacing bad.jpg: boom" in error_output.getvalue()
     assert "replaced: good.jpg" in output.getvalue()
     assert "planned=2 replaced=1 skipped=0 errors=1" in output.getvalue()
+
+
+@pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt])
+def test_media_replace_retains_stage_when_final_reader_closes_with_error(mocker, failure):
+    path = "foo.jpg"
+    production = StubProductionStorage()
+    production.add(path, b"old")
+    local = StubLocalStorage({path: b"replacement"})
+    mocker.patch(
+        "cast.management.commands.media_replace.get_production_and_backup_storage", return_value=(production, object())
+    )
+    mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
+    original_open = production.open
+
+    @contextmanager
+    def open_file(name, mode):
+        with original_open(name, mode) as stream:
+            yield stream
+        if production.saved[-1] == path:
+            raise failure("close failed")
+
+    mocker.patch.object(production, "open", side_effect=open_file)
+    errors = StringIO()
+    expected = KeyboardInterrupt if failure is KeyboardInterrupt else CommandError
+    with pytest.raises(expected):
+        call_command("media_replace", path, yes=True, stdout=StringIO(), stderr=errors)
+
+    stage = production.saved[0]
+    assert production._files[stage] == b"replacement"
+    assert f"complete recovery copy retained at {stage}" in errors.getvalue()
 
 
 def test_media_replace_errors_when_staged_replacement_is_missing(mocker):
@@ -804,12 +855,14 @@ def test_media_replace_errors_when_staged_replacement_is_missing(mocker):
         return_value=(production, object()),
     )
     mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=local)
-    mocker.patch.object(production, "save", return_value="missing-stage.tmp")
+    stage = "foo.jpg.django-cast-refresh-" + "a" * 32 + ".tmp"
+    mocker.patch("cast.management.commands.media_replace.temporary_refresh_path", return_value=stage)
+    mocker.patch.object(production, "save", return_value=stage)
 
     with pytest.raises(CommandError, match=r"1 of 1 replacement\(s\) failed"):
         call_command("media_replace", "foo.jpg", yes=True, stdout=output, stderr=error_output)
 
-    assert "error replacing foo.jpg: staged replacement missing-stage.tmp was not saved" in error_output.getvalue()
+    assert f"error replacing foo.jpg: staged replacement {stage} was not saved" in error_output.getvalue()
     assert "planned=1 replaced=0 skipped=0 errors=1" in output.getvalue()
 
 
@@ -848,8 +901,8 @@ def test_media_replace_verifies_staged_and_published_bytes(mocker, failure):
 
     stage = production.saved[0]
     if failure == "non-reserved stage":
-        assert "storage returned non-reserved staging key unexpected.tmp" in errors.getvalue()
-        assert production._files == {"foo.jpg": b"old"}
+        assert "storage returned unowned staging key unexpected.tmp" in errors.getvalue()
+        assert production._files == {"foo.jpg": b"old", "unexpected.tmp": b"replacement"}
     elif failure == "stage truncation":
         assert "failed content verification" in errors.getvalue()
         assert production._files == {"foo.jpg": b"old"}
