@@ -360,7 +360,7 @@ def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _S
     replaced; its decisions are not carried over.
     """
     _uses_audio(episode, transcript)
-    podlove_data, _ = _admit_correction_artifacts(transcript)
+    podlove_data = _admit_correction_artifacts(transcript)[0]
     data = transcript.corrections_data
     if _has_current_correction_data(data, transcript.mapping_fingerprint(), for_edit=True):
         previously = {segment["start_ms"] for segment in data["segments"] if segment["replacements"]}
