@@ -51,6 +51,16 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Stop asking the media storage for every enclosure size on each podcast feed
+  render. Sizes cached before 0.2.68 carry no file name, so since then every
+  feed cache miss, Podlove player payload and transcript page read each audio
+  size from storage again (one S3 ``HEAD`` per episode and format; about 1.5 s
+  per uncached feed on a 70-episode podcast). A size read from storage is now
+  stored with its file name the first time, so these audios heal on first use
+  without a data migration. The write runs after the request's transaction
+  commits, only while the audio still has that file and no size bound to it,
+  and sends no save signals.
+
 - Preserve literal arrows (``-->``) in WebVTT text when manually correcting a
   passage, matching the stored Podlove and DOTe text.
 

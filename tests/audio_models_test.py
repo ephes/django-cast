@@ -3,6 +3,8 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from django.core.files.storage import FileSystemStorage
+from django.db import DatabaseError
 
 from cast.media_derivation import save_audio_with_derivations
 from cast.models.audio import Audio, ChapterMark, sync_chapter_marks
@@ -241,6 +243,88 @@ class TestAudioModel:
         # when file field is null, return 0
         audio.mp3 = None
         assert audio.get_file_size("mp3") == 0
+
+    def test_unbound_cached_size_heals_after_one_storage_read(self, audio, mocker, django_capture_on_commit_callbacks):
+        # Sizes cached before 0.2.68 carry no file name and used to cost one
+        # storage request (an S3 HEAD) per feed item on every render.
+        expected_size = audio.m4a.size
+        Audio.objects.filter(pk=audio.pk).update(data={"size": {"m4a": 1}, "other": "kept"})
+        storage_size = mocker.spy(FileSystemStorage, "size")
+
+        with django_capture_on_commit_callbacks(execute=True) as callbacks:
+            assert Audio.objects.get(pk=audio.pk).get_file_size("m4a") == expected_size
+        assert len(callbacks) == 1
+        assert storage_size.call_count == 1
+
+        stored = Audio.objects.get(pk=audio.pk)
+        assert stored.data == {
+            "size": {"m4a": expected_size},
+            "size_file_names": {"m4a": audio.m4a.name},
+            "other": "kept",
+        }
+        assert stored.get_file_size("m4a") == expected_size
+        assert storage_size.call_count == 1
+
+    def test_remembered_size_waits_for_the_commit(self, audio, django_capture_on_commit_callbacks):
+        Audio.objects.filter(pk=audio.pk).update(data={})
+        reader = Audio.objects.get(pk=audio.pk)
+
+        with django_capture_on_commit_callbacks(execute=False) as callbacks:
+            reader.get_file_size("m4a")
+
+        assert len(callbacks) == 1
+        assert Audio.objects.get(pk=audio.pk).data == {}
+
+    def test_remembered_size_skips_a_replaced_file(self, audio, django_capture_on_commit_callbacks):
+        stale = Audio.objects.get(pk=audio.pk)
+        stale.data = {}
+        Audio.objects.filter(pk=audio.pk).update(m4a="cast_audio/replacement.m4a", data={})
+
+        with django_capture_on_commit_callbacks(execute=True):
+            stale._remember_file_size("m4a", audio.m4a.name, 42)
+
+        assert Audio.objects.get(pk=audio.pk).data == {}
+        assert stale.data == {"size": {"m4a": 42}, "size_file_names": {"m4a": audio.m4a.name}}
+
+    def test_remembered_size_keeps_a_size_derivation_stored_meanwhile(self, audio, django_capture_on_commit_callbacks):
+        derived = {"size": {"m4a": 5}, "size_file_names": {"m4a": audio.m4a.name}, "other": "kept"}
+        Audio.objects.filter(pk=audio.pk).update(data=derived)
+        stale = Audio.objects.get(pk=audio.pk)
+        stale.data = {}
+
+        with django_capture_on_commit_callbacks(execute=True):
+            stale._remember_file_size("m4a", audio.m4a.name, 42)
+
+        assert Audio.objects.get(pk=audio.pk).data == derived
+
+    def test_uncommitted_upload_size_is_not_cached(self, audio, m4a_audio, django_capture_on_commit_callbacks):
+        reader = Audio.objects.get(pk=audio.pk)
+        reader.data = {}
+        reader.m4a = m4a_audio  # a pending upload, not yet in storage
+
+        with django_capture_on_commit_callbacks(execute=True) as callbacks:
+            assert reader.get_file_size("m4a") == m4a_audio.size
+
+        assert callbacks == []
+        assert reader.data == {}
+
+    def test_unsaved_audio_caches_its_size_only_in_memory(self, audio, django_capture_on_commit_callbacks):
+        unsaved = Audio(user=audio.user, m4a=audio.m4a.name)
+
+        with django_capture_on_commit_callbacks(execute=True) as callbacks:
+            assert unsaved.get_file_size("m4a") == audio.m4a.size
+
+        assert callbacks == []
+        assert unsaved.data["size_file_names"] == {"m4a": audio.m4a.name}
+
+    def test_remember_file_size_survives_a_database_error(self, audio, mocker, django_capture_on_commit_callbacks):
+        mocker.patch("django.db.models.query.QuerySet.update", side_effect=DatabaseError("read-only"))
+        audio.data = {}
+
+        with django_capture_on_commit_callbacks(execute=True):
+            assert audio.get_file_size("m4a") == audio.m4a.size
+
+        assert audio.data["size_file_names"] == {"m4a": audio.m4a.name}
 
     def test_save_without_cache_file_sizes(self, audio, mocker):
         mocker.patch("cast.models.audio.TimeStampedModel.save")

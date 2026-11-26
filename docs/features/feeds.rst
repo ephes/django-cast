@@ -92,8 +92,11 @@ For example, an MP3-only episode remains in the MP3 subscription and is absent
 from the M4A subscription. A missing format does not break the entire feed;
 Wagtail view restrictions continue to exclude private episodes. Selection uses
 the stored file field without a storage existence request per entry. Size
-metadata is refreshed by normal audio derivation; missing/unreadable stored files
-report zero bytes after refresh (see :doc:`/media/audio-and-transcripts`).
+metadata is refreshed by normal audio derivation. A size not yet bound to the
+current file name is read from storage and, when that read succeeds, cached, so
+later feed renders do not issue a storage request per enclosure. A failed lookup
+reports zero bytes and is retried on the next render; a cached size stays in use
+until derivation refreshes it (see :doc:`/media/audio-and-transcripts`).
 
 Feed Fields
 ===========
