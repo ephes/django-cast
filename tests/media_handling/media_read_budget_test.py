@@ -184,6 +184,37 @@ def test_refresh_requires_complete_reported_source_extent(reported_size):
         assert f"read 6 bytes, expected {reported_size}" in errors[0]
 
 
+@pytest.mark.parametrize("encoding", ["gzip", "identity", None])
+def test_extent_check_skips_streams_decoded_from_their_stored_encoding(encoding):
+    class Obj:
+        content_encoding = encoding
+
+    class EncodedStorage(StubOverwriteStorage):
+        # Like S3 with gzip: size() is the stored (encoded) length, open() yields decoded bytes.
+        def size(self, name):
+            return super().size(name) + 20
+
+        @contextmanager
+        def open(self, name, mode):
+            with super().open(name, mode) as stream:
+                stream.obj = Obj()
+                yield stream
+
+    path = "image.svg"
+    source = StubOverwriteStorage({path: b"<svg>new</svg>"})
+    target = EncodedStorage({path: b"<svg>old</svg>"})
+    errors = []
+    result = media.sync_media_files(source, target, refresh_changed=True, report_error=errors.append)
+
+    if encoding == "gzip":
+        assert (result.refreshed, result.errors) == (1, 0)
+        assert target._files[path] == b"<svg>new</svg>"
+    else:
+        assert (result.refreshed, result.errors) == (0, 1)
+        assert any("media extent mismatch" in message for message in errors)
+        assert target._files[path] == b"<svg>old</svg>"
+
+
 def test_matching_final_digest_cannot_hide_truncated_final_extent(mocker):
     path = "media"
     source = StubOverwriteStorage({path: b"new"})

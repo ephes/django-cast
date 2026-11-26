@@ -356,7 +356,8 @@ Options:
     about 68 minutes); for save streams only the time spent opening and
     reading the stream counts, not the backend's upload work between reads.
     Exceeding it reports a path error. Digests also require agreement with
-    the reported object size when available.
+    the reported object size when available, except for streams that decode
+    a stored content encoding such as gzip.
     See :doc:`../operations/backup` for inventory limits, synchronous I/O
     limitations and the same-host publication concurrency contract.
 

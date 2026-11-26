@@ -96,7 +96,9 @@ Oversized, growing or delayed streams can exhaust the budget during
 comparison, verification or transfer and cause an explicit path error. A
 digest is only accepted if the complete stream's byte count matches the
 size reported by storage when available. Backends without size metadata
-still use bounded reads. A refused comparison never counts as unchanged.
+still use bounded reads, and so do streams that decode a stored content
+encoding (for example gzip-encoded S3 objects, whose reported size is the
+encoded length). A refused comparison never counts as unchanged.
 The deadline is checked around synchronous reads; configure backend I/O timeouts
 as well, since Python cannot interrupt an individual blocked storage call.
 Save reads use the same byte ceiling and size-scaled time allowance for both

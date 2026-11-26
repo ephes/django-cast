@@ -172,9 +172,17 @@ def is_media_staging_key(path: str) -> bool:
     return re.search(r"\.django-cast-(?:refresh|replace)-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
 
 
+def is_transparently_decoded(stream: Any) -> bool:
+    """Whether an opened stream decodes a stored content encoding (e.g. gzip on S3)."""
+    encoding = getattr(getattr(stream, "obj", None), "content_encoding", None)
+    return isinstance(encoding, str) and encoding.strip().lower() not in ("", "identity")
+
+
 def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -> Generator[bytes, None, None]:
     budget.check_time()
     with storage.open(path, "rb") as in_f:
+        if budget.expected_size is not None and is_transparently_decoded(in_f):
+            budget.expected_size = None  # The reported size is the encoded length, not the decoded bytes.
         while True:
             chunk = budget.read_chunk(in_f)
             if not chunk:
