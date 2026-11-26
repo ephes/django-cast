@@ -926,7 +926,8 @@ that should always be fixed to the glossary.
 Every corrected start time must occur exactly once in each attached format.
 If a timestamp is missing or ambiguous, or a matching WebVTT cue has
 unsupported formatting, the refresh stops before writing any artifacts or
-correction decisions.
+correction decisions. Preview and apply also reject duplicate Podlove starts
+anywhere in the file, including passages outside the requested corrections.
 
 After editing the glossary, re-apply it:
 

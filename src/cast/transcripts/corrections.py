@@ -337,6 +337,22 @@ def _fresh_data(transcript: Transcript, texts: Iterable[tuple[int, str]]) -> dic
     }
 
 
+def _start_counts(records: object, get_start: Callable[[dict[str, Any]], int | None]) -> Counter[int]:
+    if not isinstance(records, list):
+        return Counter()
+    return Counter(start for row in records if isinstance(row, dict) and (start := get_start(row)) is not None)
+
+
+def _admit_correction_artifacts(transcript: Transcript) -> tuple[dict[str, Any], Counter[int]]:
+    services.validate_editor_artifacts(transcript)
+    data = transcript._load_transcript_json("podlove")
+    podlove.validate_edit_times(data)
+    counts = _start_counts(data.get("transcripts"), podlove.segment_start_ms)
+    if any(count > 1 for count in counts.values()):
+        raise ValidationError(_("Podlove has ambiguous start times. Replace the artifact and reload."))
+    return data, counts
+
+
 def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _State | CorrectionsResult:
     """The current sidecar, or a fresh one with the current Podlove text as raw text.
 
@@ -344,9 +360,7 @@ def _load_state(transcript: Transcript, *, episode: Episode | None = None) -> _S
     replaced; its decisions are not carried over.
     """
     _uses_audio(episode, transcript)
-    services.validate_editor_artifacts(transcript)
-    podlove_data = transcript._load_transcript_json("podlove")
-    podlove.validate_edit_times(podlove_data)
+    podlove_data, _ = _admit_correction_artifacts(transcript)
     data = transcript.corrections_data
     if _has_current_correction_data(data, transcript.mapping_fingerprint(), for_edit=True):
         previously = {segment["start_ms"] for segment in data["segments"] if segment["replacements"]}
@@ -506,42 +520,40 @@ def corrected_texts(data: dict[str, Any], start_milliseconds: Iterable[int] | No
     return texts
 
 
-def _validate_destination_times(transcript: Transcript, texts: dict[int, str]) -> None:
-    """Preflight destination correspondence before staging any replacement files."""
+def _prepare_correction_destinations(
+    transcript: Transcript, texts: dict[int, str], podlove_counts: Counter[int], dote_data: dict[str, Any]
+) -> tuple[str, int]:
+    """Check each destination and return the prepared WebVTT content and change count."""
     if not texts:
-        return
-    for name, key, get_start in (
-        ("podlove", "transcripts", podlove.segment_start_ms),
-        ("dote", "lines", lambda line: dote.dote_timestamp_to_ms(line.get("startTime"))),
-    ):
-        if getattr(transcript, name):
-            records = transcript._load_transcript_json(name).get(key)
-            counts = (
-                Counter(get_start(row) for row in records if isinstance(row, dict))
-                if isinstance(records, list)
-                else Counter()
-            )
-            if any(counts[start] > 1 for start in texts):
-                raise ValidationError(_("Correction destination has ambiguous start times."))
-            if texts.keys() - counts.keys():
-                raise ValidationError(_("Correction destination has missing start times."))
-    try:
-        if transcript.vtt:
-            webvtt.set_texts_in_content(transcript._load_text_file("vtt"), texts, require_all=True)
-    except ValueError as exc:
-        raise ValidationError(str(exc)) from exc
+        return "", 0
+    if transcript.podlove and texts.keys() - podlove_counts.keys():
+        raise ValidationError(_("Correction destination has missing start times."))
+    if transcript.dote:
+        counts = _start_counts(dote_data.get("lines"), lambda line: dote.dote_timestamp_to_ms(line.get("startTime")))
+        if any(counts[start] > 1 for start in texts):
+            raise ValidationError(_("Correction destination has ambiguous start times."))
+        if texts.keys() - counts.keys():
+            raise ValidationError(_("Correction destination has missing start times."))
+    if transcript.vtt:
+        try:
+            return webvtt.set_texts_in_content(transcript._load_text_file("vtt"), texts, require_all=True)
+        except ValueError as exc:
+            raise ValidationError(str(exc)) from exc
+    return "", 0
 
 
-def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) -> int:
-    """Store the sidecar and the corrected public files in one staged replacement."""
-    services.validate_editor_artifacts(transcript)
-    podlove.validate_edit_times(transcript._load_transcript_json("podlove"))
-    _validate_destination_times(transcript, texts)
+def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str], *, dry_run: bool = False) -> int:
+    """Count changes after admission and stage the sidecar and public files on apply."""
+    podlove_data, podlove_counts = _admit_correction_artifacts(transcript)
+    dote_data = transcript._load_transcript_json("dote") if texts else {}
+    vtt_content, cues_changed = _prepare_correction_destinations(transcript, texts, podlove_counts, dote_data)
+    changed = podlove.set_texts(podlove_data, texts)
+    if dry_run:
+        return changed
     expected = services.artifact_state(transcript)
     if not transcript.source_fingerprint:
         transcript.mark_artifacts_received()
     changed_fields: list[str] = []
-    changed = 0
     replacements = StagedFileReplacementGroup()
 
     def save_with_current_glossary(instance: Transcript, **kwargs: Any) -> None:
@@ -555,20 +567,15 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) 
         if data != transcript.corrections_data:
             transcript._write_corrections_data(data, replacements=replacements)
             changed_fields.append("corrections")
-        podlove_data = transcript._load_transcript_json("podlove")
-        changed = podlove.set_texts(podlove_data, texts)
         if changed:
             transcript._write_transcript_json("podlove", podlove_data, replacements=replacements)
             changed_fields.append("podlove")
-        dote_data = transcript._load_transcript_json("dote")
         if dote.set_texts(dote_data, texts):
             transcript._write_transcript_json("dote", dote_data, replacements=replacements)
             changed_fields.append("dote")
-        if transcript.vtt:
-            content, cues = webvtt.set_texts_in_content(transcript._load_text_file("vtt"), texts)
-            if cues:
-                transcript._save_text_file("vtt", content, replacements=replacements)
-                changed_fields.append("vtt")
+        if cues_changed:
+            transcript._save_text_file("vtt", vtt_content, replacements=replacements)
+            changed_fields.append("vtt")
         if changed_fields:
             services.save_editor_artifacts(transcript, replacements, expected, save=save_with_current_glossary)
     except Exception:
@@ -605,11 +612,7 @@ def _commit(transcript: Transcript, state: _State, *, dry_run: bool = False) -> 
     }
     corrected |= {int(start) for start in data.get("manual_texts", {})}
     texts = corrected_texts(data, corrected)
-    if dry_run:
-        _validate_destination_times(transcript, texts)
-        changed = podlove.set_texts(transcript._load_transcript_json("podlove"), texts)
-    else:
-        changed = _write(transcript, data, texts)
+    changed = _write(transcript, data, texts, dry_run=dry_run)
     states = [item["state"] for segment in data["segments"] for item in segment["replacements"]]
     return CorrectionsResult(
         STATUS_APPLIED,

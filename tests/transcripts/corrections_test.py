@@ -197,6 +197,21 @@ def test_apply_rewrites_public_files_from_the_sidecar(transcript):
 
 
 @pytest.mark.django_db
+def test_apply_refuses_missing_podlove_destination_in_current_sidecar(transcript, mocker):
+    refresh_transcript_corrections(transcript)
+    transcript._write_transcript_json("podlove", podlove_data(TEXTS[1:]))
+    transcript.save(preserve_source_fingerprint=True)
+    before = file_bytes(transcript)
+    storage_save = mocker.spy(transcript.corrections.storage, "save")
+
+    with pytest.raises(ValidationError, match="missing start times"):
+        apply_transcript_corrections(transcript)
+
+    storage_save.assert_not_called()
+    assert file_bytes(transcript) == before
+
+
+@pytest.mark.django_db
 def test_apply_without_current_sidecar_does_nothing(transcript):
     assert apply_transcript_corrections(transcript) == 0
 
@@ -1253,6 +1268,28 @@ def test_legacy_dry_run_has_no_database_or_storage_writes(transcript, django_ass
     transcript.refresh_from_db()
     assert transcript.source_fingerprint == raw_fingerprint == transcript.corrections_data["source_fingerprint"]
     assert refresh_transcript_corrections(transcript).changed == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_legacy_duplicate_podlove_starts_refuse_before_staging(transcript, mocker, dry_run):
+    data = podlove_data()
+    data["transcripts"].append({"start": "00:00:10.000", "text": "Conflicting raw text."})
+    transcript._write_transcript_json("podlove", data)
+    transcript.save()
+    Transcript.objects.filter(pk=transcript.pk).update(source_fingerprint="")
+    before = file_bytes(transcript)
+    state = corrections.services.artifact_state(transcript)
+    storage_save = mocker.spy(transcript.corrections.storage, "save")
+    staging = mocker.spy(corrections, "StagedFileReplacementGroup")
+
+    with pytest.raises(ValidationError, match="Podlove.*ambiguous start times"):
+        refresh_transcript_corrections(transcript, dry_run=dry_run)
+
+    staging.assert_not_called()
+    storage_save.assert_not_called()
+    assert file_bytes(transcript) == before
+    assert corrections.services.artifact_state(transcript) == state
 
 
 @pytest.mark.django_db(databases=["default", "migration_other"])

@@ -246,6 +246,8 @@ Fixes
 - Refresh transcripts in bounded batches when running ``apply_transcript_glossary --all``.
 - Reject glossary corrections before writing if an attached format is missing a
   corrected start time, repeats it, or has an uneditable WebVTT cue at that time.
+- Use the same artifact validation for glossary previews and writes, and reject
+  duplicate Podlove start times in both modes.
 
 - Run every quickstart child with the generated settings and project import path.
 - Refuse automatic episode numbering when the next counter would exceed the portable field limit, with a field error in the Wagtail page editor and the editor API.
