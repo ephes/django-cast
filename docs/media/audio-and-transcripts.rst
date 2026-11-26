@@ -1333,7 +1333,9 @@ without a file identity) the size is read from storage, and a successful read of
 a stored (not pending) file is cached with the file name it was read from. A
 pending upload always reports its own byte count and is never cached. The cache
 write runs after the surrounding transaction commits, in its own short
-transaction on the database the audio was loaded from. It only writes while the
+transaction on the database the audio was loaded from; an audio read from a
+database the router does not send writes to (a read replica) is not healed, so
+such setups should run size derivation once instead. It only writes while the
 row is unchanged since the audio was loaded (same ``modified`` timestamp, so no
 size derivation ran in between), still holds that file name and has no size
 bound to it yet; a row locked by another transaction is skipped rather than
