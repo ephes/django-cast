@@ -531,6 +531,8 @@ def test_new_source_starts_a_fresh_sidecar(transcript):
     decide_correction_group(transcript, "Buttondown", STATE_APPROVED)
     new_texts = [(20000, "John is back.")]
     transcript.podlove.save("new.podlove.json", ContentFile(json.dumps(podlove_data(new_texts)).encode()), save=False)
+    transcript._write_transcript_json("dote", dote_data(new_texts))
+    transcript._save_text_file("vtt", vtt_content(new_texts))
     transcript.save()
     assert transcript.source_fingerprint != transcript.corrections_data["source_fingerprint"]
 
@@ -1382,6 +1384,33 @@ def test_ambiguous_destination_refuses_before_staging(transcript, destination, m
     storage_save.assert_not_called()
     assert file_bytes(transcript) == before
     assert transcript.source_fingerprint == fingerprint
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize(
+    ("destination", "error"),
+    [("dote", "missing start times"), ("vtt_missing", "missing start times"), ("vtt_markup", "WebVTT passage")],
+)
+def test_incomplete_destination_refuses_before_staging(transcript, destination, error, dry_run, mocker):
+    if destination == "dote":
+        transcript._write_transcript_json("dote", dote_data(TEXTS[1:]))
+    elif destination == "vtt_missing":
+        transcript._save_text_file("vtt", vtt_content(TEXTS[1:]))
+    else:
+        content = vtt_content().replace(TEXTS[0][1], f"<i>{TEXTS[0][1]}</i>")
+        transcript._save_text_file("vtt", content)
+    transcript.save()
+    before = file_bytes(transcript)
+    state = corrections.services.artifact_state(transcript)
+    storage_save = mocker.spy(transcript.corrections.storage, "save")
+
+    with pytest.raises(ValidationError, match=error):
+        refresh_transcript_corrections(transcript, dry_run=dry_run)
+
+    storage_save.assert_not_called()
+    assert file_bytes(transcript) == before
+    assert corrections.services.artifact_state(transcript) == state
 
 
 @pytest.mark.django_db

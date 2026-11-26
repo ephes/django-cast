@@ -923,6 +923,11 @@ is kept). A new Voxhelm import or upload starts a fresh sidecar from the new
 text; earlier approvals and decisions are not carried over, so add misspellings
 that should always be fixed to the glossary.
 
+Every corrected start time must occur exactly once in each attached format.
+If a timestamp is missing or ambiguous, or a matching WebVTT cue has
+unsupported formatting, the refresh stops before writing any artifacts or
+correction decisions.
+
 After editing the glossary, re-apply it:
 
 .. code-block:: bash

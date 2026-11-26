@@ -417,8 +417,10 @@ def set_cue_text(lines: list[str], text: str) -> list[str] | None:
     return [f"{prefix}{escape_cue_text(text)}{suffix}{ending}"]
 
 
-def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> tuple[str, int]:
-    """Set the text of cues matched by start time; return the content and how many cues changed."""
+def set_texts_in_content(
+    content: str, texts_by_start_ms: Mapping[int, str], *, require_all: bool = False
+) -> tuple[str, int]:
+    """Set cue text by start time, optionally requiring an editable cue for every start."""
     rewritten_lines: list[str] = []
     payload_lines: list[str] | None = None
     text: str | None = None
@@ -432,6 +434,8 @@ def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> 
         lines = payload_lines
         if text is not None:
             new_lines = set_cue_text(lines, text)
+            if new_lines is None and require_all:
+                raise ValueError("Cannot update this WebVTT passage: check its timestamps and formatting.")
             if new_lines is not None and new_lines != lines:
                 lines = new_lines
                 changed += 1
@@ -455,6 +459,8 @@ def set_texts_in_content(content: str, texts_by_start_ms: Mapping[int, str]) -> 
         rewritten_lines.append(line)
 
     flush_payload()
+    if require_all and texts_by_start_ms.keys() - seen:
+        raise ValueError("Correction destination has missing start times.")
     return "".join(rewritten_lines), changed
 
 

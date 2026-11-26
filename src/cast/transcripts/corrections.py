@@ -29,6 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+from collections import Counter
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
@@ -507,12 +508,28 @@ def corrected_texts(data: dict[str, Any], start_milliseconds: Iterable[int] | No
 
 def _validate_destination_times(transcript: Transcript, texts: dict[int, str]) -> None:
     """Preflight destination correspondence before staging any replacement files."""
+    if not texts:
+        return
+    for name, key, get_start in (
+        ("podlove", "transcripts", podlove.segment_start_ms),
+        ("dote", "lines", lambda line: dote.dote_timestamp_to_ms(line.get("startTime"))),
+    ):
+        if getattr(transcript, name):
+            records = transcript._load_transcript_json(name).get(key)
+            counts = (
+                Counter(get_start(row) for row in records if isinstance(row, dict))
+                if isinstance(records, list)
+                else Counter()
+            )
+            if any(counts[start] > 1 for start in texts):
+                raise ValidationError(_("Correction destination has ambiguous start times."))
+            if texts.keys() - counts.keys():
+                raise ValidationError(_("Correction destination has missing start times."))
     try:
-        dote.set_texts(transcript._load_transcript_json("dote"), texts)
         if transcript.vtt:
-            webvtt.set_texts_in_content(transcript._load_text_file("vtt"), texts)
+            webvtt.set_texts_in_content(transcript._load_text_file("vtt"), texts, require_all=True)
     except ValueError as exc:
-        raise ValidationError(_("Correction destination has ambiguous start times.")) from exc
+        raise ValidationError(str(exc)) from exc
 
 
 def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str]) -> int:
