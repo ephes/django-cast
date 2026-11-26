@@ -7,7 +7,7 @@ import re
 import stat
 import tempfile
 from collections.abc import Callable, Generator, Iterator
-from contextlib import contextmanager, suppress
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
 from io import BufferedReader, RawIOBase
 from pathlib import Path
@@ -43,9 +43,9 @@ class MediaReadBudget:
     deadline: float = field(default_factory=lambda: monotonic() + MAX_MEDIA_READ_SECONDS)
     expected_size: int | None = None
 
-    @classmethod
-    def for_object(cls, storage: Storage, path: str) -> "MediaReadBudget":
-        """A fresh budget whose deadline scales with the reported object size."""
+    @staticmethod
+    def object_allowance(storage: Storage, path: str) -> tuple[int | None, int]:
+        """The reported object size (if usable) and the seconds a full read may take."""
         try:
             size = storage.size(path)
         except Exception:  # An unknown size keeps the base deadline.
@@ -54,6 +54,12 @@ class MediaReadBudget:
         # Beyond the byte ceiling more time cannot help: such a read is refused anyway.
         scaled = min(expected_size or 0, MAX_MEDIA_READ_BYTES)
         seconds = max(MAX_MEDIA_READ_SECONDS, math.ceil(scaled / MIN_MEDIA_READ_BYTES_PER_SECOND))
+        return expected_size, seconds
+
+    @classmethod
+    def for_object(cls, storage: Storage, path: str) -> "MediaReadBudget":
+        """A fresh budget whose deadline scales with the reported object size."""
+        expected_size, seconds = cls.object_allowance(storage, path)
         return cls(deadline=monotonic() + seconds, expected_size=expected_size)
 
     def check_time(self) -> None:
@@ -69,6 +75,43 @@ class MediaReadBudget:
     def read_chunk(self, stream: File, size: int = CONTENT_CHUNK_SIZE) -> bytes:
         self.consume(0)  # A backend retry cannot read past an exhausted budget.
         chunk: bytes = stream.read(min(size, CONTENT_CHUNK_SIZE, self.remaining + 1))
+        self.consume(len(chunk))
+        return chunk
+
+
+@dataclass
+class MediaSaveReadBudget(MediaReadBudget):
+    """Bytes and read time for one stream consumed by ``Storage.save()``.
+
+    Only time spent opening and inside the stream's own reads is charged. A
+    backend uploading between reads (multipart transfers, spooled uploads) is
+    not limited by this budget, so slow uplinks do not fail large transfers.
+    """
+
+    seconds: float = MAX_MEDIA_READ_SECONDS
+    spent: float = 0.0
+
+    @classmethod
+    def for_object(cls, storage: Storage, path: str) -> "MediaSaveReadBudget":
+        expected_size, seconds = cls.object_allowance(storage, path)
+        return cls(seconds=seconds, expected_size=expected_size)
+
+    def check_time(self) -> None:
+        if self.spent >= self.seconds:
+            raise MediaReadBudgetExceeded("media read exceeded time budget")
+
+    @contextmanager
+    def charged(self) -> Iterator[None]:
+        started = monotonic()
+        try:
+            yield
+        finally:
+            self.spent += monotonic() - started
+
+    def read_chunk(self, stream: File, size: int = CONTENT_CHUNK_SIZE) -> bytes:
+        self.consume(0)  # A backend retry cannot read past an exhausted budget.
+        with self.charged():
+            chunk: bytes = stream.read(min(size, CONTENT_CHUNK_SIZE, self.remaining + 1))
         self.consume(len(chunk))
         return chunk
 
@@ -102,9 +145,10 @@ class BudgetedMediaStream(RawIOBase):
 
 @contextmanager
 def open_media_for_save(storage: Storage, path: str) -> Iterator[File]:
-    budget = MediaReadBudget.for_object(storage, path)
-    budget.check_time()
-    with storage.open(path, "rb") as stream:
+    budget = MediaSaveReadBudget.for_object(storage, path)
+    with ExitStack() as stack:
+        with budget.charged():
+            stream = stack.enter_context(storage.open(path, "rb"))
         with BufferedReader(BudgetedMediaStream(stream, budget), buffer_size=CONTENT_CHUNK_SIZE) as bounded:
             yield File(bounded, name=path)
 

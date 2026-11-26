@@ -58,8 +58,9 @@ Fixes
   whose modification time could not be determined. Creation time alone can
   establish age when the backend explicitly lacks modification timestamps.
 - Reject media sync digests when the complete read disagrees with the reported
-  object size. Apply independent byte and time budgets to the reads that
-  supply both staging and final saves.
+  object size. Apply independent byte and read-time budgets to the reads that
+  supply both staging and final saves; backend upload time between those reads
+  is not charged.
 
 - Roll back editor post and episode creation if preparing the response fails,
   so the original slug can be retried.

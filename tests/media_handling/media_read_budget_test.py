@@ -277,17 +277,43 @@ def test_sync_streams_to_local_and_seekable_object_storage(tmp_path):
     assert restored._files == remote._files
 
 
-def test_save_read_refuses_after_its_deadline(mocker):
+def test_save_stream_refuses_when_its_reads_exceed_the_deadline(mocker):
     limits(mocker)
     now = [0.0]
     mocker.patch.object(media, "monotonic", side_effect=lambda: now[0], create=True)
 
-    class SlowTransferStorage(StubOverwriteStorage):
-        def save(self, name, content):
+    class SlowStream(BytesIO):
+        def read(self, size=-1):
             now[0] += 11
-            return super().save(name, content)
+            return super().read(size)
 
-    target = SlowTransferStorage()
-    result = media.sync_media_files(StubOverwriteStorage({"media": b"abc"}), target)
-    assert (result.copied, result.errors) == (0, 1)
-    assert target._files == {}
+    class SlowReadStorage(StubOverwriteStorage):
+        @contextmanager
+        def open(self, name, mode):
+            with super().open(name, mode) as stream:
+                yield File(SlowStream(stream.read()))
+
+    with media.open_media_for_save(SlowReadStorage({"media": b"abc"}), "media") as stream:
+        with pytest.raises(media.MediaReadBudgetExceeded, match="time budget"):
+            stream.read()
+
+
+def test_backend_upload_time_between_save_reads_is_not_charged(mocker):
+    limits(mocker, size=64)
+    now = [0.0]
+    mocker.patch.object(media, "monotonic", side_effect=lambda: now[0], create=True)
+
+    class SlowUplinkStorage(StubOverwriteStorage):
+        def save(self, name, content):
+            parts = []
+            while part := content.read(4):
+                parts.append(part)
+                now[0] += 11  # Uploading each part takes longer than the whole read allowance.
+            return super().save(name, ContentFile(b"".join(parts)))
+
+    data = b"synthetic media bytes"
+    target = SlowUplinkStorage({"media": b"old"})
+    result = media.sync_media_files(StubOverwriteStorage({"media": data}), target, refresh_changed=True)
+    assert (result.refreshed, result.errors) == (1, 0)
+    assert target._files["media"] == data
+    assert target.staged() == []

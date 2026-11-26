@@ -99,9 +99,12 @@ size reported by storage when available. Backends without size metadata
 still use bounded reads. A refused comparison never counts as unchanged.
 The deadline is checked around synchronous reads; configure backend I/O timeouts
 as well, since Python cannot interrupt an individual blocked storage call.
-Save reads use the same bounds for both source-to-stage and stage-to-final
-transfers. Backends control their own upload completion and any I/O they
-perform internally outside the supplied file's reads.
+Save reads use the same byte ceiling and size-scaled time allowance for both
+source-to-stage and stage-to-final transfers, but only the time spent opening
+the stream and inside its reads is charged. Upload work a backend does between
+reads (for example multipart parts or a spooled upload) is not limited, so a
+slow uplink does not fail a large transfer; configure backend upload timeouts
+for that.
 
 Before dropping the stage, backup and restore hash the final key after a
 same-name save. A failed final refresh can leave partial destination bytes.
