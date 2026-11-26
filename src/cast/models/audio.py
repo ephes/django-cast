@@ -445,8 +445,17 @@ def sync_chapter_marks(
         else:
             cm_from_db = start_from_database[cm.start]
             if cm.has_changed(cm_from_db):
-                cm.pk = cm_from_db.pk  # to be able to just call cm.save() later on
-                to_update.append(cm)
+                # A separate instance keeps the stored pk off the caller's input.
+                to_update.append(
+                    ChapterMark(
+                        pk=cm_from_db.pk,
+                        audio_id=cm.audio_id,
+                        start=cm.start,
+                        title=cm.title,
+                        link=cm.link,
+                        image=cm.image,
+                    )
+                )
     to_remove = [cm for cm in from_database if cm.start not in start_from_cms]
     return to_add, to_update, to_remove
 
@@ -456,14 +465,19 @@ class ChapterMarkManager(models.Manager):
     def sync_chaptermarks(
         audio: Audio, from_cms: list["ChapterMark"], *, update_urls: bool = True, using: str | None = None
     ) -> None:
+        # Persist separate instances: a rolled-back write must not leave pks,
+        # normalized starts or stored URLs on the caller's (retryable) inputs.
+        start_field = ChapterMark._meta.get_field("start")
+        pending: list[ChapterMark] = []
         starts = set()
         for cm in from_cms:
             if cm.audio_id != audio.pk:
                 raise ValueError("Chapter marks must belong to the synchronized audio")
-            cm.start = ChapterMark._meta.get_field("start").to_python(cm.start)
-            if cm.start in starts:
+            start = start_field.to_python(cm.start)
+            if start in starts:
                 raise ValueError("Duplicate chapter start")
-            starts.add(cm.start)
+            starts.add(start)
+            pending.append(ChapterMark(audio_id=audio.pk, start=start, title=cm.title, link=cm.link, image=cm.image))
         using = using or router.db_for_write(Audio, instance=audio)
         with transaction.atomic(using=using):
             # A no-op UPDATE takes a row lock on PostgreSQL and a write lock on
@@ -473,10 +487,10 @@ class ChapterMarkManager(models.Manager):
             from_db = list(ChapterMark.objects.using(using).filter(audio_id=audio.pk))
             if not update_urls:
                 by_start = {cm.start: cm for cm in from_db}
-                for cm in from_cms:
+                for cm in pending:
                     if cm.start in by_start:
                         cm.link, cm.image = by_start[cm.start].link, by_start[cm.start].image
-            to_add, to_update, to_remove = sync_chapter_marks(from_db, from_cms)
+            to_add, to_update, to_remove = sync_chapter_marks(from_db, pending)
             for cm in to_add + to_update:
                 cm.save(using=using)
             for cm in to_remove:

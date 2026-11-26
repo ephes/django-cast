@@ -51,6 +51,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Chapter synchronization now writes separate chapter instances and leaves the
+  caller's chapter marks unchanged. Retrying a batch after a rolled-back write
+  no longer reuses rolled-back primary keys, which could overwrite an unrelated
+  chapter mark that took the same ID.
+
 - The "Cache file sizes" admin action no longer writes back a stale audio row.
   It merges only the probed size entries under a row lock and skips formats
   whose file was replaced meanwhile, so concurrent editor changes survive.
