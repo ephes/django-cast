@@ -51,6 +51,18 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Count verified media sync copies and refreshes even if stage cleanup fails.
+  Reporting failures no longer interrupt recovery cleanup or mask the
+  original storage error.
+- Keep reserved media staging keys out of stale-media deletion and skip files
+  whose modification time could not be determined. Creation time alone can
+  establish age when the backend explicitly lacks modification timestamps.
+- Reject media sync digests when the complete read disagrees with the reported
+  object size (not for gzip-decoded S3 or Google Cloud streams); a failed
+  size lookup now refuses the path instead of skipping that check. Apply independent byte and read-time budgets to the reads that
+  supply both staging and final saves; backend upload time between those reads
+  is not charged.
+
 - Roll back editor post and episode creation if preparing the response fails,
   so the original slug can be retried.
 - Return a null file URL for a malformed storage URL in the editor media

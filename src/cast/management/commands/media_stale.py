@@ -11,7 +11,7 @@ from wagtail.images.models import Image, Rendition
 
 from ... import appsettings
 from ...utils import StorageInventoryError, storage_walk_paths
-from .storage_backend import get_production_and_backup_storage
+from .storage_backend import get_production_and_backup_storage, is_media_staging_key
 
 MANAGED_MEDIA_PREFIXES = (
     "cast_audio/",
@@ -99,17 +99,27 @@ class Command(BaseCommand):
         if timezone.is_naive(cutoff):
             cutoff = timezone.make_aware(cutoff, default_timezone)
         timestamps = []
-        for get_time in (storage.get_modified_time, storage.get_created_time):
-            try:
-                timestamp = get_time(path)
-            except Exception:
-                # Storage backends use different exceptions for unavailable metadata.
-                continue
-            if timestamp is None:
-                continue
-            if timezone.is_naive(timestamp):
-                timestamp = timezone.make_aware(timestamp, default_timezone)
-            timestamps.append(timestamp)
+        try:
+            modified = storage.get_modified_time(path)
+        except NotImplementedError:
+            pass  # Explicitly unsupported: a creation timestamp may still establish age.
+        except Exception:
+            return False
+        else:
+            if not isinstance(modified, datetime):
+                return False
+            timestamps.append(modified)
+        try:
+            created = storage.get_created_time(path)
+        except Exception:
+            pass  # A valid modification timestamp is sufficient on its own.
+        else:
+            if isinstance(created, datetime):
+                timestamps.append(created)
+        timestamps = [
+            timezone.make_aware(timestamp, default_timezone) if timezone.is_naive(timestamp) else timestamp
+            for timestamp in timestamps
+        ]
         return bool(timestamps) and max(timestamps) <= cutoff
 
     def handle(self, *args: Any, **options: Any) -> None:
@@ -119,6 +129,7 @@ class Command(BaseCommand):
         if type(min_age_days) is not int or min_age_days < 0:
             raise CommandError("CAST_MEDIA_STALE_MIN_AGE_DAYS must be a non-negative integer")
         cutoff = timezone.now() - timedelta(days=min_age_days)
+        skipped_reserved = 0
         skipped_too_young = 0
         skipped_newly_referenced = 0
         deleted = 0
@@ -127,7 +138,13 @@ class Command(BaseCommand):
         production_paths = self.get_paths(production_storage)
         stale_production: dict[str, int] = {}
         for path in production_paths:
-            if not self.is_managed_media_path(path) or path in paths_from_models:
+            if not self.is_managed_media_path(path):
+                continue
+            if is_media_staging_key(path):
+                skipped_reserved += 1
+                print(f"Kept reserved media staging key: {path}")
+                continue
+            if path in paths_from_models:
                 continue
             if not self.is_old_enough(production_storage, path, cutoff):
                 skipped_too_young += 1
@@ -151,5 +168,5 @@ class Command(BaseCommand):
                 deleted += 1
         print(
             f"media_stale: candidates={len(stale_production)} deleted={deleted} "
-            f"skipped-too-young={skipped_too_young} skipped-newly-referenced={skipped_newly_referenced}"
+            f"skipped-reserved={skipped_reserved} skipped-too-young={skipped_too_young} skipped-newly-referenced={skipped_newly_referenced}"
         )

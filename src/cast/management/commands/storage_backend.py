@@ -7,13 +7,15 @@ import re
 import stat
 import tempfile
 from collections.abc import Callable, Generator, Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager, suppress
 from dataclasses import dataclass, field
+from io import BufferedReader, RawIOBase
 from pathlib import Path
 from time import monotonic
+from typing import Any
 from uuid import uuid4
 
-from django.core.files import locks
+from django.core.files import File, locks
 from django.core.files.storage import InvalidStorageError, Storage, storages
 from django.core.management.base import CommandError
 
@@ -39,18 +41,28 @@ class MediaReadBudget:
 
     remaining: int = field(default_factory=lambda: MAX_MEDIA_READ_BYTES)
     deadline: float = field(default_factory=lambda: monotonic() + MAX_MEDIA_READ_SECONDS)
+    expected_size: int | None = None
+
+    @staticmethod
+    def object_allowance(storage: Storage, path: str) -> tuple[int | None, int]:
+        """The reported object size (if usable) and the seconds a full read may take."""
+        # Only a backend without sizes reads without an extent check; a failed lookup refuses the read.
+        size_of = getattr(storage, "size", None)
+        try:
+            size = size_of(path) if callable(size_of) else None
+        except NotImplementedError:
+            size = None
+        expected_size = size if type(size) is int and size >= 0 else None
+        # Beyond the byte ceiling more time cannot help: such a read is refused anyway.
+        scaled = min(expected_size or 0, MAX_MEDIA_READ_BYTES)
+        seconds = max(MAX_MEDIA_READ_SECONDS, math.ceil(scaled / MIN_MEDIA_READ_BYTES_PER_SECOND))
+        return expected_size, seconds
 
     @classmethod
     def for_object(cls, storage: Storage, path: str) -> "MediaReadBudget":
         """A fresh budget whose deadline scales with the reported object size."""
-        try:
-            size = storage.size(path)
-        except Exception:  # Advisory only: an unknown size keeps the base deadline.
-            size = 0
-        # Beyond the byte ceiling more time cannot help: such a read is refused anyway.
-        scaled = min(max(size, 0), MAX_MEDIA_READ_BYTES)
-        seconds = max(MAX_MEDIA_READ_SECONDS, math.ceil(scaled / MIN_MEDIA_READ_BYTES_PER_SECOND))
-        return cls(deadline=monotonic() + seconds)
+        expected_size, seconds = cls.object_allowance(storage, path)
+        return cls(deadline=monotonic() + seconds, expected_size=expected_size)
 
     def check_time(self) -> None:
         if monotonic() >= self.deadline:
@@ -61,6 +73,91 @@ class MediaReadBudget:
         self.remaining -= size
         if self.remaining < 0:
             raise MediaReadBudgetExceeded("media read exceeded byte budget")
+
+    def read_chunk(self, stream: File, size: int = CONTENT_CHUNK_SIZE) -> bytes:
+        self.consume(0)  # A backend retry cannot read past an exhausted budget.
+        chunk: bytes = stream.read(min(size, CONTENT_CHUNK_SIZE, self.remaining + 1))
+        self.consume(len(chunk))
+        return chunk
+
+
+@dataclass
+class MediaSaveReadBudget(MediaReadBudget):
+    """Bytes and read time for one stream consumed by ``Storage.save()``.
+
+    Only time spent opening and inside the stream's own reads is charged. A
+    backend uploading between reads (multipart transfers, spooled uploads) is
+    not limited by this budget, so slow uplinks do not fail large transfers.
+    """
+
+    seconds: float = MAX_MEDIA_READ_SECONDS
+    spent: float = 0.0
+
+    @classmethod
+    def for_object(cls, storage: Storage, path: str) -> "MediaSaveReadBudget":
+        expected_size, seconds = cls.object_allowance(storage, path)
+        return cls(seconds=seconds, expected_size=expected_size)
+
+    def check_time(self) -> None:
+        if self.spent >= self.seconds:
+            raise MediaReadBudgetExceeded("media read exceeded time budget")
+
+    @contextmanager
+    def charged(self) -> Iterator[None]:
+        started = monotonic()
+        try:
+            yield
+        finally:
+            self.spent += monotonic() - started
+
+    def read_chunk(self, stream: File, size: int = CONTENT_CHUNK_SIZE) -> bytes:
+        self.consume(0)  # A backend retry cannot read past an exhausted budget.
+        with self.charged():
+            chunk: bytes = stream.read(min(size, CONTENT_CHUNK_SIZE, self.remaining + 1))
+        self.consume(len(chunk))
+        return chunk
+
+
+class BudgetedMediaStream(RawIOBase):
+    """Supply buffered upload reads without exposing the underlying file handle."""
+
+    def __init__(self, stream: File, budget: MediaSaveReadBudget) -> None:
+        super().__init__()
+        self.stream = stream
+        self.budget = budget
+
+    def readable(self) -> bool:
+        return True
+
+    # Lazy backends may download on the first access of any kind, so positioning is charged too.
+    def seekable(self) -> bool:
+        with self.budget.charged():
+            return self.stream.seekable()
+
+    def seek(self, offset: int, whence: int = os.SEEK_SET) -> int:
+        self.budget.check_time()
+        with self.budget.charged():
+            return self.stream.seek(offset, whence)
+
+    def tell(self) -> int:
+        with self.budget.charged():
+            return self.stream.tell()
+
+    def readinto(self, buffer: Any) -> int:
+        view = memoryview(buffer).cast("B")
+        chunk = self.budget.read_chunk(self.stream, len(view))
+        view[: len(chunk)] = chunk
+        return len(chunk)
+
+
+@contextmanager
+def open_media_for_save(storage: Storage, path: str) -> Iterator[File]:
+    budget = MediaSaveReadBudget.for_object(storage, path)
+    with ExitStack() as stack:
+        with budget.charged():
+            stream = stack.enter_context(storage.open(path, "rb"))
+        with BufferedReader(BudgetedMediaStream(stream, budget), buffer_size=CONTENT_CHUNK_SIZE) as bounded:
+            yield File(bounded, name=path)
 
 
 @dataclass
@@ -82,13 +179,30 @@ def is_media_staging_key(path: str) -> bool:
     return re.search(r"\.django-cast-(?:refresh|replace)-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
 
 
+def has_gzip_encoding(handle: Any) -> bool:
+    encoding = getattr(handle, "content_encoding", None)
+    return isinstance(encoding, str) and encoding.strip().lower() == "gzip"
+
+
+def is_transparently_decoded(storage: Storage, stream: Any) -> bool:
+    """
+    Whether an opened stream returns gzip-decoded bytes of a gzip-encoded object.
+
+    django-storages' S3 files (``obj``) decode only on storages with ``gzip``
+    enabled; Google Cloud files (``blob``) are always decoded on download.
+    """
+    if has_gzip_encoding(getattr(stream, "blob", None)):
+        return True
+    return getattr(storage, "gzip", False) is True and has_gzip_encoding(getattr(stream, "obj", None))
+
+
 def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -> Generator[bytes, None, None]:
     budget.check_time()
     with storage.open(path, "rb") as in_f:
+        if budget.expected_size is not None and is_transparently_decoded(storage, in_f):
+            budget.expected_size = None  # The reported size is the encoded length, not the decoded bytes.
         while True:
-            budget.check_time()
-            chunk = in_f.read(min(CONTENT_CHUNK_SIZE, budget.remaining + 1))
-            budget.consume(len(chunk))
+            chunk = budget.read_chunk(in_f)
             if not chunk:
                 return
             yield chunk
@@ -97,8 +211,12 @@ def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -
 def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
     budget = budget or MediaReadBudget.for_object(storage, path)
     digest = hashlib.sha256()
+    initial_remaining = budget.remaining
     for chunk in bounded_media_chunks(storage, path, budget):
         digest.update(chunk)
+    count = initial_remaining - budget.remaining
+    if budget.expected_size is not None and count != budget.expected_size:
+        raise RuntimeError(f"media extent mismatch for {path}: read {count} bytes, expected {budget.expected_size}")
     return digest.digest()
 
 
@@ -222,8 +340,7 @@ def publish_staged_file(
     target_exists = target_storage.exists(path)
     if target_exists == missing:
         raise RuntimeError(f"media publication conflict: target presence changed for {path}")
-    # Every full read gets its own size-scaled budget; backend save I/O is not
-    # charged to any of them.
+    # Verification and each transfer have independent, size-scaled read budgets.
     target_before = content_digest(target_storage, path) if target_exists else None
     source_before = content_digest(source_storage, path)
     requested_stage = temporary_refresh_path(path)
@@ -232,7 +349,7 @@ def publish_staged_file(
     staged_names = {requested_stage}
     recovery_name = None
     try:
-        with source_storage.open(path, "rb") as in_f:
+        with open_media_for_save(source_storage, path) as in_f:
             staged_name = target_storage.save(requested_stage, in_f)
         staged_names.add(staged_name)
         if not target_storage.exists(staged_name):
@@ -248,7 +365,7 @@ def publish_staged_file(
             current_exists and content_digest(target_storage, path) != target_before
         ):
             raise RuntimeError(f"media publication conflict: target changed while staging {path}")
-        with target_storage.open(staged_name, "rb") as staged_f:
+        with open_media_for_save(target_storage, staged_name) as staged_f:
             try:
                 saved_name = target_storage.save(path, staged_f)
             except BaseException:
@@ -292,23 +409,37 @@ def publish_staged_file(
             raise RuntimeError(f"published copy {path} failed content verification")
         staged_names.discard(path)
     except BaseException as primary_error:
+        warnings = []
         if recovery_name is not None:
             staged_names.discard(recovery_name)
             message = f"complete recovery copy retained at {recovery_name}; inspect before retry or manual deletion"
             primary_error.add_note(message)
-            logger.warning(message)
-            if report_error is not None:
-                report_error(message)
+            warnings.append(message)
         try:
             remove_staged_copies(target_storage, staged_names)
         except RuntimeError as cleanup_error:
             primary_error.add_note(str(cleanup_error))
-            logger.warning("Refresh staging cleanup failed: %s", cleanup_error)
-            if report_error is not None:
-                report_error(f"warning: refresh staging cleanup failed: {cleanup_error}")
+            warnings.append(f"warning: refresh staging cleanup failed: {cleanup_error}")
+        for message in warnings:
+            report_sync_message(message, report_error, always_log=True)
         raise
     else:
-        remove_staged_copies(target_storage, staged_names)
+        try:
+            remove_staged_copies(target_storage, staged_names)
+        except RuntimeError as cleanup_error:
+            report_sync_message(
+                f"warning: sync published {path}, but staging cleanup failed: {cleanup_error}", report_error
+            )
+
+
+def report_sync_message(message: str, report_error: Callable[[str], None] | None, *, always_log: bool = False) -> None:
+    if report_error is not None:
+        with suppress(Exception):
+            report_error(message)
+            if not always_log:
+                return
+    with suppress(Exception):
+        logger.warning(message)
 
 
 def sync_media_files(
@@ -331,10 +462,7 @@ def sync_media_files(
         for num, path in enumerate(storage_walk_paths(source_storage)):
             if is_media_staging_key(path):
                 message = f"skipped reserved media staging key {path}; inspect and remove manually"
-                if report_error is not None:
-                    report_error(message)
-                else:
-                    logger.warning(message)
+                report_sync_message(message, report_error)
                 continue
             try:
                 # Even an unchanged decision must not observe another writer's
@@ -354,19 +482,13 @@ def sync_media_files(
             except Exception as exc:
                 result.errors += 1
                 message = f"error syncing {path}: {exc}"
-                if report_error is not None:
-                    report_error(message)
-                else:
-                    logger.warning(message)
+                report_sync_message(message, report_error)
             if num % 100 == 0:  # pragma: no cover
                 print(".", end="", flush=True)
     except StorageInventoryError as exc:
         result.errors += 1
         message = f"incomplete storage inventory: {exc}"
-        if report_error is not None:
-            report_error(message)
-        else:
-            logger.warning(message)
+        report_sync_message(message, report_error)
     return result
 
 

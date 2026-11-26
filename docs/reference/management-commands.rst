@@ -351,9 +351,14 @@ Options:
     costs time and transfer on remote storage. Unchanged files are not
     rewritten. For changed files, staging verification reads the source again
     and reads the staged target bytes. A digest mismatch refuses publication.
-    Each full read has its own 16 GiB byte ceiling and a 300 second
-    deadline that grows with the object size (at most about 68 minutes);
-    exceeding it reports an incomplete path without publishing a replacement.
+    Each verification and save stream has its own 16 GiB byte ceiling
+    and a 300 second deadline that grows with the object size (at most
+    about 68 minutes); for save streams only the time spent opening,
+    reading and positioning the stream counts, not the backend's upload work
+    between reads.
+    Exceeding it reports a path error. Digests also require agreement with
+    the reported object size when available, except for gzip-decoded S3 or
+    Google Cloud streams. A failed size lookup reports a path error.
     See :doc:`../operations/backup` for inventory limits, synchronous I/O
     limitations and the same-host publication concurrency contract.
 
@@ -372,12 +377,12 @@ Options:
     the path is reported as an error and the verified stage is retained for
     recovery. A final overwrite that raises also retains the stage. A save
     under a generated name keeps no stage.
-    Verified publication removes its stage. Cleanup attempts every other
-    requested and returned staging name even if another deletion fails. Leftover
-    names and deletion failures are logged and reported on command stderr when publication has
-    already failed, preserving the original publication exception; cleanup failure
-    after successful publication is itself an error. Inspect the reported keys
-    and remove recoverable leftovers manually.
+    Verified publication attempts to remove its stage. A deletion failure
+    reports the leftover key as a warning while the copy still counts as
+    copied or refreshed. On publication failure, cleanup attempts every
+    owned staging name except the verified recovery key. Recovery and cleanup
+    details are attached to the original exception before diagnostics are
+    emitted. Inspect reported leftovers before removing them manually.
 
     The final overwrite itself is only as safe as the backup storage backend
     makes it. Object storage replaces an object atomically, so a failed
@@ -536,8 +541,11 @@ Options:
 
 Only files at least ``CAST_MEDIA_STALE_MIN_AGE_DAYS`` old (default: 7 days)
 are candidates. The command uses the newest available storage modification or
-creation timestamp; a backend without either timestamp leaves the file untouched
-and reports its age as unknown. Naive timestamps use the Django default timezone.
+creation timestamp. If modification timestamps are explicitly unsupported
+(``NotImplementedError``), a creation timestamp alone can establish age. A failed
+modification lookup or missing modification value leaves the file untouched
+and reports its age as unknown, even if the creation timestamp is old.
+Naive timestamps use the Django default timezone.
 The setting must be a non-negative integer; ``0`` removes the age delay.
 The age boundary is inclusive. The command completes the storage listing
 before requesting sizes and only requests sizes for stale candidates.
@@ -552,9 +560,13 @@ became referenced are skipped. No database rows are deleted. This reduces the
 race window but cannot make a storage deletion atomic with a concurrent upload
 or database write; schedule cleanup when uploads are quiet and retain backups.
 
+Reserved refresh and legacy replacement staging keys are kept and reported
+by name. Inspect these keys before removing them manually.
+
 The command prints candidate paths, their total size in MB, and counts for
-``candidates``, ``deleted``, ``skipped-too-young`` (including unknown ages), and
-``skipped-newly-referenced``. The last count applies when using ``--delete``.
+``candidates``, ``deleted``, ``skipped-reserved``, ``skipped-too-young`` (including
+unknown ages), and ``skipped-newly-referenced``. The last count applies when using
+``--delete``.
 
 Reference Site
 ==============

@@ -86,19 +86,30 @@ including recovery of a failed missing-copy save. Cross-host publication needs
 backend-specific conditional writes and is unsupported. Existing-file final
 write failures remain backend-dependent as described in the command reference.
 
-Every full read used for hashing (comparison of source and target, and each
-publication-verification read of target, source and staged copy) has its own
-ceiling of 16 GiB of bytes and a deadline of 300 seconds, extended for large
+Each read for comparison, verification and transfer to ``Storage.save()`` has
+its own byte ceiling of 16 GiB and a deadline of 300 seconds, extended for large
 objects to their reported size at 4 MiB/s (at most the time 16 GiB takes at that
 rate, about 68 minutes). Missing copies are subject to the same
 per-read ceilings, since they are staged and verified like refreshes. Reads
 request at most 1 MiB (or the remaining budget plus one overflow byte).
-Oversized, growing or delayed streams cause an explicit path error during
-comparison or verification. A refused comparison never counts as unchanged.
+Oversized, growing or delayed streams can exhaust the budget during
+comparison, verification or transfer and cause an explicit path error. A
+digest is only accepted if the complete stream's byte count matches the
+size reported by storage when available. Backends without size metadata
+(``size()`` raises ``NotImplementedError``) still use bounded reads; any
+other size lookup failure refuses the path. Streams that decode a
+gzip-encoded object also skip the extent check, since their reported size is
+the encoded length: django-storages S3 files (``obj``) on a storage with
+``gzip`` enabled, and Google Cloud files (``blob``), which are always decoded
+on download. Other backends must report the size of the bytes they return. A refused comparison never counts as unchanged.
 The deadline is checked around synchronous reads; configure backend I/O timeouts
 as well, since Python cannot interrupt an individual blocked storage call.
-These ceilings cover hashing; backend-managed ``save`` I/O (the staging upload
-and the final save) is not charged to any of them.
+Save reads use the same byte ceiling and size-scaled time allowance for both
+source-to-stage and stage-to-final transfers, but only the time spent opening
+the stream and inside its reads, seeks and position queries is charged. Upload work a backend does between
+reads (for example multipart parts or a spooled upload) is not limited, so a
+slow uplink does not fail a large transfer; configure backend upload timeouts
+for that.
 
 Before dropping the stage, backup and restore hash the final key after a
 same-name save. A failed final refresh can leave partial destination bytes.
