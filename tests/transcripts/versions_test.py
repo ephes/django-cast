@@ -450,3 +450,58 @@ def test_upload_view_reports_refused_capture_as_form_error(admin_client, version
     after = state(versioned)
     # Re-rendering the editor refreshes mapping ``last_seen``; files and backup stay untouched.
     assert (after[0], after[2]) == (before[0], before[2])
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_restore_batches_contributor_checks_on_transcript_database(settings):
+    from django.contrib.auth import get_user_model
+    from django.db import connections
+    from django.test.utils import CaptureQueriesContext
+    from wagtail.models import Collection
+
+    from cast.models import Audio, Contributor
+    from tests.transcripts.known_speaker_apply_helpers import PODLOVE, make_transcript
+
+    alias = "migration_other"
+
+    class TranscriptRouter:
+        def db_for_read(self, model, **hints):
+            return alias
+
+        db_for_write = db_for_read
+
+    settings.DATABASE_ROUTERS = [TranscriptRouter()]
+    user = get_user_model().objects.create(username="synthetic-version-editor")
+    collection = Collection.objects.create(name="Synthetic root", path="0001", depth=1)
+    audio = Audio.objects.create(user=user, title="Synthetic restore", collection=collection)
+    transcript = make_transcript(audio, podlove=PODLOVE)
+    contributor = Contributor.objects.create(display_name="Synthetic contributor", slug="synthetic-contributor")
+    missing_id = contributor.pk + 1
+    Contributor.objects.using("default").bulk_create(
+        [Contributor(pk=missing_id, display_name="Default only", slug="default-only")]
+    )
+    payload = json.loads(versions.bundle(transcript))
+    payload["mappings"] = [
+        {
+            "speaker_label": f"Synthetic label {index}",
+            "contributor_id": contributor.pk if index < 300 else missing_id,
+            "display_name": "",
+            "review_state": "approved",
+            "source_artifact_fingerprint": transcript.source_fingerprint,
+            "active": True,
+            "last_seen": None,
+            "reviewed_at": None,
+        }
+        for index in range(302)
+    ]
+    transcript.previous_version.save("mapped.json", ContentFile(json.dumps(payload).encode()))
+
+    with CaptureQueriesContext(connections[alias]) as routed, CaptureQueriesContext(connections["default"]) as default:
+        versions.restore(transcript)
+
+    assert not default.captured_queries
+    contributor_reads = [query["sql"] for query in routed if Contributor._meta.db_table in query["sql"]]
+    assert len(contributor_reads) == 1
+    assert transcript.speaker_mappings.filter(contributor_id=contributor.pk, review_state="approved").count() == 300
+    assert transcript.speaker_mappings.filter(contributor_id=None, review_state="stale").count() == 2
+    assert transcript.podlove_data == PODLOVE

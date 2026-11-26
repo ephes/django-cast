@@ -14,7 +14,7 @@ from cast.file_replacement import StagedFileReplacementGroup
 from cast.media_derivation import TRANSCRIPT_SPEAKER_MAPPING_ARTIFACT_FIELDS
 
 from ..private_storage import get_transcript_storage
-from ..transcripts import dote, known_speakers, parsing, podlove, services, speaker_samples, voice_references, webvtt
+from ..transcripts import dote, known_speakers, parsing, podlove, services, speaker_samples, voice_references
 from ..transcripts.dote import (
     convert_dote_to_podcastindex_transcript,
     convert_segments as convert_segments,
@@ -476,24 +476,6 @@ class Transcript(CollectionMember, index.Indexed, models.Model):
         applied, changed = dote.clear_suggestions(data, start_milliseconds)
         if changed:
             self._write_transcript_json("dote", data, replacements=replacements)
-        return applied
-
-    def _clear_suggestions_from_webvtt(
-        self, start_milliseconds: set[int], *, replacements: StagedFileReplacementGroup | None = None
-    ) -> int:
-        content = self._load_text_file("vtt")
-        rewritten_content, applied, changed = webvtt.clear_suggestions_from_content(content, start_milliseconds)
-        if changed:
-            self._save_text_file("vtt", rewritten_content, replacements=replacements)
-        return applied
-
-    def _apply_suggestions_to_webvtt(
-        self, names_by_start_ms: dict[int, str], *, replacements: StagedFileReplacementGroup | None = None
-    ) -> int:
-        content = self._load_text_file("vtt")
-        rewritten_content, applied, changed = webvtt.apply_suggestions_to_content(content, names_by_start_ms)
-        if changed:
-            self._save_text_file("vtt", rewritten_content, replacements=replacements)
         return applied
 
     def _write_transcript_json(

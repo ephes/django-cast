@@ -232,14 +232,13 @@ def restore(transcript: Transcript) -> None:
 
                 services.save_editor_artifacts(transcript, replacements, expected, save=save)
                 transcript.speaker_mappings.all().delete()
+                contributor_ids = {
+                    row["contributor_id"] for row in data["mappings"] if row["contributor_id"] is not None
+                }
+                existing_contributors = Contributor.objects.using(stored._state.db).only("pk").in_bulk(contributor_ids)
                 for row in data["mappings"]:
                     values = {name: row[name] for name in MAPPING_FIELDS}
-                    if (
-                        values["contributor_id"]
-                        and not Contributor.objects.using(transcript._state.db)
-                        .filter(pk=values["contributor_id"])
-                        .exists()
-                    ):
+                    if values["contributor_id"] is not None and values["contributor_id"] not in existing_contributors:
                         values.update(contributor_id=None, review_state="stale")
                     if values["review_state"] == "approved" and not (
                         values["contributor_id"] or values["display_name"]

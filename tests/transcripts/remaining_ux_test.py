@@ -309,6 +309,8 @@ def test_vtt_only_preview_and_edit(admin_client, episode):
     assert admin_client.get(reverse("cast-transcript:preview", args=(transcript.pk,))).status_code == 200
     transcript.correct_passage_text(0, "Corrected")
     assert get_passages(transcript)[0]["text"] == "Corrected"
+    transcript.change_passage_speaker(0, "Synthetic speaker")
+    assert get_passages(transcript)[0]["speaker"] == "Synthetic speaker"
 
 
 def test_preview_conflicts_and_error_responses(admin_client, episode, mocker):

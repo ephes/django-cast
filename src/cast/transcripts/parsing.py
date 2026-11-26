@@ -4,16 +4,18 @@ import json
 import math
 import re
 import unicodedata
+from collections.abc import Iterator
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
 
 class TranscriptArtifactError(Exception):
-    """A stored JSON artifact cannot be decoded safely for editorial work."""
+    """A stored transcript artifact cannot be read safely for editorial work."""
 
 
 MAX_TRANSCRIPT_JSON_DEPTH = 64
 MAX_STORED_TRANSCRIPT_JSON_BYTES = 10 * 1024 * 1024
+MAX_EDITOR_WEBVTT_BYTES = 10 * 1024 * 1024
 MAX_TRANSCRIPT_FINGERPRINT_ARTIFACT_BYTES = 10 * 1024 * 1024
 MAX_TRANSCRIPT_FINGERPRINT_TOTAL_BYTES = 30 * 1024 * 1024
 
@@ -27,15 +29,23 @@ def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def read_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
-    """Read binary stored JSON with a fixed byte ceiling, including short reads."""
-    if max_bytes is None:
-        max_bytes = MAX_STORED_TRANSCRIPT_JSON_BYTES
+def read_bounded_artifact(file: Any, *, max_bytes: int, limit_message: str) -> bytearray:
+    """Read at most the byte ceiling plus one, including short reads."""
     content = bytearray()
     while chunk := file.read(min(64 * 1024, max_bytes + 1 - len(content))):
         content.extend(chunk)
         if len(content) > max_bytes:
-            raise TranscriptArtifactError("Stored transcript JSON exceeds 10 MiB. Replace the artifact and reload.")
+            raise TranscriptArtifactError(limit_message)
+    return content
+
+
+def read_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
+    """Read binary stored JSON with a fixed byte ceiling."""
+    content = read_bounded_artifact(
+        file,
+        max_bytes=MAX_STORED_TRANSCRIPT_JSON_BYTES if max_bytes is None else max_bytes,
+        limit_message="Stored transcript JSON exceeds 10 MiB. Replace the artifact and reload.",
+    )
     try:
         return json.loads(content.decode("utf-8"), object_pairs_hook=_unique_members)
     except (UnicodeDecodeError, RecursionError) as error:
@@ -46,15 +56,19 @@ def read_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
 
 def load_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
     data = read_json_artifact(file, max_bytes=max_bytes)
-    pending = [(data, 0)]
+    pending: list[Iterator[Any]] = [iter((data,))]
     while pending:
-        value, depth = pending.pop()
-        if depth > MAX_TRANSCRIPT_JSON_DEPTH:
-            raise TranscriptArtifactError("Invalid transcript JSON nesting. Replace the artifact and reload.")
-        if isinstance(value, dict):
-            pending.extend((child, depth + 1) for child in value.values())
-        elif isinstance(value, list):
-            pending.extend((child, depth + 1) for child in value)
+        for value in pending[-1]:
+            if len(pending) - 1 > MAX_TRANSCRIPT_JSON_DEPTH:
+                raise TranscriptArtifactError("Invalid transcript JSON nesting. Replace the artifact and reload.")
+            if isinstance(value, dict):
+                pending.append(iter(value.values()))
+                break
+            if isinstance(value, list):
+                pending.append(iter(value))
+                break
+        else:
+            pending.pop()
     return data
 
 
@@ -79,11 +93,15 @@ LOW_SIGNAL_TRANSCRIPT_SAMPLE_TEXTS = frozenset(
 )
 
 
-def segment_sort_key(segment: dict) -> float:
-    try:
-        return float(segment.get("start") or 0.0)
-    except (TypeError, ValueError):
-        return 0.0
+def speaker_suggestion_start_ms(value: Any) -> int | None:
+    """Admit a sidecar start before it participates in name resolution."""
+    if isinstance(value, bool):
+        return None
+    seconds = _finite_nonnegative(value)
+    if seconds is None:
+        return None
+    milliseconds = seconds * 1000
+    return round(milliseconds) if math.isfinite(milliseconds) else None
 
 
 def quantize_seconds(value: Decimal) -> Decimal:

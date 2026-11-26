@@ -923,14 +923,15 @@ class TestTranscriptSpeakerMapping:
         with transcript.vtt.open("r") as vtt_file:
             assert vtt_file.read() == "WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 1>Hello\n"
 
-    def test_rewrite_speaker_labels_ignores_missing_vtt_file(self, audio):
+    def test_rewrite_speaker_labels_refuses_missing_vtt_file(self, audio):
         transcript = create_transcript(
             audio=audio,
             vtt="WEBVTT\n\n00:00:00.000 --> 00:00:01.000\n<v Speaker 1>Hello\n",
         )
         transcript.vtt.storage.delete(transcript.vtt.name)
 
-        assert not transcript.rewrite_speaker_labels({"Speaker 1": "Alice"})
+        with pytest.raises(parsing.TranscriptArtifactError, match="Could not read WebVTT"):
+            transcript.rewrite_speaker_labels({"Speaker 1": "Alice"})
 
     def test_save_json_file_handles_missing_existing_file(self, audio):
         transcript = create_transcript(audio=audio, podlove={"transcripts": []})
