@@ -386,9 +386,9 @@ def escape_cue_text(text: str) -> str:
 def set_cue_text(lines: list[str], text: str) -> list[str] | None:
     """Replace the text of one cue payload, keeping its voice tag and ``Speaker N:`` prefix.
 
-    The payload becomes one line. Returns ``None`` for a payload with other markup
-    (several voices, styling tags), which is left alone, and the lines unchanged when
-    they already show ``text``.
+    The payload becomes one line. Returns the lines unchanged when they already show
+    ``text`` (ignoring markup), and ``None`` for a payload with other markup (several
+    voices, styling tags) that would need a rewrite; such a cue is left alone.
     """
     if not lines:
         return None
@@ -410,10 +410,11 @@ def set_cue_text(lines: list[str], text: str) -> list[str] | None:
         if generic_match is not None:
             prefix += generic_match.string[: generic_match.start("text")]
     inner = body[len(prefix) : len(body) - len(suffix)]
+    # A styled cue that already shows ``text`` needs no rewrite, so it is not refused.
+    if " ".join(html.unescape(CUE_TAG_RE.sub("", inner)).split()) == " ".join(text.split()):
+        return lines
     if CUE_TAG_RE.search(inner):
         return None
-    if " ".join(html.unescape(inner).split()) == " ".join(text.split()):
-        return lines
     return [f"{prefix}{escape_cue_text(text)}{suffix}{ending}"]
 
 

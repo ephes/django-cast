@@ -117,6 +117,8 @@ def test_set_texts_ignore_missing_lists_and_bad_entries():
         (["<v Jon>Jon said</v>\n"], ["<v Jon>Jon said</v>\n"]),
         (["<v A>John</v> <v B>said</v>\n"], None),
         (["<i>John said</i>\n"], None),
+        (["<i>Jon said</i>\n"], ["<i>Jon said</i>\n"]),
+        (["<v A>Jon</v> <v B>said</v>\n"], ["<v A>Jon</v> <v B>said</v>\n"]),
         ([], None),
     ],
 )
@@ -1448,6 +1450,19 @@ def test_incomplete_destination_refuses_before_staging(transcript, destination, 
     storage_save.assert_not_called()
     assert file_bytes(transcript) == before
     assert corrections.services.artifact_state(transcript) == state
+
+
+@pytest.mark.django_db
+def test_styled_cue_that_already_shows_the_text_does_not_block_refresh(transcript):
+    refresh_transcript_corrections(transcript)
+    corrected = public_texts(transcript)[0][10000]
+    content = transcript._load_text_file("vtt").replace(corrected, f"<i>{corrected}</i>")
+    transcript._save_text_file("vtt", content)
+    transcript.save(preserve_source_fingerprint=True)
+
+    assert refresh_transcript_corrections(transcript, dry_run=True).changed == 0
+    assert refresh_transcript_corrections(transcript).changed == 0
+    assert transcript._load_text_file("vtt") == content
 
 
 @pytest.mark.django_db

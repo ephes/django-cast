@@ -246,6 +246,7 @@ Fixes
 - Refresh transcripts in bounded batches when running ``apply_transcript_glossary --all``.
 - Reject glossary corrections before writing if an attached format is missing a
   corrected start time, repeats it, or has an uneditable WebVTT cue at that time.
+  A styled WebVTT cue that already shows the corrected text is left as it is.
 - Use the same artifact validation for glossary previews and writes, and reject
   duplicate Podlove start times in both modes.
 
