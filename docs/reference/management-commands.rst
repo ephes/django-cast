@@ -156,7 +156,8 @@ Options (one of the first three is required):
     when the command starts. Higher IDs are picked up on a later run.
 
 ``--dry-run``
-    Compute and report without writing.
+    Validate the editor artifacts, Podlove start times and correction destinations
+    as for an apply run. Report the change count without staging or writing files.
 
 Each successful refresh prints a line
 ``transcript <id>: <status> automatic=<n> approved=<n> proposals=<n> changed=<n>``,

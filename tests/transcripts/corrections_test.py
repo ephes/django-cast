@@ -117,6 +117,8 @@ def test_set_texts_ignore_missing_lists_and_bad_entries():
         (["<v Jon>Jon said</v>\n"], ["<v Jon>Jon said</v>\n"]),
         (["<v A>John</v> <v B>said</v>\n"], None),
         (["<i>John said</i>\n"], None),
+        (["<i>Jon said</i>\n"], ["<i>Jon said</i>\n"]),
+        (["<v A>Jon</v> <v B>said</v>\n"], ["<v A>Jon</v> <v B>said</v>\n"]),
         ([], None),
     ],
 )
@@ -194,6 +196,21 @@ def test_apply_rewrites_public_files_from_the_sidecar(transcript):
 
     assert apply_transcript_corrections(transcript) == 2
     assert public_texts(transcript)[0][10000] == "Jon said Gunicorn is fast."
+
+
+@pytest.mark.django_db
+def test_apply_refuses_missing_podlove_destination_in_current_sidecar(transcript, mocker):
+    refresh_transcript_corrections(transcript)
+    transcript._write_transcript_json("podlove", podlove_data(TEXTS[1:]))
+    transcript.save(preserve_source_fingerprint=True)
+    before = file_bytes(transcript)
+    storage_save = mocker.spy(transcript.corrections.storage, "save")
+
+    with pytest.raises(ValidationError, match="missing start times"):
+        apply_transcript_corrections(transcript)
+
+    storage_save.assert_not_called()
+    assert file_bytes(transcript) == before
 
 
 @pytest.mark.django_db
@@ -531,6 +548,8 @@ def test_new_source_starts_a_fresh_sidecar(transcript):
     decide_correction_group(transcript, "Buttondown", STATE_APPROVED)
     new_texts = [(20000, "John is back.")]
     transcript.podlove.save("new.podlove.json", ContentFile(json.dumps(podlove_data(new_texts)).encode()), save=False)
+    transcript._write_transcript_json("dote", dote_data(new_texts))
+    transcript._save_text_file("vtt", vtt_content(new_texts))
     transcript.save()
     assert transcript.source_fingerprint != transcript.corrections_data["source_fingerprint"]
 
@@ -1253,6 +1272,28 @@ def test_legacy_dry_run_has_no_database_or_storage_writes(transcript, django_ass
     assert refresh_transcript_corrections(transcript).changed == 0
 
 
+@pytest.mark.django_db
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_legacy_duplicate_podlove_starts_refuse_before_staging(transcript, mocker, dry_run):
+    data = podlove_data()
+    data["transcripts"].append({"start": "00:00:10.000", "text": "Conflicting raw text."})
+    transcript._write_transcript_json("podlove", data)
+    transcript.save()
+    Transcript.objects.filter(pk=transcript.pk).update(source_fingerprint="")
+    before = file_bytes(transcript)
+    state = corrections.services.artifact_state(transcript)
+    storage_save = mocker.spy(transcript.corrections.storage, "save")
+    staging = mocker.spy(corrections, "StagedFileReplacementGroup")
+
+    with pytest.raises(ValidationError, match="Podlove.*ambiguous start times"):
+        refresh_transcript_corrections(transcript, dry_run=dry_run)
+
+    staging.assert_not_called()
+    storage_save.assert_not_called()
+    assert file_bytes(transcript) == before
+    assert corrections.services.artifact_state(transcript) == state
+
+
 @pytest.mark.django_db(databases=["default", "migration_other"])
 def test_correction_context_stays_on_owning_database(transcript, glossary_episode, jon, mocker, tmp_path):
     from django.db import connections
@@ -1382,6 +1423,46 @@ def test_ambiguous_destination_refuses_before_staging(transcript, destination, m
     storage_save.assert_not_called()
     assert file_bytes(transcript) == before
     assert transcript.source_fingerprint == fingerprint
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("dry_run", [False, True])
+@pytest.mark.parametrize(
+    ("destination", "error"),
+    [("dote", "missing start times"), ("vtt_missing", "missing start times"), ("vtt_markup", "WebVTT passage")],
+)
+def test_incomplete_destination_refuses_before_staging(transcript, destination, error, dry_run, mocker):
+    if destination == "dote":
+        transcript._write_transcript_json("dote", dote_data(TEXTS[1:]))
+    elif destination == "vtt_missing":
+        transcript._save_text_file("vtt", vtt_content(TEXTS[1:]))
+    else:
+        content = vtt_content().replace(TEXTS[0][1], f"<i>{TEXTS[0][1]}</i>")
+        transcript._save_text_file("vtt", content)
+    transcript.save()
+    before = file_bytes(transcript)
+    state = corrections.services.artifact_state(transcript)
+    storage_save = mocker.spy(transcript.corrections.storage, "save")
+
+    with pytest.raises(ValidationError, match=error):
+        refresh_transcript_corrections(transcript, dry_run=dry_run)
+
+    storage_save.assert_not_called()
+    assert file_bytes(transcript) == before
+    assert corrections.services.artifact_state(transcript) == state
+
+
+@pytest.mark.django_db
+def test_styled_cue_that_already_shows_the_text_does_not_block_refresh(transcript):
+    refresh_transcript_corrections(transcript)
+    corrected = public_texts(transcript)[0][10000]
+    content = transcript._load_text_file("vtt").replace(corrected, f"<i>{corrected}</i>")
+    transcript._save_text_file("vtt", content)
+    transcript.save(preserve_source_fingerprint=True)
+
+    assert refresh_transcript_corrections(transcript, dry_run=True).changed == 0
+    assert refresh_transcript_corrections(transcript).changed == 0
+    assert transcript._load_text_file("vtt") == content
 
 
 @pytest.mark.django_db
