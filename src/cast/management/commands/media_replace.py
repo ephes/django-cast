@@ -7,8 +7,8 @@ from django.core.management.base import BaseCommand, CommandError
 from .storage_backend import (
     content_digest,
     get_production_and_backup_storage,
-    is_media_staging_key,
     temporary_refresh_path,
+    validate_media_stage_receipt,
 )
 
 
@@ -63,18 +63,21 @@ class Command(BaseCommand):
                         requested_stage = temporary_refresh_path(path)
                         staged_names.add(requested_stage)
                         staged_name = production.save(requested_stage, in_f)
+                        validate_media_stage_receipt(requested_stage, staged_name)
                         staged_names.add(staged_name)
                     if not production.exists(staged_name):
                         raise RuntimeError(f"staged replacement {staged_name} was not saved")
-                    if not is_media_staging_key(staged_name):
-                        raise RuntimeError(f"storage returned non-reserved staging key {staged_name}")
                     staged_digest = content_digest(production, staged_name)
                     if staged_digest != source_digest:
                         raise RuntimeError(f"staged replacement {staged_name} failed content verification")
                     target_exists = production.exists(path)
                     with production.open(staged_name, "rb") as staged_f:
+                        if target_exists:
+                            # A failed overwrite can leave partial bytes at the target.
+                            recovery_name = staged_name
                         saved_name = production.save(path, staged_f)
                     if target_exists and saved_name != path:
+                        recovery_name = None
                         if production.exists(saved_name):
                             try:
                                 production.delete(saved_name)
@@ -96,10 +99,10 @@ class Command(BaseCommand):
                 except Exception as exc:
                     errors += 1
                     self.stderr.write(f"error replacing {path}: {exc}")
+                finally:
                     if recovery_name is not None:
                         staged_names.discard(recovery_name)
                         self.stderr.write(f"complete recovery copy retained at {recovery_name}; inspect before retry")
-                finally:
                     for staged_name in sorted(staged_names):
                         try:
                             if production.exists(staged_name):

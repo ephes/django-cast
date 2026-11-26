@@ -51,6 +51,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Keep a verified ``media_replace`` recovery copy if an overwrite raises,
+  including on cancellation or failure while closing the staging reader.
+- Limit media replacement and sync staging cleanup to the requested key and
+  its Django-style aliases. Report unrelated backend receipts and leave their
+  objects intact.
 - Count verified media sync copies and refreshes even if stage cleanup fails.
   Reporting failures no longer interrupt recovery cleanup or mask the
   original storage error.

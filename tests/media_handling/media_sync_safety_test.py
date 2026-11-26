@@ -203,7 +203,7 @@ def test_refresh_reports_generated_alternate_when_cleanup_fails(mocker, failure)
 
 
 @pytest.mark.parametrize("mode", ["truncated", "unreserved"])
-def test_unverified_stage_is_removed_before_publication(mocker, mode):
+def test_invalid_stage_aborts_before_publication(mocker, mode):
     source = StubOverwriteStorage({"media.jpg": b"complete bytes"})
     target = StubOverwriteStorage({"media.jpg": b"old"})
     original_save = target.save
@@ -217,9 +217,71 @@ def test_unverified_stage_is_removed_before_publication(mocker, mode):
         return result
 
     mocker.patch.object(target, "save", side_effect=save)
-    with pytest.raises(RuntimeError, match="verification|non-reserved"):
+    with pytest.raises(RuntimeError, match="verification|unowned staging key"):
         refresh_existing_file(source, target, "media.jpg")
-    assert target._files == {"media.jpg": b"old"}
+    expected_files = {"media.jpg": b"old"}
+    if mode == "unreserved":
+        expected_files["unexpected.tmp"] = b"complete bytes"
+    assert target._files == expected_files
+
+
+@pytest.mark.parametrize("publisher", ["replace", "refresh"])
+@pytest.mark.parametrize("receipt_kind", ["live", "other stage", "tmp suffix", "compound suffix"])
+def test_staging_cleanup_is_limited_to_requested_key_and_its_alias(mocker, publisher, receipt_kind):
+    path = "folder/media.jpg"
+    stage = f"{path}.django-cast-refresh-{'a' * 32}.tmp"
+    receipt = {
+        "live": "folder/other.jpg",
+        "other stage": f"{path}.django-cast-refresh-{'b' * 32}.tmp",
+        "tmp suffix": f"{stage.removesuffix('.tmp')}_Ab123.tmp",
+        "compound suffix": stage.replace("media.jpg", "media_Ab123.jpg"),
+    }[receipt_kind]
+    is_alias = receipt_kind.endswith(" suffix")
+    source = StubOverwriteStorage({path: b"replacement"})
+    target = StubOverwriteStorage({path: b"original"})
+    if not is_alias:
+        target._files[receipt] = b"unrelated"
+    module = "media_replace" if publisher == "replace" else "storage_backend"
+    mocker.patch(f"cast.management.commands.{module}.temporary_refresh_path", return_value=stage)
+    original_save = target.save
+
+    def save(name, content):
+        if name == stage:
+            original_save(name, content)
+            if is_alias:
+                target._files[receipt] = target._files[name]
+            return receipt
+        return original_save(name, content)
+
+    mocker.patch.object(target, "save", side_effect=save)
+    errors = StringIO()
+    if publisher == "replace":
+        mocker.patch(
+            "cast.management.commands.media_replace.get_production_and_backup_storage", return_value=(target, object())
+        )
+        mocker.patch("cast.management.commands.media_replace.FileSystemStorage", return_value=source)
+
+        def publish():
+            call_command("media_replace", path, yes=True, stdout=StringIO(), stderr=errors)
+
+        expected_error = CommandError
+    else:
+
+        def publish():
+            refresh_existing_file(source, target, path)
+
+        expected_error = RuntimeError
+
+    if is_alias:
+        publish()
+        assert target._files == {path: b"replacement"}
+        assert set(target.deleted) == {stage, receipt}
+    else:
+        with pytest.raises(expected_error) as exc:
+            publish()
+        assert target._files == {path: b"original", receipt: b"unrelated"}
+        assert target.deleted == [stage]
+        assert f"unowned staging key {receipt}" in errors.getvalue() + str(exc.value)
 
 
 def test_real_filesystem_keeps_complete_stage_after_partial_final_write(tmp_path):
