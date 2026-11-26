@@ -892,7 +892,8 @@ later lists it as a variant. Rejected replacements are listed but never
 applied. Approved replacements are applied before automatic ones; an automatic
 replacement that overlaps an approved one is dropped. For each segment, the
 review checks spans in text order within each priority group. Replacements
-can touch at their endpoints.
+can touch at their endpoints. Transcript-wide approvals reuse the same
+whole-phrase matcher across segments, with offsets in the original text.
 
 After every Voxhelm import (admin request, queued completion or
 ``generate_transcripts``), the glossary runs automatically. A failure in this
@@ -930,6 +931,11 @@ If a timestamp is missing or ambiguous, or a matching WebVTT cue that needs new
 text has unsupported formatting, the refresh stops before writing any artifacts or
 correction decisions. Preview and apply also reject duplicate Podlove starts
 anywhere in the file, including passages outside the requested corrections.
+
+The Python helper ``apply_transcript_corrections(transcript)`` restores stored
+replacements and manual passage edits to the attached public formats when the
+sidecar matches the current source fingerprint. It returns the number of changed
+Podlove segments.
 
 After editing the glossary, re-apply it:
 

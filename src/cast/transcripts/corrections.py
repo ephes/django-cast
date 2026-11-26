@@ -54,12 +54,12 @@ from .glossary import (
     ShowTerm,
     TextSegment,
     apply_replacements,
+    compile_phrase_pattern,
     episode_terms,
     find_proposals,
     find_replacements,
     normalize_phrase,
     parse_contributor_variants,
-    phrase_spans,
 )
 
 logger = logging.getLogger(__name__)
@@ -474,8 +474,12 @@ def _build(data: dict[str, Any], episode: Episode) -> dict[str, Any]:
     for decision in decisions.values():
         if decision["state"] != STATE_APPROVED:
             continue
+        pattern = compile_phrase_pattern(decision["original"])
+        if pattern is None:
+            continue
         for segment in segments:
-            for start, end in phrase_spans(segment.text, decision["original"]):
+            for match in pattern.finditer(segment.text):
+                start, end = match.span()
                 original = segment.text[start:end]
                 if original != decision["to"]:
                     add(segment.start_ms, start, end, original, decision["to"], SOURCE_DECISION, 1.0, False)
@@ -680,13 +684,18 @@ def refresh_transcript_corrections(
 def apply_transcript_corrections(transcript: Transcript) -> int:
     """Write the stored corrections into the public files without recomputing them.
 
-    Rewrites the text of every segment that has replacements; returns the number
+    Rewrites segments with replacements or manual text and returns the number
     of Podlove segments whose text changed. Running it twice changes nothing.
     """
     data = transcript.corrections_data
     if not _is_current(data, transcript.source_fingerprint):
         return 0
-    corrected = [segment["start_ms"] for segment in data["segments"] if segment["replacements"]]
+    manual_texts = data.get("manual_texts", {})
+    corrected = [
+        segment["start_ms"]
+        for segment in data["segments"]
+        if segment["replacements"] or str(segment["start_ms"]) in manual_texts
+    ]
     return _write(transcript, data, corrected_texts(data, corrected)).podlove
 
 

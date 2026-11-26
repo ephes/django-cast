@@ -299,3 +299,102 @@ def test_interrupted_poster_publication_retires_only_unreferenced_attempt(video,
     assert storage.exists(attempt) == (cleanup != "unreferenced")
     if cleanup == "delete-fails":
         assert interrupted.value.__notes__ == ["Could not retire the staged video poster"]
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("stream", "method"), [("stderr", "write"), ("stdout", "write"), ("stdout", "flush")])
+def test_recalc_retains_published_posters_on_receipt_failure(video, tmp_path, mocker, stream, method):
+    storage = FileSystemStorage(location=tmp_path)
+    mocker.patch.object(Video._meta.get_field("poster"), "storage", storage)
+    second, third = Video.objects.bulk_create(
+        [Video(user=video.user, collection=video.collection, original=f"synthetic-{index}.mp4") for index in range(2)]
+    )
+    attempts = []
+
+    def generate(item):
+        attempts.append(item.pk)
+        if item.pk == second.pk:
+            raise RuntimeError("PRIVATE_MEDIA_ERROR")
+        item.poster.save(f"{item.pk}.jpg", ContentFile(b"synthetic poster"), save=False)
+
+    mocker.patch.object(Video, "_create_poster", generate)
+    outputs = {"stdout": StringIO(), "stderr": StringIO()}
+    mocker.patch.object(outputs[stream], method, side_effect=BrokenPipeError("PRIVATE_SINK_ERROR"))
+    expected = "diagnostic failed: processed=2" if stream == "stderr" else "summary failed: processed=3"
+
+    with pytest.raises(CommandError, match=f"Poster backfill {expected} errors=1") as error:
+        call_command("recalc_video_posters", **outputs)
+
+    assert "PRIVATE_" not in str(error.value) + outputs["stderr"].getvalue()
+    assert attempts == ([video.pk, second.pk] if stream == "stderr" else [video.pk, second.pk, third.pk])
+    for item in (video, second, third):
+        item.refresh_from_db()
+    assert storage.exists(video.poster.name)
+    assert not second.poster
+    if stream == "stderr":
+        assert not third.poster
+    else:
+        assert storage.exists(third.poster.name)
+        assert f"error recalculating poster for video {second.pk}:" in outputs["stderr"].getvalue()
+
+
+@pytest.mark.django_db
+def test_recalc_preserves_progress_when_terminal_rendering_breaks(video, tmp_path, mocker, monkeypatch):
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setenv("TTY_COMPATIBLE", "1")
+    storage = FileSystemStorage(location=tmp_path)
+    mocker.patch.object(Video._meta.get_field("poster"), "storage", storage)
+    (later,) = Video.objects.bulk_create(
+        [Video(user=video.user, collection=video.collection, original="synthetic-later.mp4")]
+    )
+    attempts = []
+
+    def generate(item):
+        attempts.append(item.pk)
+        item.poster.save("attempt.jpg", ContentFile(b"synthetic poster"), save=False)
+
+    mocker.patch.object(Video, "_create_poster", generate)
+    stdout = StringIO()
+    mocker.patch.object(stdout, "isatty", return_value=True)
+    original_write = stdout.write
+
+    def write(value):
+        if attempts:
+            raise BrokenPipeError("PRIVATE_TERMINAL_ERROR")
+        return original_write(value)
+
+    mocker.patch.object(stdout, "write", side_effect=write)
+    with pytest.raises(CommandError, match="Poster backfill progress failed: processed=1 errors=0"):
+        call_command("recalc_video_posters", stdout=stdout, stderr=StringIO())
+
+    assert attempts == [video.pk]
+    video.refresh_from_db()
+    later.refresh_from_db()
+    assert storage.exists(video.poster.name)
+    assert not later.poster
+
+
+@pytest.mark.django_db
+def test_recalc_terminal_progress_redraws_without_extra_newlines(video, tmp_path, mocker, monkeypatch):
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setenv("TTY_COMPATIBLE", "1")
+    storage = FileSystemStorage(location=tmp_path)
+    mocker.patch.object(Video._meta.get_field("poster"), "storage", storage)
+    Video.objects.bulk_create(
+        [Video(user=video.user, collection=video.collection, original=f"synthetic-{index}.mp4") for index in range(4)]
+    )
+
+    def generate(item):
+        item.poster.save(f"{item.pk}.jpg", ContentFile(b"synthetic poster"), save=False)
+
+    mocker.patch.object(Video, "_create_poster", generate)
+    stdout = StringIO()
+    mocker.patch.object(stdout, "isatty", return_value=True)
+
+    call_command("recalc_video_posters", stdout=stdout, stderr=StringIO())
+
+    output = stdout.getvalue()
+    assert "Recalculating video posters" in output
+    # Rich redraws the bar in place; only its final line and the summary end with a newline.
+    assert output.count("\n") == 2
+    assert output.endswith("processed=5 errors=0\n")
