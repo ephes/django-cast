@@ -106,7 +106,10 @@ class ItunesArtWorkModelAdmin(AdminUserMixin, ModelAdmin):
 @admin.action(description="Cache file sizes")
 def cache_file_sizes(_modeladmin: ModelAdmin, _request: "HttpRequest", queryset: QuerySet[Audio]) -> None:
     for audio in queryset:
-        audio.refresh_file_size_cache()
+        try:
+            audio.refresh_file_size_cache()
+        except Audio.DoesNotExist:
+            continue  # deleted after the queryset was read; never re-insert it
 
 
 @admin.register(Audio)

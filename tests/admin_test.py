@@ -81,6 +81,19 @@ def test_cache_file_sizes_refreshes_stored_sizes(audio):
 
 
 @pytest.mark.django_db
+def test_cache_file_sizes_skips_audio_deleted_after_selection(audio, user):
+    stale = Audio.objects.get(pk=audio.pk)
+    remaining = Audio.objects.create(user=user, title="remaining")
+    Audio.objects.filter(pk=audio.pk).delete()
+
+    cache_file_sizes(None, None, [stale, remaining])
+
+    assert not Audio.objects.filter(pk=audio.pk).exists()
+    remaining.refresh_from_db()
+    assert remaining.data == {"size": {}, "size_file_names": {}}
+
+
+@pytest.mark.django_db
 def test_cache_file_sizes_keeps_editor_saves_made_during_the_probe(audio, mocker):
     original_name = audio.m4a.name
     stale = Audio.objects.get(pk=audio.pk)
