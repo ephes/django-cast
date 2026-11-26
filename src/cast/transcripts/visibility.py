@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.core.exceptions import ObjectDoesNotExist
 
 from ..audio_access import _prime_candidate_restrictions, _view_restrictions
 from . import dote, podlove, webvtt
 from .parsing import clean_speaker_label
+
+if TYPE_CHECKING:
+    from ..models import Episode, Transcript
 
 EDITOR_SPEAKER_PREVIEW_ATTR = "_cast_editor_speaker_preview"
 
@@ -97,10 +100,15 @@ def public_speaker_labels_for_transcript(transcript: Any, *, episode: Any | None
     if not live_episodes:
         return None
 
+    return _contributor_labels_for_episodes(live_episodes, audio=audio) | _one_off_speaker_labels_for_episodes(
+        transcript, live_episodes
+    )
+
+
+def _contributor_labels_for_episodes(episodes: list[Any], *, audio: Any) -> set[str]:
     labels: set[str] = set()
-    for live_episode in live_episodes:
-        labels.update(public_speaker_labels_for_episode(live_episode, audio=audio) or set())
-    labels.update(public_one_off_speaker_labels_for_transcript(transcript))
+    for episode in episodes:
+        labels.update(public_speaker_labels_for_episode(episode, audio=audio) or set())
     return labels
 
 
@@ -212,12 +220,19 @@ def _public_contributor_ids(episodes: list[Any]) -> set[int]:
 
 def public_one_off_speaker_labels_for_transcript(transcript: Any, *, episode: Any | None = None) -> set[str]:
     episodes = _public_episode_contexts_for_transcript(transcript, episode=episode)
+    return _one_off_speaker_labels_for_episodes(transcript, episodes)
+
+
+def _one_off_speaker_labels_for_episodes(transcript: Any, episodes: list[Any] | None) -> set[str]:
     if not episodes:
         return set()
-    raw_speaker_labels = _current_raw_speaker_labels(transcript)
+    return _one_off_speaker_labels(_current_raw_speaker_labels(transcript), _current_mapping_rows(transcript))
+
+
+def _one_off_speaker_labels(raw_speaker_labels: set[str], rows: list[Any]) -> set[str]:
     return {
         label
-        for row in _current_mapping_rows(transcript)
+        for row in rows
         if row.contributor_id is None
         and (label := clean_speaker_label(row.display_name))
         and label not in raw_speaker_labels
@@ -229,10 +244,14 @@ def public_speaker_mapping_for_transcript(transcript: Any, *, episode: Any | Non
     episodes = _public_episode_contexts_for_transcript(transcript, episode=episode)
     if not episodes:
         return {}
-    contributor_ids = _public_contributor_ids(episodes)
-    raw_speaker_labels = _current_raw_speaker_labels(transcript)
+    return _speaker_mapping(
+        _public_contributor_ids(episodes), _current_raw_speaker_labels(transcript), _current_mapping_rows(transcript)
+    )
+
+
+def _speaker_mapping(contributor_ids: set[int], raw_speaker_labels: set[str], rows: list[Any]) -> dict[str, str]:
     mapping: dict[str, str] = {}
-    for row in _current_mapping_rows(transcript):
+    for row in rows:
         source_label = clean_speaker_label(row.speaker_label)
         if not source_label:
             continue
@@ -248,6 +267,21 @@ def public_speaker_mapping_for_transcript(transcript: Any, *, episode: Any | Non
         if target_label:
             mapping[source_label] = target_label
     return mapping
+
+
+def speaker_preview_policy(
+    transcript: Transcript, *, episode: Episode | None, speaker_labels: list[str]
+) -> tuple[dict[str, str], set[str]]:
+    """Return preview replacements and allowed names from the same approved rows."""
+    episodes = _public_episode_contexts_for_transcript(transcript, episode=episode)
+    if not episodes:
+        return {}, set()
+    raw_speaker_labels = set(speaker_labels)
+    rows = _current_mapping_rows(transcript)
+    mapping = _speaker_mapping(_public_contributor_ids(episodes), raw_speaker_labels, rows)
+    allowed = _contributor_labels_for_episodes(episodes, audio=transcript.audio)
+    allowed.update(_one_off_speaker_labels(raw_speaker_labels, rows))
+    return mapping, allowed
 
 
 def apply_public_speaker_mapping_to_podlove_data(

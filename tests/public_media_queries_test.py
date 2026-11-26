@@ -5,7 +5,7 @@ from wagtail.models import PageViewRestriction
 
 from cast.audio_access import authorize_audio_access, prevent_private_media_caching
 from cast.devdata import create_transcript
-from cast.models import Audio, Contributor, EpisodeContributor
+from cast.models import Audio, Contributor, EpisodeContributor, TranscriptSpeakerMapping
 from cast.transcripts.visibility import public_speaker_labels_for_transcript, public_speaker_mapping_for_transcript
 from tests.factories import EpisodeFactory, PodcastFactory
 
@@ -47,10 +47,15 @@ def test_public_speaker_aggregate_query_budget(podcast, rf, count, django_assert
         episode = episode_for(private, audio, f"private-{index}")
         private_contributor = Contributor.objects.create(display_name=f"Secret {index}", slug=f"secret-{index}")
         EpisodeContributor.objects.create(episode=episode, contributor=private_contributor)
-    with django_assert_num_queries(13):
-        assert public_speaker_labels_for_transcript(transcript) == {"Public Person"}
+    TranscriptSpeakerMapping.objects.filter(transcript=transcript, speaker_label="Speaker 1").update(
+        display_name="Guest",
+        review_state=TranscriptSpeakerMapping.ReviewState.APPROVED,
+        source_artifact_fingerprint=transcript.mapping_fingerprint(),
+    )
     with django_assert_num_queries(7):
-        assert public_speaker_mapping_for_transcript(transcript) == {}
+        assert public_speaker_labels_for_transcript(transcript) == {"Public Person", "Guest"}
+    with django_assert_num_queries(7):
+        assert public_speaker_mapping_for_transcript(transcript) == {"Speaker 1": "Guest"}
 
 
 @pytest.mark.django_db
@@ -146,8 +151,6 @@ def test_legacy_public_visibility_predicate_remains_available(podcast, rf):
 @pytest.mark.django_db
 @pytest.mark.parametrize("alias_kind", ["episode", "ancestor"])
 def test_aggregate_speakers_exclude_restricted_alias_sources(podcast, alias_kind):
-    from cast.models import TranscriptSpeakerMapping
-
     audio = Audio.objects.create(user=podcast.owner, title="Synthetic audio")
     transcript = create_transcript(audio=audio, podlove={"transcripts": [{"speaker": "Speaker 1", "text": "hi"}]})
     public = episode_for(podcast, audio, "public")

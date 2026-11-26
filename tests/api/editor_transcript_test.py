@@ -15,10 +15,12 @@ from cast.models import (
     Audio,
     Contributor,
     EpisodeContributor,
+    Transcript,
     TranscriptGeneration,
     TranscriptSpeakerMapping,
     VoxhelmSettings,
 )
+from cast.transcripts import visibility
 from cast.voxhelm import TranscriptSubmission, VoxhelmError, build_audio_task_ref
 from tests.factories import UserFactory
 
@@ -277,7 +279,7 @@ class TestEpisodeTranscriptStatus:
         assert data["status"] == "interrupted"
         assert data["active"] is False
 
-    def test_transcript_speakers_and_editor_preview_labels(self, api_client, admin_user, episode, draft_hosts):
+    def test_transcript_speakers_and_editor_preview_labels(self, api_client, admin_user, episode, draft_hosts, mocker):
         episode.live = False
         episode.save(update_fields=["live"])
         transcript = create_transcript(
@@ -306,11 +308,23 @@ class TestEpisodeTranscriptStatus:
             ),
         )
         transcript.sync_speaker_mappings()
+        fingerprint = transcript.transcript_artifact_fingerprint()
         TranscriptSpeakerMapping.objects.filter(transcript=transcript, speaker_label="Speaker 2").update(
             contributor=draft_hosts[1],
             review_state=TranscriptSpeakerMapping.ReviewState.APPROVED,
-            source_artifact_fingerprint=transcript.transcript_artifact_fingerprint(),
+            source_artifact_fingerprint=fingerprint,
         )
+        TranscriptSpeakerMapping.objects.filter(transcript=transcript, speaker_label="Speaker 3").update(
+            display_name="Drop-in Guest",
+            review_state=TranscriptSpeakerMapping.ReviewState.APPROVED,
+            source_artifact_fingerprint=fingerprint,
+        )
+        labels = transcript.get_speaker_labels()
+        rows = visibility._current_mapping_rows(transcript)
+        read_labels = mocker.patch.object(
+            Transcript, "get_speaker_labels", side_effect=[labels, ["Drop-in Guest"], ["Drop-in Guest"]]
+        )
+        read_rows = mocker.patch.object(visibility, "_current_mapping_rows", side_effect=[rows, []])
         api_client.force_authenticate(user=admin_user)
 
         data = api_client.get(transcript_url(episode)).json()["transcript"]
@@ -319,7 +333,9 @@ class TestEpisodeTranscriptStatus:
         assert data["complete"] is False
         assert data["edit_url"] == reverse("cast-transcript:edit", args=(transcript.pk,))
         assert data["speaker_labels"] == ["Draft Host", "Speaker 2", "Speaker 3"]
-        assert data["preview_speaker_labels"] == ["Draft Host", "Guest"]
+        assert data["preview_speaker_labels"] == ["Draft Host", "Guest", "Drop-in Guest"]
+        read_labels.assert_called_once_with()
+        read_rows.assert_called_once()
         assert data["known_speaker_suggestions"] == {
             "total": 3,
             "confident": 2,
@@ -333,18 +349,30 @@ class TestEpisodeTranscriptStatus:
             "contributor": {"id": draft_hosts[1].pk, "slug": "guest"},
             "display_name": "Guest",
         }
-        assert mappings["Speaker 3"]["contributor"] is None
+        assert mappings["Speaker 3"] == {
+            "speaker_label": "Speaker 3",
+            "review_state": "approved",
+            "contributor": None,
+            "display_name": "Drop-in Guest",
+        }
+        assert mappings["Draft Host"]["review_state"] == "unmapped"
 
-    def test_live_episode_reports_public_labels(self, api_client, admin_user, episode):
+    @pytest.mark.parametrize("diarization_disabled", [False, True])
+    def test_live_episode_reports_public_labels(self, api_client, admin_user, episode, diarization_disabled):
         contributor = Contributor.objects.create(display_name="Live Host", slug="live-host")
         EpisodeContributor.objects.create(episode=episode, contributor=contributor, role=EpisodeContributor.ROLE_HOST)
+        audio = episode.podcast_audio
+        if diarization_disabled:
+            audio.transcript_diarization_mode = Audio.TranscriptDiarizationMode.DISABLED
+            audio.save(update_fields=["transcript_diarization_mode"], duration=False, cache_file_sizes=False)
         create_transcript(
-            audio=episode.podcast_audio,
+            audio=audio,
             podlove={"transcripts": [{"start": "00:00:00.000", "speaker": "Live Host", "text": "A"}]},
         )
         api_client.force_authenticate(user=admin_user)
         data = api_client.get(transcript_url(episode)).json()["transcript"]
-        assert data["preview_speaker_labels"] == ["Live Host"]
+        assert data["speaker_labels"] == ["Live Host"]
+        assert data["preview_speaker_labels"] == ([] if diarization_disabled else ["Live Host"])
         assert data["known_speaker_suggestions"] is None
 
 
@@ -354,7 +382,6 @@ def test_transcript_read_denies_unselectable_draft_audio(
     scoped_editor_audio, podcast, api_client, mocker, protected_draft
 ):
     from cast.api.editor import transcripts as editor_transcripts
-    from cast.models import Transcript
     from tests.factories import EpisodeFactory
 
     actor, audio, forbidden = scoped_editor_audio

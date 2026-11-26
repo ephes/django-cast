@@ -1436,8 +1436,10 @@ Fields:
   the labels stored in the transcript files. ``preview_speaker_labels`` are the
   names an editor sees in the preview after approved speaker mappings and the
   episode's contributor assignments are applied (the public labels for a live
-  episode). ``speaker_mappings`` lists the active raw-label mappings with their
-  review state. ``known_speaker_suggestions`` summarizes Voxhelm's private
+  episode). The preview uses the same raw labels returned in ``speaker_labels``
+  and one read of the current approved mappings. ``speaker_mappings`` lists the
+  active raw-label mappings with their review state.
+  ``known_speaker_suggestions`` summarizes Voxhelm's private
   known-speaker suggestions (``null`` without a suggestions file); applying
   suggestions to the transcript remains an editor review step in the Wagtail
   transcript admin.

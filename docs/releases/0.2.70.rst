@@ -51,6 +51,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Use the same admitted public episodes for contributor and one-off speaker
+  labels when a transcript has no explicit episode context.
+- Use one read of raw labels and approved speaker mappings to compute both
+  the editor preview replacements and the names the preview may display.
+
 - Archive-wide glossary refresh skips and reports transcripts whose routed
   reads or writes disagree with the database used to load them.
 - Glossary application reports completed, changed and failed transcript
