@@ -351,9 +351,10 @@ Options:
     costs time and transfer on remote storage. Unchanged files are not
     rewritten. For changed files, staging verification reads the source again
     and reads the staged target bytes. A digest mismatch refuses publication.
-    Each full read has its own 16 GiB byte ceiling and a 300 second
-    deadline that grows with the object size (at most about 68 minutes);
-    exceeding it reports an incomplete path without publishing a replacement.
+    Each verification and save stream has its own 16 GiB byte ceiling
+    and a 300 second deadline that grows with the object size (at most
+    about 68 minutes). Exceeding it reports a path error. Digests also
+    require agreement with the reported object size when available.
     See :doc:`../operations/backup` for inventory limits, synchronous I/O
     limitations and the same-host publication concurrency contract.
 

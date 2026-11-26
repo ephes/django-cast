@@ -57,6 +57,9 @@ Fixes
 - Keep reserved media staging keys out of stale-media deletion and skip files
   whose modification time could not be determined. Creation time alone can
   establish age when the backend explicitly lacks modification timestamps.
+- Reject media sync digests when the complete read disagrees with the reported
+  object size. Apply independent byte and time budgets to the reads that
+  supply both staging and final saves.
 
 - Roll back editor post and episode creation if preparing the response fails,
   so the original slug can be retried.

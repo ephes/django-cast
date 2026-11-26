@@ -9,11 +9,13 @@ import tempfile
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
+from io import BufferedReader, RawIOBase
 from pathlib import Path
 from time import monotonic
+from typing import Any
 from uuid import uuid4
 
-from django.core.files import locks
+from django.core.files import File, locks
 from django.core.files.storage import InvalidStorageError, Storage, storages
 from django.core.management.base import CommandError
 
@@ -39,18 +41,20 @@ class MediaReadBudget:
 
     remaining: int = field(default_factory=lambda: MAX_MEDIA_READ_BYTES)
     deadline: float = field(default_factory=lambda: monotonic() + MAX_MEDIA_READ_SECONDS)
+    expected_size: int | None = None
 
     @classmethod
     def for_object(cls, storage: Storage, path: str) -> "MediaReadBudget":
         """A fresh budget whose deadline scales with the reported object size."""
         try:
             size = storage.size(path)
-        except Exception:  # Advisory only: an unknown size keeps the base deadline.
-            size = 0
+        except Exception:  # An unknown size keeps the base deadline.
+            size = None
+        expected_size = size if type(size) is int and size >= 0 else None
         # Beyond the byte ceiling more time cannot help: such a read is refused anyway.
-        scaled = min(max(size, 0), MAX_MEDIA_READ_BYTES)
+        scaled = min(expected_size or 0, MAX_MEDIA_READ_BYTES)
         seconds = max(MAX_MEDIA_READ_SECONDS, math.ceil(scaled / MIN_MEDIA_READ_BYTES_PER_SECOND))
-        return cls(deadline=monotonic() + seconds)
+        return cls(deadline=monotonic() + seconds, expected_size=expected_size)
 
     def check_time(self) -> None:
         if monotonic() >= self.deadline:
@@ -61,6 +65,48 @@ class MediaReadBudget:
         self.remaining -= size
         if self.remaining < 0:
             raise MediaReadBudgetExceeded("media read exceeded byte budget")
+
+    def read_chunk(self, stream: File, size: int = CONTENT_CHUNK_SIZE) -> bytes:
+        self.consume(0)  # A backend retry cannot read past an exhausted budget.
+        chunk: bytes = stream.read(min(size, CONTENT_CHUNK_SIZE, self.remaining + 1))
+        self.consume(len(chunk))
+        return chunk
+
+
+class BudgetedMediaStream(RawIOBase):
+    """Supply buffered upload reads without exposing the underlying file handle."""
+
+    def __init__(self, stream: File, budget: MediaReadBudget) -> None:
+        super().__init__()
+        self.stream = stream
+        self.budget = budget
+
+    def readable(self) -> bool:
+        return True
+
+    def seekable(self) -> bool:
+        return self.stream.seekable()
+
+    def seek(self, offset: int, whence: int = os.SEEK_SET) -> int:
+        return self.stream.seek(offset, whence)
+
+    def tell(self) -> int:
+        return self.stream.tell()
+
+    def readinto(self, buffer: Any) -> int:
+        view = memoryview(buffer).cast("B")
+        chunk = self.budget.read_chunk(self.stream, len(view))
+        view[: len(chunk)] = chunk
+        return len(chunk)
+
+
+@contextmanager
+def open_media_for_save(storage: Storage, path: str) -> Iterator[File]:
+    budget = MediaReadBudget.for_object(storage, path)
+    budget.check_time()
+    with storage.open(path, "rb") as stream:
+        with BufferedReader(BudgetedMediaStream(stream, budget), buffer_size=CONTENT_CHUNK_SIZE) as bounded:
+            yield File(bounded, name=path)
 
 
 @dataclass
@@ -86,9 +132,7 @@ def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -
     budget.check_time()
     with storage.open(path, "rb") as in_f:
         while True:
-            budget.check_time()
-            chunk = in_f.read(min(CONTENT_CHUNK_SIZE, budget.remaining + 1))
-            budget.consume(len(chunk))
+            chunk = budget.read_chunk(in_f)
             if not chunk:
                 return
             yield chunk
@@ -97,8 +141,12 @@ def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -
 def content_digest(storage: Storage, path: str, *, budget: MediaReadBudget | None = None) -> bytes:
     budget = budget or MediaReadBudget.for_object(storage, path)
     digest = hashlib.sha256()
+    initial_remaining = budget.remaining
     for chunk in bounded_media_chunks(storage, path, budget):
         digest.update(chunk)
+    count = initial_remaining - budget.remaining
+    if budget.expected_size is not None and count != budget.expected_size:
+        raise RuntimeError(f"media extent mismatch for {path}: read {count} bytes, expected {budget.expected_size}")
     return digest.digest()
 
 
@@ -222,8 +270,7 @@ def publish_staged_file(
     target_exists = target_storage.exists(path)
     if target_exists == missing:
         raise RuntimeError(f"media publication conflict: target presence changed for {path}")
-    # Every full read gets its own size-scaled budget; backend save I/O is not
-    # charged to any of them.
+    # Verification and each transfer have independent, size-scaled read budgets.
     target_before = content_digest(target_storage, path) if target_exists else None
     source_before = content_digest(source_storage, path)
     requested_stage = temporary_refresh_path(path)
@@ -232,7 +279,7 @@ def publish_staged_file(
     staged_names = {requested_stage}
     recovery_name = None
     try:
-        with source_storage.open(path, "rb") as in_f:
+        with open_media_for_save(source_storage, path) as in_f:
             staged_name = target_storage.save(requested_stage, in_f)
         staged_names.add(staged_name)
         if not target_storage.exists(staged_name):
@@ -248,7 +295,7 @@ def publish_staged_file(
             current_exists and content_digest(target_storage, path) != target_before
         ):
             raise RuntimeError(f"media publication conflict: target changed while staging {path}")
-        with target_storage.open(staged_name, "rb") as staged_f:
+        with open_media_for_save(target_storage, staged_name) as staged_f:
             try:
                 saved_name = target_storage.save(path, staged_f)
             except BaseException:

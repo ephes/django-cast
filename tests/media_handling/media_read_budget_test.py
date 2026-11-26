@@ -4,6 +4,9 @@ from contextlib import contextmanager
 from io import BytesIO
 
 import pytest
+from django.core.files import File
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
 
 from cast.management.commands import storage_backend as media
 from tests.management_command_helpers import StubOverwriteStorage
@@ -146,11 +149,145 @@ def test_staging_upload_time_is_not_charged_to_verification_reads(mocker):
 
     class SlowSaveStorage(StubOverwriteStorage):
         def save(self, name, content):
-            now[0] += 60  # Far beyond one read deadline.
-            return super().save(name, content)
+            saved = super().save(name, content)
+            now[0] += 60  # Upload completion may outlast the read deadline.
+            return saved
 
     source = StubOverwriteStorage({"media": b"abc"})
     target = SlowSaveStorage()
     result = media.sync_media_files(source, target)
     assert (result.copied, result.errors) == (1, 0)
     assert target._files["media"] == b"abc"
+
+
+@pytest.mark.parametrize("reported_size", [4, 10, None])
+def test_refresh_requires_complete_reported_source_extent(reported_size):
+    class SourceStorage(StubOverwriteStorage):
+        def size(self, name):
+            if reported_size is None:
+                raise NotImplementedError
+            return reported_size
+
+    path = "media"
+    source = SourceStorage({path: b"abcdef"})
+    target = StubOverwriteStorage({path: b"old"})
+    errors = []
+    result = media.sync_media_files(source, target, refresh_changed=True, report_error=errors.append)
+
+    if reported_size is None:
+        assert (result.refreshed, result.errors) == (1, 0)
+        assert target._files == {path: b"abcdef"}
+    else:
+        assert (result.refreshed, result.errors) == (0, 1)
+        assert target._files == {path: b"old"}
+        assert target.saved == []
+        assert f"read 6 bytes, expected {reported_size}" in errors[0]
+
+
+def test_matching_final_digest_cannot_hide_truncated_final_extent(mocker):
+    path = "media"
+    source = StubOverwriteStorage({path: b"new"})
+    target = StubOverwriteStorage({path: b"old"})
+    original_size = target.size
+
+    def size(name):
+        count = original_size(name)
+        return count + 1 if name == path and path in target.saved else count
+
+    mocker.patch.object(target, "size", side_effect=size)
+    errors = []
+    result = media.sync_media_files(source, target, refresh_changed=True, report_error=errors.append)
+
+    assert (result.refreshed, result.errors) == (0, 1)
+    (key,) = target.staged()
+    assert target._files[key] == b"new"
+    assert any("read 3 bytes, expected 4" in message for message in errors)
+
+
+@pytest.mark.parametrize("grows", ["source", "stage"])
+@pytest.mark.parametrize("transfer", ["read", "chunks"])
+def test_sync_caps_actual_save_reads(mocker, grows, transfer):
+    limits(mocker)
+    path = "media"
+    transfers = []
+
+    class TransferStorage(StubOverwriteStorage):
+        @contextmanager
+        def open(self, name, mode):
+            growing = grows == "source" and self is source or grows == "stage" and media.is_media_staging_key(name)
+            second_read = self.opened.count(name) == 1
+            with super().open(name, mode) as stream:
+                if growing and second_read:
+
+                    class GrowingStream(BytesIO):
+                        def read(self, size=-1):
+                            chunk = super().read(size)
+                            transfers.append(len(chunk))
+                            return chunk
+
+                    with GrowingStream(stream.getvalue() + b"x" * 20) as expanded:
+                        yield File(expanded)
+                else:
+                    yield File(stream)
+
+        def save(self, name, content):
+            if transfer == "read":
+                return super().save(name, content)
+            with ContentFile(b"".join(content.chunks(chunk_size=2))) as assembled:
+                return super().save(name, assembled)
+
+    source = TransferStorage({path: b"new"})
+    target = TransferStorage({path: b"old!"})
+    errors = []
+    result = media.sync_media_files(source, target, refresh_changed=True, report_error=errors.append)
+
+    assert (result.copied, result.refreshed, result.errors) == (0, 0, 1)
+    assert sum(transfers) == 7
+    assert any("byte budget" in message for message in errors)
+    assert target._files[path] == b"old!"
+    if grows == "stage":
+        (key,) = target.staged()
+        assert target._files[key] == b"new"
+        assert any(key in message for message in errors)
+    else:
+        assert target.staged() == []
+
+
+def test_sync_streams_to_local_and_seekable_object_storage(tmp_path):
+    class ObjectStorage(StubOverwriteStorage):
+        def save(self, name, content):
+            # Seek/tell size probing and sized reads, as used by S3 transfer managers.
+            content.seek(0, 2)
+            size = content.tell()
+            content.seek(0)
+            assert content.readable() and content.seekable()
+            chunks = []
+            while chunk := content.read(2):
+                chunks.append(chunk)
+            data = b"".join(chunks)
+            assert len(data) == size
+            return super().save(name, BytesIO(data))
+
+    path = "media"
+    local = FileSystemStorage(location=tmp_path)
+    remote = ObjectStorage({path: b"synthetic media"})
+    assert media.sync_media_files(remote, local).copied == 1
+    restored = ObjectStorage()
+    assert media.sync_media_files(local, restored).copied == 1
+    assert restored._files == remote._files
+
+
+def test_save_read_refuses_after_its_deadline(mocker):
+    limits(mocker)
+    now = [0.0]
+    mocker.patch.object(media, "monotonic", side_effect=lambda: now[0], create=True)
+
+    class SlowTransferStorage(StubOverwriteStorage):
+        def save(self, name, content):
+            now[0] += 11
+            return super().save(name, content)
+
+    target = SlowTransferStorage()
+    result = media.sync_media_files(StubOverwriteStorage({"media": b"abc"}), target)
+    assert (result.copied, result.errors) == (0, 1)
+    assert target._files == {}

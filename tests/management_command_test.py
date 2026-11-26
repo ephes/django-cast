@@ -73,7 +73,7 @@ class StubStorage:
         return name
 
     def save_without_adding(self, name: str, content: BytesIO) -> None:
-        self._files[name] = BytesIO(content.getvalue())
+        self._files[name] = BytesIO(content.read())
 
     def delete(self, path: str) -> None:
         self._files.pop(path, None)
