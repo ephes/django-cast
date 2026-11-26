@@ -97,9 +97,28 @@ def page_permission_user(*, codenames: tuple[str, ...]) -> object:
     return user
 
 
+@pytest.fixture
+def collection_wal_mode(transactional_db):
+    if connection.vendor != "sqlite":
+        yield
+        return
+
+    with connection.cursor() as cursor:
+        cursor.execute("PRAGMA journal_mode")
+        original_mode = cursor.fetchone()[0]
+        cursor.execute("PRAGMA journal_mode=WAL")
+    try:
+        yield
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute(f"PRAGMA journal_mode={original_mode}")
+
+
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.parametrize("use_snapshot", [True, False])
-def test_collection_breadcrumbs_survive_move_after_page_read(api_client, monkeypatch, use_snapshot):
+def test_collection_breadcrumbs_survive_move_after_page_read(
+    api_client, monkeypatch, use_snapshot, collection_wal_mode
+):
     if not use_snapshot:
         monkeypatch.setattr(editor_media, "_collection_read_snapshot", lambda using: nullcontext(False))
     elif connection.vendor != "postgresql":
@@ -142,35 +161,71 @@ def test_collection_breadcrumbs_survive_move_after_page_read(api_client, monkeyp
         return page
 
     monkeypatch.setattr(paginator, "paginate_queryset", paginate_before_move)
-    original_mode = None
-    if connection.vendor == "sqlite":
-        with connection.cursor() as cursor:
-            cursor.execute("PRAGMA journal_mode")
-            original_mode = cursor.fetchone()[0]
-            cursor.execute("PRAGMA journal_mode=WAL")
-    try:
-        url = reverse("cast:api:editor_media_collections")
-        for branch in (source, destination):
-            response = api_client.get(url, {"type": "image", "pageSize": 1})
-            assert response.status_code == 200, response.content
-            assert moved
-            assert response.json() == {
-                "count": 1,
-                "next": None,
-                "previous": None,
-                "results": [
-                    {
-                        "id": child.pk,
-                        "name": child.name,
-                        "breadcrumb": " / ".join(node.name for node in (root, branch, parent, child)),
-                        "ancestors": [{"id": node.pk, "name": node.name} for node in (root, branch, parent)],
-                    }
-                ],
-            }
-    finally:
-        if original_mode is not None:
-            with connection.cursor() as cursor:
-                cursor.execute(f"PRAGMA journal_mode={original_mode}")
+    url = reverse("cast:api:editor_media_collections")
+    for branch in (source, destination):
+        response = api_client.get(url, {"type": "image", "pageSize": 1})
+        assert response.status_code == 200, response.content
+        assert moved
+        assert response.json() == {
+            "count": 1,
+            "next": None,
+            "previous": None,
+            "results": [
+                {
+                    "id": child.pk,
+                    "name": child.name,
+                    "breadcrumb": " / ".join(node.name for node in (root, branch, parent, child)),
+                    "ancestors": [{"id": node.pk, "name": node.name} for node in (root, branch, parent)],
+                }
+            ],
+        }
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("nested", [False, True])
+def test_collection_count_and_page_survive_insert(api_client, monkeypatch, nested, collection_wal_mode):
+    root = Collection.get_first_root_node() or Collection.add_root(name="Synthetic root")
+    earlier = root.add_child(name="Earlier branch")
+    later = root.add_child(name="Later branch")
+    original = later.add_child(name="Original collection")
+    permitted = Collection.objects.filter(depth=original.depth)
+    monkeypatch.setattr(editor_media, "_usable_image_collections", lambda user: permitted)
+    api_client.force_authenticate(user=UserFactory(is_staff=True, is_superuser=True))
+
+    def insert_collection():
+        try:
+            return Collection.objects.get(pk=earlier.pk).add_child(name="New first collection").pk
+        finally:
+            connections.close_all()
+
+    inserted_id = None
+
+    def insert_after_first_collection_read(execute, sql, params, many, context):
+        nonlocal inserted_id
+        result = execute(sql, params, many, context)
+        if inserted_id is None and 'FROM "wagtailcore_collection"' in sql:
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                inserted_id = pool.submit(insert_collection).result(timeout=10)
+        return result
+
+    url = reverse("cast:api:editor_media_collections")
+    query = {"type": "image", "pageSize": 1}
+    with transaction.atomic() if nested else nullcontext():
+        with connection.execute_wrapper(insert_after_first_collection_read):
+            response = api_client.get(url, query)
+
+    assert inserted_id is not None
+    assert response.status_code == 200, response.content
+    data = response.json()
+    assert (data["count"], data["next"], data["previous"]) == (1, None, None)
+    assert [row["id"] for row in data["results"]] == [original.pk]
+
+    response = api_client.get(url, query)
+    assert response.status_code == 200, response.content
+    data = response.json()
+    assert data["count"] == 2
+    assert data["next"] is not None
+    assert [row["id"] for row in data["results"]] == [inserted_id]
 
 
 @pytest.mark.django_db
@@ -358,6 +413,51 @@ class TestEditorMediaEndpoints:
         assert image.status_code == 200
         video = api_client.get(f"{url}?type=video", format="json")
         assert video.status_code == 200
+
+    @pytest.mark.parametrize("page_size", [2, 3])
+    def test_collection_discovery_last_page(self, api_client, superuser, page_size):
+        root = Collection.get_first_root_node()
+        first = root.add_child(name="First")
+        last = root.add_child(name="Last")
+        api_client.force_authenticate(user=superuser)
+
+        response = api_client.get(
+            reverse("cast:api:editor_media_collections"), {"type": "image", "page": "last", "pageSize": page_size}
+        )
+
+        assert response.status_code == 200, response.content
+        data = response.json()
+        assert data["count"] == 3
+        assert data["next"] is None
+        assert (data["previous"] is not None) == (page_size == 2)
+        assert [item["id"] for item in data["results"]] == (
+            [last.pk] if page_size == 2 else [root.pk, first.pk, last.pk]
+        )
+
+    @pytest.mark.parametrize("page", [0, 2, "invalid", "100000000000000000000"])
+    def test_collection_discovery_rejects_invalid_pages(self, api_client, superuser, monkeypatch, page):
+        root = Collection.get_first_root_node()
+        permitted = Collection.objects.filter(pk=root.pk)
+        monkeypatch.setattr(editor_media, "_usable_image_collections", lambda user: permitted)
+        api_client.force_authenticate(user=superuser)
+
+        response = api_client.get(reverse("cast:api:editor_media_collections"), {"type": "image", "page": page})
+
+        assert response.status_code == 404
+        assert response.json()["code"] == "not_found"
+        assert "Invalid page" in response.json()["detail"]
+
+    @pytest.mark.parametrize("empty_tree", [False, True])
+    def test_collection_discovery_accepts_empty_first_page(self, api_client, superuser, monkeypatch, empty_tree):
+        if empty_tree:
+            Collection.objects.all().delete()
+        monkeypatch.setattr(editor_media, "_usable_image_collections", lambda user: Collection.objects.none())
+        api_client.force_authenticate(user=superuser)
+
+        response = api_client.get(reverse("cast:api:editor_media_collections"), {"type": "image", "page": "last"})
+
+        assert response.status_code == 200
+        assert response.json() == {"count": 0, "next": None, "previous": None, "results": []}
 
     def test_collection_discovery_rejects_unsupported_parameter(self, api_client, superuser):
         api_client.force_authenticate(user=superuser)
