@@ -429,7 +429,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         """Cache one storage-read size for the file name it was read from.
 
         The database write runs after the surrounding transaction commits, in its
-        own short transaction on the database the audio was loaded from, so it can
+        own short transaction on the database the audio was loaded from (skipped
+        when the router sends writes elsewhere, e.g. a read replica), so it can
         neither fail nor lock rows for the request that rendered the feed. It only
         writes while the row is unchanged since this instance was loaded or saved
         (same ``modified`` revision, so no derivation ran in between), still holds
@@ -443,6 +444,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         using, pk, revision = self._state.db, self.pk, self.modified
         if pk is None or using is None or revision is None:
             return
+        if router.db_for_write(Audio, instance=self) != using:
+            return  # Read from a replica (or routed elsewhere): never redirect the write.
         connection = transaction.get_connection(using)
         if not connection.in_atomic_block and not connection.get_autocommit():
             return  # Manual transaction management: no commit callback available.

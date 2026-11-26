@@ -401,10 +401,10 @@ class TestAudioModel:
 
         assert reader.get_file_size("m4a") == 0
 
-    def test_remembered_size_is_written_to_the_source_database(
+    def test_remembered_size_is_not_redirected_to_another_database(
         self, audio, mocker, django_capture_on_commit_callbacks
     ):
-        # A write router must not redirect the cache write to another database.
+        # An audio read from a replica (write router points elsewhere) is not healed.
         Audio.objects.filter(pk=audio.pk).update(data={})
         reader = Audio.objects.get(pk=audio.pk)
         mocker.patch("django.db.router.db_for_write", return_value="elsewhere")
@@ -412,8 +412,8 @@ class TestAudioModel:
         with django_capture_on_commit_callbacks(using=reader._state.db, execute=True) as callbacks:
             reader._remember_file_size("m4a", audio.m4a.name, 42)
 
-        assert len(callbacks) == 1
-        assert Audio.objects.get(pk=audio.pk).data["size"] == {"m4a": 42}
+        assert callbacks == []
+        assert Audio.objects.get(pk=audio.pk).data == {}
 
     def test_remembered_size_does_not_wait_for_a_locked_row(self, audio, mocker, django_capture_on_commit_callbacks):
         Audio.objects.filter(pk=audio.pk).update(data={})
