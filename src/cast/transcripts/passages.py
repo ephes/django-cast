@@ -85,11 +85,7 @@ def change_speaker(transcript: Transcript, start_ms: int, speaker: str) -> None:
         sidecar = transcript.speakers_data
         changed = False
         for segment in sidecar.get("segments", []):
-            if (
-                isinstance(segment, dict)
-                and (seconds := parsing.parse_timestamp_seconds(segment.get("start"))) is not None
-                and round(seconds * 1000) == start_ms
-            ):
+            if isinstance(segment, dict) and parsing.speaker_suggestion_start_ms(segment.get("start")) == start_ms:
                 segment["editor_decision"] = {"action": "correct" if speaker else "reject", "speaker": speaker}
                 changed = True
         if changed:

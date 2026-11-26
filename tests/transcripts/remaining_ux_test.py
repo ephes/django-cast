@@ -1,5 +1,7 @@
 """Editor workflow regression tests for the remaining transcript slices."""
 
+from pathlib import Path
+
 import pytest
 from django.urls import reverse
 
@@ -119,6 +121,30 @@ def test_preview_and_one_passage_speaker_change(admin_client, episode):
         ).status_code
         == 400
     )
+
+
+def test_manual_speaker_edit_ignores_unrepresentable_sidecar_start(episode, django_capture_on_commit_callbacks):
+    unrelated = {"start": 1e308, "editor_decision": {"action": "reject", "speaker": ""}}
+    transcript = passage_transcript(episode, speakers={"segments": [{"start": 0}, unrelated]})
+    fields = ("podlove", "dote", "vtt", "speakers")
+    old_files = {Path(getattr(transcript, name).path) for name in fields}
+    directories = {path.parent for path in old_files}
+    before = {path for directory in directories for path in directory.iterdir()}
+
+    with django_capture_on_commit_callbacks(execute=True):
+        transcript.change_passage_speaker(0, "Host")
+
+    transcript.refresh_from_db()
+    assert transcript.podlove_data["transcripts"][0]["speaker"] == "Host"
+    assert transcript.dote_data["lines"][0]["speakerDesignation"] == "Host"
+    assert "<v Host>Original</v>" in transcript._load_text_file("vtt")
+    assert transcript.speakers_data["segments"] == [
+        {"start": 0, "editor_decision": {"action": "correct", "speaker": "Host"}},
+        unrelated,
+    ]
+    new_files = {Path(getattr(transcript, name).path) for name in fields}
+    assert old_files.isdisjoint(new_files)
+    assert {path for directory in directories for path in directory.iterdir()} == (before - old_files) | new_files
 
 
 def test_inline_text_correction_updates_all_formats_and_survives_glossary(admin_client, episode, mocker):

@@ -1495,7 +1495,9 @@ Preview, passage corrections and upload
 Preview is available from the transcript editor and episode panel, including
 unpublished revisions. It shows 200 passages per page, marks unnamed passages,
 and plays audio from each timestamp. Change speaker affects the same timestamp
-in every stored format and retains a decision for generated transcripts.
+in every stored format and retains a decision for matching generated
+suggestions. Manual edits use the same sidecar start times as bulk speaker
+application, skipping starts that cannot be converted to finite milliseconds.
 
 Preview tells the editor how to edit: click a passage's text to correct it
 inline; Enter or Cmd+Enter saves, Escape cancels. A passage is one paragraph:

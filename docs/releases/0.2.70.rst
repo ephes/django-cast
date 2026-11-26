@@ -51,6 +51,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Apply manual passage speaker changes even when another sidecar segment has
+  a start time that overflows in milliseconds.
+
 - Ignore invalid speaker suggestion starts before resolving names and reuse
   rounded millisecond identities for matching across formats.
 - Check stored transcript JSON depth without allocating a stack entry per sibling.
