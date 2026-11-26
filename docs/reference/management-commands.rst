@@ -154,6 +154,9 @@ Options (one of the first three is required):
 ``--all``
     Read transcripts in batches of up to 100, through the highest ID visible
     when the command starts. Higher IDs are picked up on a later run.
+    Before opening a transcript's artifacts, check that its read and write
+    routes match the database it was loaded from. A mismatch fails that row
+    and the command continues with the remaining rows.
 
 ``--dry-run``
     Validate the editor artifacts, Podlove start times and correction destinations
@@ -166,7 +169,12 @@ episodes, or the stored episode no longer uses it; an editor must choose) or
 ``no_segments``, and ``changed`` counts Podlove segments whose text changed.
 For each failed refresh, the command reports the transcript ID and, when safe,
 the exception type on stderr. It processes the remaining transcripts, then
-exits with an error that includes the failure count.
+exits with an error that includes the failure count. If a receipt or diagnostic
+cannot be written or flushed, the command stops before refreshing another row.
+The command error includes the number of completed attempts, the number of
+transcripts with text changes in any public format, the number of failed
+attempts and the dry-run flag. Completed writes are retained. In dry runs
+the change count is a preview.
 
 Image Renditions
 ================

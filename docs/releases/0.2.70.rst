@@ -51,6 +51,11 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Archive-wide glossary refresh skips and reports transcripts whose routed
+  reads or writes disagree with the database used to load them.
+- Glossary application reports completed, changed and failed transcript
+  counts and dry-run status if an output stream fails.
+
 - Reapplying stored transcript corrections restores manual-only passage edits
   in Podlove, DOTe and WebVTT.
 

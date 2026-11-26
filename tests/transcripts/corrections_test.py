@@ -2,7 +2,7 @@
 
 import json
 import logging
-from io import BytesIO
+from io import BytesIO, StringIO
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -967,6 +967,67 @@ def test_command_reports_failures_and_continues(transcript, mocker, capsys):
     output = capsys.readouterr()
     assert output.err == f"transcript {transcript.pk}: failed (UnprintableError)\n"
     assert f"transcript {second.pk}: applied" in output.out
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("stream", "method", "dry_run", "expected"),
+    [
+        ("stdout", "write", False, "completed=2 changed=2 failed=0 dry_run=False"),
+        ("stderr", "write", False, "completed=2 changed=1 failed=1 dry_run=False"),
+        ("stdout", "flush", True, "completed=2 changed=2 failed=0 dry_run=True"),
+    ],
+)
+def test_archive_reports_settled_progress_on_receipt_failure(
+    transcript, glossary_episode, mocker, stream, method, dry_run, expected
+):
+    from cast.management.commands import apply_transcript_glossary as command
+
+    podcast = glossary_episode.get_parent()
+    later = []
+    for index in range(2):
+        audio = Audio.objects.create(title=f"Synthetic {index}", collection=transcript.collection, user=podcast.owner)
+        EpisodeFactory(
+            owner=podcast.owner,
+            parent=podcast,
+            title=f"Synthetic {index}",
+            slug=f"synthetic-{index}",
+            podcast_audio=audio,
+            body=BODY,
+        )
+        later.append(make_transcript(audio))
+    second, third = later
+
+    def refresh(row, *, dry_run):
+        if stream == "stderr" and row.pk == second.pk:
+            raise RuntimeError("PRIVATE_MEDIA_ERROR")
+        return refresh_transcript_corrections(row, dry_run=dry_run)
+
+    refresh_row = mocker.patch.object(command, "refresh_transcript_corrections", side_effect=refresh)
+    outputs = {"stdout": StringIO(), "stderr": StringIO()}
+    sink = outputs[stream]
+    original = getattr(sink, method)
+    writes = 0
+
+    def emit(*args):
+        nonlocal writes
+        writes += 1
+        if writes == (1 if stream == "stderr" else 2):
+            raise BrokenPipeError("PRIVATE_SINK_ERROR")
+        return original(*args)
+
+    mocker.patch.object(sink, method, side_effect=emit)
+
+    with pytest.raises(CommandError, match=f"Glossary receipt failed: {expected}") as error:
+        call_command("apply_transcript_glossary", "--all", dry_run=dry_run, **outputs)
+
+    assert [call.args[0].pk for call in refresh_row.call_args_list] == [transcript.pk, second.pk]
+    assert "PRIVATE_" not in str(error.value)
+    assert public_texts(transcript)[0][10000] == (TEXTS[0][1] if dry_run else "Jon said Gunicorn is fast.")
+    assert public_texts(second)[0][10000] == (
+        TEXTS[0][1] if dry_run or stream == "stderr" else "John said Gunicorn is fast."
+    )
+    assert public_texts(third)[0][10000] == TEXTS[0][1]
 
 
 @pytest.mark.parametrize("name", ["Error\nforged line", "E" * 81, "Érror"])

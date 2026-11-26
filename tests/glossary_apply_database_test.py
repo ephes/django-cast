@@ -1,8 +1,10 @@
 """Glossary application selects and preflights synthetic database rows."""
 
+import json
 from io import StringIO
 
 import pytest
+from django.core.files.base import ContentFile
 from django.core.management import CommandError, call_command
 from django.db import connections
 
@@ -119,3 +121,47 @@ def test_explicit_selection_preflights_later_transcript(settings, mocker, dry_ru
         )
 
     refresh.assert_not_called()
+
+
+@pytest.mark.django_db(databases={"default", "migration_other"})
+def test_archive_refuses_divergent_writer_and_refreshes_later_row(settings, mocker, request):
+    from cast.management.commands import apply_transcript_glossary as command
+    from tests.transcripts.corrections_helpers import podlove_data
+
+    sites = request.getfixturevalue("independent_podcasts")
+    _, episode, first = sites["default"]
+    _, _, other = sites["migration_other"]
+    # Identical artifact references let a conditional update match either row.
+    Episode.objects.using("default").filter(pk=episode.pk).update(podcast_audio=None)
+    first.podlove.save("synthetic.podlove.json", ContentFile(json.dumps(podlove_data()).encode()), save=False)
+    first.save()
+    Transcript.objects.using("migration_other").filter(pk=other.pk).update(
+        podlove=first.podlove.name, source_fingerprint=first.source_fingerprint
+    )
+    audio = Audio.objects.create(title="later", collection=first.collection, user=first.audio.user)
+    (later,) = Transcript.objects.bulk_create(
+        [Transcript(pk=first.pk + 1, audio=audio, collection=first.collection, podlove=first.podlove.name)]
+    )
+
+    class ArchiveRouter:
+        def db_for_write(self, model, **hints):
+            if model is Transcript and getattr(hints.get("instance"), "pk", None) == first.pk:
+                return "migration_other"
+            return None
+
+    settings.DATABASE_ROUTERS = [ArchiveRouter()]
+    mocker.patch.object(command, "ALL_BATCH_SIZE", 1)
+    refresh = mocker.spy(command, "refresh_transcript_corrections")
+    output, errors = StringIO(), StringIO()
+
+    with pytest.raises(CommandError, match=r"^1 transcript\(s\) failed$"):
+        call_command("apply_transcript_glossary", "--all", stdout=output, stderr=errors)
+
+    assert [call.args[0].pk for call in refresh.call_args_list] == [later.pk]
+    assert errors.getvalue() == f"transcript {first.pk}: failed (CommandError)\n"
+    first.refresh_from_db(using="default")
+    other.refresh_from_db(using="migration_other")
+    later.refresh_from_db(using="default")
+    assert not first.corrections and not other.corrections
+    assert first.podlove.name == other.podlove.name
+    assert later.corrections_data["segments"]

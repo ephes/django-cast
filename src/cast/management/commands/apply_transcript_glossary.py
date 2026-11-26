@@ -1,7 +1,7 @@
 from collections.abc import Iterable, Iterator
 from typing import Any
 
-from django.core.management.base import BaseCommand, CommandError, CommandParser
+from django.core.management.base import BaseCommand, CommandError, CommandParser, OutputWrapper
 from django.db import router
 from django.db.models import QuerySet
 
@@ -27,6 +27,12 @@ def _transcripts_at_start(transcripts: QuerySet[Transcript]) -> Iterator[Transcr
         yield from batch
         remaining = admitted.filter(pk__gt=batch[-1].pk)
         del batch
+
+
+def _validate_transcript_database(transcript: Transcript) -> None:
+    for operation in (router.db_for_read, router.db_for_write):
+        if operation(Transcript, instance=transcript) != transcript._state.db:
+            raise CommandError("Glossary application requires one database for transcript reads and writes.")
 
 
 def _failure_status(exc: Exception) -> str:
@@ -78,34 +84,48 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         dry_run = options["dry_run"]
-        failed = 0
+        completed = changed = failed = 0
+
+        def report(stream: OutputWrapper, message: str) -> None:
+            try:
+                stream.write(message)
+                stream.flush()
+            except Exception:
+                raise CommandError(
+                    f"Glossary receipt failed: completed={completed} changed={changed} failed={failed} dry_run={dry_run}"
+                ) from None
+
         transcripts = self.get_transcripts(options)
         selected: Iterable[Transcript]
-        if options["transcripts"] or options["podcast"]:
+        archive = options["all"]
+        if not archive:
             selected = list(transcripts)
             # Validate every actual transcript before refreshing the first one.
             # Instance-sensitive routers may differ from the podcast preflight.
             for transcript in selected:
-                for operation in (router.db_for_read, router.db_for_write):
-                    if operation(Transcript, instance=transcript) != transcript._state.db:
-                        raise CommandError(
-                            "Glossary application requires one database for transcript reads and writes."
-                        )
+                _validate_transcript_database(transcript)
         else:
             selected = _transcripts_at_start(transcripts)
         for transcript in selected:
             try:
+                if archive:
+                    _validate_transcript_database(transcript)
                 result = refresh_transcript_corrections(transcript, dry_run=dry_run)
             except Exception as exc:
                 failed += 1
-                self.stderr.write(f"transcript {transcript.pk}: {_failure_status(exc)}")
-                continue
-            self.stdout.write(
-                f"transcript {transcript.pk}: {result.status} automatic={result.automatic} "
-                f"approved={result.approved} proposals={result.proposals} changed={result.changed} "
-                f"dote_changed={result.format_changes.dote} vtt_changed={result.format_changes.vtt}"
-            )
+                stream = self.stderr
+                receipt = f"transcript {transcript.pk}: {_failure_status(exc)}"
+            else:
+                changed += bool(result.changed or result.format_changes.dote or result.format_changes.vtt)
+                stream = self.stdout
+                receipt = (
+                    f"transcript {transcript.pk}: {result.status} automatic={result.automatic} "
+                    f"approved={result.approved} proposals={result.proposals} changed={result.changed} "
+                    f"dote_changed={result.format_changes.dote} vtt_changed={result.format_changes.vtt}"
+                )
+            completed += 1
+            report(stream, receipt)
         if dry_run:
-            self.stdout.write("dry run, nothing written")
+            report(self.stdout, "dry run, nothing written")
         if failed:
             raise CommandError(f"{failed} transcript(s) failed")
