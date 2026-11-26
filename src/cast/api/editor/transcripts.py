@@ -14,11 +14,7 @@ from wagtail.models import Site
 from ...models import Audio, Episode, Transcript, TranscriptGeneration
 from ...transcripts.editing import episode_from_latest_revision
 from ...transcripts.generation_status import get_transcript_generation, transcript_complete
-from ...transcripts.visibility import (
-    editor_speaker_preview_episode,
-    public_speaker_mapping_for_transcript,
-    strict_public_speaker_labels_for_transcript,
-)
+from ...transcripts.visibility import editor_speaker_preview_episode, speaker_preview_policy
 from ...voxhelm import (
     VoxhelmError,
     build_known_speaker_references,
@@ -97,8 +93,7 @@ def transcript_payload(transcript: Transcript | None, *, episode: Episode, user:
         return None
     speaker_labels = transcript.get_speaker_labels()
     context_episode = _speaker_context_episode(episode, user)
-    mapping = public_speaker_mapping_for_transcript(transcript, episode=context_episode)
-    allowed = strict_public_speaker_labels_for_transcript(transcript, episode=context_episode)
+    mapping, allowed = speaker_preview_policy(transcript, episode=context_episode, speaker_labels=speaker_labels)
     preview_labels: list[str] = []
     for label in speaker_labels:
         shown = mapping.get(label, label)
