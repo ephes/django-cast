@@ -49,8 +49,8 @@ class Command(BaseCommand):
         using = router.db_for_write(Video)
         videos = Video.objects.using(using).order_by("pk")
         scope = videos.aggregate(last_pk=Max("pk"), total=Count("pk"))
-        # Django registers OutputWrapper as a text stream and delegates its I/O methods.
-        console = _ProgressConsole(file=cast(TextIO, self.stdout))
+        # Rich redraws in place; OutputWrapper.write() would append a newline to every refresh.
+        console = _ProgressConsole(file=cast(TextIO, self.stdout._out))
         try:
             for video in track(
                 _video_pages(videos, scope["last_pk"]),

@@ -372,3 +372,29 @@ def test_recalc_preserves_progress_when_terminal_rendering_breaks(video, tmp_pat
     later.refresh_from_db()
     assert storage.exists(video.poster.name)
     assert not later.poster
+
+
+@pytest.mark.django_db
+def test_recalc_terminal_progress_redraws_without_extra_newlines(video, tmp_path, mocker, monkeypatch):
+    monkeypatch.setenv("TERM", "xterm-256color")
+    monkeypatch.setenv("TTY_COMPATIBLE", "1")
+    storage = FileSystemStorage(location=tmp_path)
+    mocker.patch.object(Video._meta.get_field("poster"), "storage", storage)
+    Video.objects.bulk_create(
+        [Video(user=video.user, collection=video.collection, original=f"synthetic-{index}.mp4") for index in range(4)]
+    )
+
+    def generate(item):
+        item.poster.save(f"{item.pk}.jpg", ContentFile(b"synthetic poster"), save=False)
+
+    mocker.patch.object(Video, "_create_poster", generate)
+    stdout = StringIO()
+    mocker.patch.object(stdout, "isatty", return_value=True)
+
+    call_command("recalc_video_posters", stdout=stdout, stderr=StringIO())
+
+    output = stdout.getvalue()
+    assert "Recalculating video posters" in output
+    # Rich redraws the bar in place; only its final line and the summary end with a newline.
+    assert output.count("\n") == 2
+    assert output.endswith("processed=5 errors=0\n")
