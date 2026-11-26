@@ -1495,13 +1495,16 @@ Preview, passage corrections and upload
 Preview is available from the transcript editor and episode panel, including
 unpublished revisions. It shows 200 passages per page, marks unnamed passages,
 and plays audio from each timestamp. Change speaker affects the same timestamp
-in every stored format and retains a decision for generated transcripts.
+in every stored format and retains a decision for matching generated
+suggestions. Manual edits use the same sidecar start times as bulk speaker
+application, skipping starts that cannot be converted to finite milliseconds.
 
 Preview tells the editor how to edit: click a passage's text to correct it
 inline; Enter or Cmd+Enter saves, Escape cancels. A passage is one paragraph:
 line breaks and repeated spaces are folded into single spaces, so every format
-stores the same text. Saved and error states appear beside the passage without
-reloading; errors are shown as plain sentences and keep the typed text. The
+stores the same text. WebVTT escapes literal arrows such as ``-->`` so they
+display exactly as entered. Saved and error states appear beside the passage
+without reloading; errors are shown as plain sentences and keep the typed text. The
 audio player stays at the top while scrolling. Manual corrections update the stored Podlove,
 DOTe and WebVTT files together, their plain text and search entry. They take
 precedence over subsequent spelling-correction review. Mismatched timestamps or

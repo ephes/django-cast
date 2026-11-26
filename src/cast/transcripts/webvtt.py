@@ -378,8 +378,8 @@ def voice_opening(label: str, *, classes: str = "") -> str:
 
 
 def escape_cue_text(text: str) -> str:
-    """One WebVTT payload line for ``text``, escaped the way Voxhelm writes cues."""
-    single_line = " ".join(text.split()).replace("-->", "->")
+    """Escape one payload line, including the closing bracket of any literal arrow."""
+    single_line = " ".join(text.split())
     return single_line.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
