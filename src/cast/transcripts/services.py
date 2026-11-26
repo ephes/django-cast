@@ -255,24 +255,24 @@ def prepare_speaker_application(
 ) -> tuple[dict[int, str], set[int]]:
     """Resolve names and validate correspondence before any editorial file writes."""
     podlove.validate_edit_times(transcript._load_transcript_json("podlove"))
-    suggestions = sorted(suggestions, key=parsing.segment_sort_key)
+    segments_by_start: dict[int, dict] = {}
+    for segment in suggestions:
+        start_ms = parsing.speaker_suggestion_start_ms(segment.get("start"))
+        if start_ms is None:
+            continue
+        if start_ms in segments_by_start:
+            raise parsing.TranscriptArtifactError("Speaker suggestions have ambiguous rounded start times. Reload.")
+        segments_by_start[start_ms] = segment
+    starts = sorted(segments_by_start)
+    admitted = [segments_by_start[start_ms] for start_ms in starts]
     display_names = known_speakers.resolve_display_names(
-        suggestions, smooth=smooth, label_names=resolve_unreferenced_label_names(transcript, suggestions)
+        admitted, smooth=smooth, label_names=resolve_unreferenced_label_names(transcript, admitted)
     )
     names_by_start_ms: dict[int, str] = {}
     rejected_start_ms: set[int] = set()
-    seen_starts: set[int] = set()
-    for segment, name in zip(suggestions, display_names):
-        try:
-            start_ms = int(round(float(segment["start"]) * 1000))
-        except (TypeError, ValueError, KeyError, OverflowError):
-            continue
-        if start_ms in seen_starts:
-            raise parsing.TranscriptArtifactError("Speaker suggestions have ambiguous rounded start times. Reload.")
-        seen_starts.add(start_ms)
+    for start_ms, segment, name in zip(starts, admitted, display_names):
         if name:
             names_by_start_ms[start_ms] = name
-            rejected_start_ms.discard(start_ms)
         elif known_speakers.segment_has_reject_decision(segment):
             rejected_start_ms.add(start_ms)
     validate_speaker_destination_times(transcript, set(names_by_start_ms) | rejected_start_ms)

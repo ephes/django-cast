@@ -77,3 +77,19 @@ def test_segment_review_refuses_unsafe_correspondence_before_sidecar_write(audio
         transcript.save_known_speaker_editor_decisions({0: {"action": "reject"}})
     stage.assert_not_called()
     assert {name: transcript._read_file_bytes(name) for name in services.EDITOR_ARTIFACT_FIELDS} == before
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("start", [10**400, float("nan"), float("inf"), 1e308, -1e-10, True, None, "bad"])
+def test_invalid_suggestion_starts_do_not_influence_smoothing(audio, start):
+    speakers = copy.deepcopy(SPEAKERS)
+    speakers["segments"][0]["start"] = "10.0"  # Legacy numeric strings still match.
+    speakers["segments"].insert(1, {"start": start, "speaker": "Synthetic invalid"})
+    transcript = make_transcript(audio, podlove=PODLOVE, dote=DOTE, vtt=VTT, speakers=speakers)
+
+    assert services.prepare_speaker_application(transcript, transcript.get_speaker_suggestions(), smooth=True) == (
+        {10000: "Johannes", 12500: "Johannes", 15000: "Dominik"},
+        set(),
+    )
+    assert transcript.apply_known_speaker_suggestions() == 9
+    assert transcript.podlove_data["transcripts"][1]["speaker"] == "Johannes"

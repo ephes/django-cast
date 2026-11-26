@@ -1,6 +1,7 @@
 """Bound reads of synthetic stored JSON before decoding or editorial writes."""
 
 import json
+import tracemalloc
 from io import BytesIO
 
 import pytest
@@ -103,3 +104,31 @@ def test_player_and_serializer_refuse_oversized_json(audio, monkeypatch, reader)
 def test_stored_json_keeps_utf8_encoding_policy():
     with pytest.raises(parsing.TranscriptArtifactError):
         parsing.load_json_artifact(BytesIO('{"text":"hello"}'.encode("utf-16")))
+
+
+def test_depth_check_does_not_queue_wide_array_siblings():
+    width = 100_000
+    artifact = BytesIO(b"[" + b"0," * (width - 1) + b"0]")
+    tracemalloc.start()
+    try:
+        result = parsing.load_json_artifact(artifact)
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    assert len(result) == width
+    # Allow for decoding buffers and the resulting list, but not a tuple per item.
+    assert peak < 3 * 1024 * 1024
+
+
+@pytest.mark.parametrize("extra_depth", [0, 1])
+def test_stored_json_depth_boundary(extra_depth):
+    depth = parsing.MAX_TRANSCRIPT_JSON_DEPTH + extra_depth
+    payload = BytesIO(b'{"child":' * depth + b"[]" + b"}" * depth)
+    if extra_depth:
+        with pytest.raises(parsing.TranscriptArtifactError, match="nesting"):
+            parsing.load_json_artifact(payload)
+    else:
+        value = parsing.load_json_artifact(payload)
+        for _ in range(depth):
+            value = value["child"]
+        assert value == []

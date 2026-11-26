@@ -4,6 +4,7 @@ import json
 import math
 import re
 import unicodedata
+from collections.abc import Iterator
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -46,15 +47,19 @@ def read_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
 
 def load_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
     data = read_json_artifact(file, max_bytes=max_bytes)
-    pending = [(data, 0)]
+    pending: list[Iterator[Any]] = [iter((data,))]
     while pending:
-        value, depth = pending.pop()
-        if depth > MAX_TRANSCRIPT_JSON_DEPTH:
-            raise TranscriptArtifactError("Invalid transcript JSON nesting. Replace the artifact and reload.")
-        if isinstance(value, dict):
-            pending.extend((child, depth + 1) for child in value.values())
-        elif isinstance(value, list):
-            pending.extend((child, depth + 1) for child in value)
+        for value in pending[-1]:
+            if len(pending) - 1 > MAX_TRANSCRIPT_JSON_DEPTH:
+                raise TranscriptArtifactError("Invalid transcript JSON nesting. Replace the artifact and reload.")
+            if isinstance(value, dict):
+                pending.append(iter(value.values()))
+                break
+            if isinstance(value, list):
+                pending.append(iter(value))
+                break
+        else:
+            pending.pop()
     return data
 
 
@@ -79,11 +84,15 @@ LOW_SIGNAL_TRANSCRIPT_SAMPLE_TEXTS = frozenset(
 )
 
 
-def segment_sort_key(segment: dict) -> float:
-    try:
-        return float(segment.get("start") or 0.0)
-    except (TypeError, ValueError):
-        return 0.0
+def speaker_suggestion_start_ms(value: Any) -> int | None:
+    """Admit a sidecar start before it participates in name resolution."""
+    if isinstance(value, bool):
+        return None
+    seconds = _finite_nonnegative(value)
+    if seconds is None:
+        return None
+    milliseconds = seconds * 1000
+    return round(milliseconds) if math.isfinite(milliseconds) else None
 
 
 def quantize_seconds(value: Decimal) -> Decimal:
