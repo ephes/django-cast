@@ -180,6 +180,26 @@ def test_inline_text_correction_updates_all_formats_and_survives_glossary(admin_
     )
 
 
+def test_manual_text_edit_preserves_literal_arrow_in_every_format(episode):
+    from html import unescape
+
+    from django.utils.html import strip_tags
+
+    from cast.transcripts.webvtt import cue_lines
+
+    transcript = passage_transcript(episode)
+    expected = "Diagram: A --> B & C"
+    assert transcript.correct_passage_text(0, " Diagram: A  -->\n B & C ") == expected
+
+    transcript.refresh_from_db()
+    assert transcript.podlove_data["transcripts"][0]["text"] == expected
+    assert transcript.dote_data["lines"][0]["text"] == expected
+    assert transcript.corrections_data["manual_texts"] == {"0": expected}
+    content = transcript._load_text_file("vtt")
+    assert [unescape(strip_tags(line.strip())) for line, _, payload in cue_lines(content) if payload] == [expected]
+    assert "--&gt;" in content
+
+
 def test_preview_paging_and_permission(admin_client, client, episode):
     transcript = make_transcript(
         episode.podcast_audio, podlove={"transcripts": [{"start_ms": i * 1000, "text": str(i)} for i in range(201)]}

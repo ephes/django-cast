@@ -51,6 +51,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Preserve literal arrows (``-->``) in WebVTT text when manually correcting a
+  passage, matching the stored Podlove and DOTe text.
+
 - Apply manual passage speaker changes even when another sidecar segment has
   a start time that overflows in milliseconds.
 
