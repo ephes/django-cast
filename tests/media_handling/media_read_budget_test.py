@@ -184,20 +184,21 @@ def test_refresh_requires_complete_reported_source_extent(reported_size):
         assert f"read 6 bytes, expected {reported_size}" in errors[0]
 
 
+@pytest.mark.parametrize("handle", ["obj", "blob"])
 @pytest.mark.parametrize("encoding", ["gzip", "identity", None])
-def test_extent_check_skips_streams_decoded_from_their_stored_encoding(encoding):
+def test_extent_check_skips_streams_decoded_from_their_stored_encoding(encoding, handle):
     class Obj:
         content_encoding = encoding
 
     class EncodedStorage(StubOverwriteStorage):
-        # Like S3 with gzip: size() is the stored (encoded) length, open() yields decoded bytes.
+        # Like S3/Google Cloud with gzip: size() is the stored (encoded) length, open() yields decoded bytes.
         def size(self, name):
             return super().size(name) + 20
 
         @contextmanager
         def open(self, name, mode):
             with super().open(name, mode) as stream:
-                stream.obj = Obj()
+                setattr(stream, handle, Obj())
                 yield stream
 
     path = "image.svg"
@@ -326,6 +327,49 @@ def test_save_stream_refuses_when_its_reads_exceed_the_deadline(mocker):
 
     with media.open_media_for_save(SlowReadStorage({"media": b"abc"}), "media") as stream:
         with pytest.raises(media.MediaReadBudgetExceeded, match="time budget"):
+            stream.read()
+
+
+@pytest.mark.parametrize("call", ["tell", "seek", "seekable"])
+def test_save_stream_charges_lazy_downloads_on_positioning(mocker, call):
+    limits(mocker)
+    now = [0.0]
+    mocker.patch.object(media, "monotonic", side_effect=lambda: now[0], create=True)
+
+    class LazyStream(BytesIO):
+        # Like django-storages' S3File: the first access of any kind downloads the object.
+        downloaded = False
+
+        def download(self):
+            if not self.downloaded:
+                self.downloaded = True
+                now[0] += 11
+
+        def tell(self):
+            if call == "tell":
+                self.download()
+            return super().tell()
+
+        def seek(self, offset, whence=0):
+            if call == "seek":
+                self.download()
+            return super().seek(offset, whence)
+
+        def seekable(self):
+            if call == "seekable":
+                self.download()
+            return super().seekable()
+
+    class LazyStorage(StubOverwriteStorage):
+        @contextmanager
+        def open(self, name, mode):
+            with super().open(name, mode) as stream:
+                yield File(LazyStream(stream.read()))
+
+    with pytest.raises(media.MediaReadBudgetExceeded, match="time budget"):
+        with media.open_media_for_save(LazyStorage({"media": b"abc"}), "media") as stream:
+            stream.seekable()
+            stream.seek(0)
             stream.read()
 
 

@@ -119,7 +119,7 @@ class MediaSaveReadBudget(MediaReadBudget):
 class BudgetedMediaStream(RawIOBase):
     """Supply buffered upload reads without exposing the underlying file handle."""
 
-    def __init__(self, stream: File, budget: MediaReadBudget) -> None:
+    def __init__(self, stream: File, budget: MediaSaveReadBudget) -> None:
         super().__init__()
         self.stream = stream
         self.budget = budget
@@ -127,14 +127,19 @@ class BudgetedMediaStream(RawIOBase):
     def readable(self) -> bool:
         return True
 
+    # Lazy backends may download on the first access of any kind, so positioning is charged too.
     def seekable(self) -> bool:
-        return self.stream.seekable()
+        with self.budget.charged():
+            return self.stream.seekable()
 
     def seek(self, offset: int, whence: int = os.SEEK_SET) -> int:
-        return self.stream.seek(offset, whence)
+        self.budget.check_time()
+        with self.budget.charged():
+            return self.stream.seek(offset, whence)
 
     def tell(self) -> int:
-        return self.stream.tell()
+        with self.budget.charged():
+            return self.stream.tell()
 
     def readinto(self, buffer: Any) -> int:
         view = memoryview(buffer).cast("B")
@@ -172,10 +177,17 @@ def is_media_staging_key(path: str) -> bool:
     return re.search(r"\.django-cast-(?:refresh|replace)-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
 
 
+# Remote object handles of opened storage files: S3 (``obj``) and Google Cloud (``blob``).
+REMOTE_OBJECT_ATTRIBUTES = ("obj", "blob")
+
+
 def is_transparently_decoded(stream: Any) -> bool:
-    """Whether an opened stream decodes a stored content encoding (e.g. gzip on S3)."""
-    encoding = getattr(getattr(stream, "obj", None), "content_encoding", None)
-    return isinstance(encoding, str) and encoding.strip().lower() not in ("", "identity")
+    """Whether an opened stream decodes a stored content encoding (e.g. gzip on S3 or Google Cloud)."""
+    for attribute in REMOTE_OBJECT_ATTRIBUTES:
+        encoding = getattr(getattr(stream, attribute, None), "content_encoding", None)
+        if isinstance(encoding, str) and encoding.strip().lower() not in ("", "identity"):
+            return True
+    return False
 
 
 def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -> Generator[bytes, None, None]:

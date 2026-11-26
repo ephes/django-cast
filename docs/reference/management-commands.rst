@@ -353,11 +353,12 @@ Options:
     and reads the staged target bytes. A digest mismatch refuses publication.
     Each verification and save stream has its own 16 GiB byte ceiling
     and a 300 second deadline that grows with the object size (at most
-    about 68 minutes); for save streams only the time spent opening and
-    reading the stream counts, not the backend's upload work between reads.
+    about 68 minutes); for save streams only the time spent opening,
+    reading and positioning the stream counts, not the backend's upload work
+    between reads.
     Exceeding it reports a path error. Digests also require agreement with
-    the reported object size when available, except for streams that decode
-    a stored content encoding such as gzip.
+    the reported object size when available, except for S3 or Google Cloud
+    streams that decode a stored content encoding such as gzip.
     See :doc:`../operations/backup` for inventory limits, synchronous I/O
     limitations and the same-host publication concurrency contract.
 

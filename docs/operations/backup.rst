@@ -97,13 +97,15 @@ comparison, verification or transfer and cause an explicit path error. A
 digest is only accepted if the complete stream's byte count matches the
 size reported by storage when available. Backends without size metadata
 still use bounded reads, and so do streams that decode a stored content
-encoding (for example gzip-encoded S3 objects, whose reported size is the
-encoded length). A refused comparison never counts as unchanged.
+encoding, whose reported size is the encoded length. Such streams are
+recognized by the ``content_encoding`` of their remote object handle
+(``obj`` for S3, ``blob`` for Google Cloud, as in django-storages); other
+backends must report the size of the bytes they return. A refused comparison never counts as unchanged.
 The deadline is checked around synchronous reads; configure backend I/O timeouts
 as well, since Python cannot interrupt an individual blocked storage call.
 Save reads use the same byte ceiling and size-scaled time allowance for both
 source-to-stage and stage-to-final transfers, but only the time spent opening
-the stream and inside its reads is charged. Upload work a backend does between
+the stream and inside its reads, seeks and position queries is charged. Upload work a backend does between
 reads (for example multipart parts or a spooled upload) is not limited, so a
 slow uplink does not fail a large transfer; configure backend upload timeouts
 for that.
