@@ -1330,17 +1330,25 @@ Cleared, missing and unreadable formats lose their previous cached size; other
 metadata is preserved. A cached size is used without a storage request only when
 its file name matches the current field. Otherwise (for example a legacy size
 without a file identity) the size is read from storage, and a successful read of
-a stored (not pending) file is cached with the file name it was read from. That
+a stored (not pending) file is cached with the file name it was read from. A
+pending upload always reports its own byte count and is never cached. The cache
 write runs after the surrounding transaction commits, in its own short
-transaction: it locks the audio row, only writes while the row still holds that
-file name and has no size bound to it yet, keeps the other metadata and sends no
-save signals. If it fails, the size is simply read again next time. So after
-upgrading, each legacy format costs one storage size request (one HEAD on remote
-storage) on its first successful feed render or player request, not on every
-one. A failed lookup reports zero bytes and is not cached. Replacing bytes under
-an unchanged storage name requires running size derivation
-(``audio.save(duration=False, cache_file_sizes=True)``) to refresh the cached
-length, as does removing a file outside Django.
+transaction on the database the audio was loaded from. It only writes while the
+row is unchanged since the audio was loaded (same ``modified`` timestamp, so no
+size derivation ran in between), still holds that file name and has no size
+bound to it yet; a row locked by another transaction is skipped rather than
+waited for. It keeps the other metadata and sends no save signals. Under manual
+transaction management (autocommit off, outside ``atomic()``) nothing is
+written. A skipped or failed write only means the size is read again next time.
+So after upgrading, each legacy format costs one storage size request (one HEAD
+on remote storage) on its first successful feed render or player request, not on
+every one. A lookup that raises ``OSError`` or ``ValueError`` (for example a
+missing file; django-storages reports an S3 404 as ``FileNotFoundError``)
+reports zero bytes and is not cached. Other storage errors, such as an S3 403
+``ClientError``, propagate to the caller. Replacing bytes under an unchanged
+storage name requires running size derivation (``audio.save(duration=False,
+cache_file_sizes=True)``) to refresh the cached length, as does removing a file
+outside Django.
 
 
 Voice-reference selection freshness
