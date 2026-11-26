@@ -23,7 +23,7 @@ from cast.models import (
     TranscriptSpeakerMapping,
 )
 from cast.models.contributors import get_voice_reference_storage
-from cast.transcripts import corrections, dote, podlove, webvtt
+from cast.transcripts import corrections, dote, glossary, podlove, webvtt
 from cast.transcripts.corrections import (
     STATE_APPROVED,
     STATE_AUTO,
@@ -197,6 +197,58 @@ def test_apply_rewrites_public_files_from_the_sidecar(transcript):
 
     assert apply_transcript_corrections(transcript) == 2
     assert public_texts(transcript)[0][10000] == "Jon said Gunicorn is fast."
+
+
+@pytest.mark.django_db
+def test_apply_restores_manual_only_text_in_every_format(transcript):
+    from cast.transcripts.passages import correct_text
+
+    start = 15000
+    manual = "Editor text & details."
+    correct_text(transcript, start, manual)
+    [segment] = [segment for segment in transcript.corrections_data["segments"] if segment["start_ms"] == start]
+    assert segment["replacements"] == []
+    assert transcript.corrections_data["manual_texts"] == {str(start): manual}
+    before = public_texts(transcript)
+    assert before[0][start] == before[1][start] == manual
+    assert "Editor text &amp; details." in before[2]
+
+    transcript._write_transcript_json("podlove", podlove_data())
+    transcript._write_transcript_json("dote", dote_data())
+    transcript.vtt.save("stale.vtt", ContentFile(vtt_content().encode()), save=False)
+    transcript.save(preserve_source_fingerprint=True)
+    assert public_texts(transcript)[0][start] == public_texts(transcript)[1][start] == dict(TEXTS)[start]
+    assert dict(TEXTS)[start] in public_texts(transcript)[2]
+
+    assert apply_transcript_corrections(transcript) == 1
+    assert public_texts(transcript) == before
+    repaired = file_bytes(transcript)
+    assert apply_transcript_corrections(transcript) == 0
+    assert file_bytes(transcript) == repaired
+
+
+def test_transcript_wide_approvals_build_each_phrase_pattern_once(mocker):
+    raw = "Groß  Baum beside L’ARC and lʼarc, with GROSS Baum."
+    phrases = {"gross baum": "CANOPY", "l'arc": "ARCH"}
+    segments = [{"start_ms": i * 1000, "raw_text": raw} for i in range(20)]
+    decisions = [{"original": phrase, "to": target, "state": STATE_APPROVED} for phrase, target in phrases.items()]
+    decisions.append({"original": "--", "to": "ignored", "state": STATE_APPROVED})
+    expected = sorted(
+        (start, end, raw[start:end], target)
+        for phrase, target in phrases.items()
+        for start, end in phrase_spans(raw, phrase)
+    )
+    assert [item[2] for item in expected] == ["Groß  Baum", "L’ARC", "lʼarc", "GROSS Baum"]
+    mocker.patch.object(corrections, "effective_glossary", return_value=(EffectiveGlossary(language=""), "synthetic"))
+    build_pattern = mocker.spy(glossary, "_phrase_pattern")
+
+    data = corrections._build(
+        {"segments": segments, "decisions": decisions, "occurrence_decisions": []}, mocker.Mock(pk=1)
+    )
+
+    for segment in data["segments"]:
+        assert [(edit["start"], edit["end"], edit["from"], edit["to"]) for edit in segment["replacements"]] == expected
+    assert [call.args[0] for call in build_pattern.call_args_list] == list(phrases)
 
 
 @pytest.mark.django_db
