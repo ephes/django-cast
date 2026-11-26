@@ -10,11 +10,12 @@ from typing import Any
 
 
 class TranscriptArtifactError(Exception):
-    """A stored JSON artifact cannot be decoded safely for editorial work."""
+    """A stored transcript artifact cannot be read safely for editorial work."""
 
 
 MAX_TRANSCRIPT_JSON_DEPTH = 64
 MAX_STORED_TRANSCRIPT_JSON_BYTES = 10 * 1024 * 1024
+MAX_EDITOR_WEBVTT_BYTES = 10 * 1024 * 1024
 MAX_TRANSCRIPT_FINGERPRINT_ARTIFACT_BYTES = 10 * 1024 * 1024
 MAX_TRANSCRIPT_FINGERPRINT_TOTAL_BYTES = 30 * 1024 * 1024
 
@@ -28,15 +29,23 @@ def _unique_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
     return result
 
 
-def read_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
-    """Read binary stored JSON with a fixed byte ceiling, including short reads."""
-    if max_bytes is None:
-        max_bytes = MAX_STORED_TRANSCRIPT_JSON_BYTES
+def read_bounded_artifact(file: Any, *, max_bytes: int, limit_message: str) -> bytearray:
+    """Read at most the byte ceiling plus one, including short reads."""
     content = bytearray()
     while chunk := file.read(min(64 * 1024, max_bytes + 1 - len(content))):
         content.extend(chunk)
         if len(content) > max_bytes:
-            raise TranscriptArtifactError("Stored transcript JSON exceeds 10 MiB. Replace the artifact and reload.")
+            raise TranscriptArtifactError(limit_message)
+    return content
+
+
+def read_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
+    """Read binary stored JSON with a fixed byte ceiling."""
+    content = read_bounded_artifact(
+        file,
+        max_bytes=MAX_STORED_TRANSCRIPT_JSON_BYTES if max_bytes is None else max_bytes,
+        limit_message="Stored transcript JSON exceeds 10 MiB. Replace the artifact and reload.",
+    )
     try:
         return json.loads(content.decode("utf-8"), object_pairs_hook=_unique_members)
     except (UnicodeDecodeError, RecursionError) as error:

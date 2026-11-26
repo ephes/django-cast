@@ -229,7 +229,45 @@ def resolve_unreferenced_label_names(transcript: Transcript, suggestions: list[d
     return {label: name} if name else {}
 
 
-def validate_speaker_destination_times(transcript: Transcript, starts: set[int]) -> None:
+def read_editor_webvtt(transcript: Transcript) -> str | None:
+    """Load the referenced WebVTT before staging any speaker changes."""
+    field = transcript.vtt
+    name = field.name
+    if not name:
+        return None
+    try:
+        with field.storage.open(name, "rb") as file:
+            return parsing.read_bounded_artifact(
+                file,
+                max_bytes=parsing.MAX_EDITOR_WEBVTT_BYTES,
+                limit_message="Stored WebVTT exceeds 10 MiB. Replace the artifact and reload.",
+            ).decode("utf-8")
+    except (OSError, ValueError) as error:
+        raise parsing.TranscriptArtifactError("Could not read WebVTT. Replace the artifact and reload.") from error
+
+
+def stage_webvtt_speaker_changes(
+    transcript: Transcript,
+    content: str,
+    names: Mapping[int, str],
+    rejected: set[int],
+    *,
+    replacements: StagedFileReplacementGroup,
+) -> int:
+    matched = 0
+    changed = False
+    if rejected:
+        content, matched, changed = webvtt.clear_suggestions_from_content(content, rejected)
+    if names:
+        content, applied, labeled = webvtt.apply_suggestions_to_content(content, names)
+        matched += applied
+        changed |= labeled
+    if changed:
+        transcript._save_text_file("vtt", content, replacements=replacements)
+    return matched
+
+
+def validate_speaker_destination_times(transcript: Transcript, starts: set[int], *, vtt_content: str | None) -> None:
     """Require at most one destination per selected millisecond in each format."""
     podlove_data = transcript._load_transcript_json("podlove")
     records = podlove_data.get("transcripts")
@@ -242,18 +280,18 @@ def validate_speaker_destination_times(transcript: Transcript, starts: set[int])
     try:
         texts = dict.fromkeys(starts, "")
         dote.set_texts(transcript._load_transcript_json("dote"), texts)
-        if transcript.vtt:
-            webvtt.set_texts_in_content(transcript._load_text_file("vtt"), texts)
+        if vtt_content is not None:
+            webvtt.set_texts_in_content(vtt_content, texts)
     except ValueError as error:
         raise parsing.TranscriptArtifactError(
             "Speaker destination has ambiguous start times. Replace and reload."
         ) from error
 
 
-def prepare_speaker_application(
+def resolve_speaker_application(
     transcript: Transcript, suggestions: list[dict], *, smooth: bool
 ) -> tuple[dict[int, str], set[int]]:
-    """Resolve names and validate correspondence before any editorial file writes."""
+    """Resolve names and rejections by normalized start before any file writes."""
     podlove.validate_edit_times(transcript._load_transcript_json("podlove"))
     segments_by_start: dict[int, dict] = {}
     for segment in suggestions:
@@ -275,7 +313,6 @@ def prepare_speaker_application(
             names_by_start_ms[start_ms] = name
         elif known_speakers.segment_has_reject_decision(segment):
             rejected_start_ms.add(start_ms)
-    validate_speaker_destination_times(transcript, set(names_by_start_ms) | rejected_start_ms)
     return names_by_start_ms, rejected_start_ms
 
 
@@ -312,22 +349,24 @@ def apply_known_speaker_suggestions(transcript: Transcript, *, smooth: bool = Tr
     """
     validate_editor_artifacts(transcript)
     expected = artifact_state(transcript)
-    names_by_start_ms, rejected_start_ms = prepare_speaker_application(
+    vtt_content = read_editor_webvtt(transcript)
+    names_by_start_ms, rejected_start_ms = resolve_speaker_application(
         transcript, transcript.get_speaker_suggestions(), smooth=smooth
     )
+    validate_speaker_destination_times(transcript, set(names_by_start_ms) | rejected_start_ms, vtt_content=vtt_content)
     if not names_by_start_ms and not rejected_start_ms:
         return 0
     replacements = StagedFileReplacementGroup()
     try:
         applied = transcript._clear_suggestions_from_podlove(rejected_start_ms, replacements=replacements)
         applied += transcript._clear_suggestions_from_dote(rejected_start_ms, replacements=replacements)
-        if transcript.vtt:
-            applied += transcript._clear_suggestions_from_webvtt(rejected_start_ms, replacements=replacements)
         if names_by_start_ms:
             applied += transcript._apply_suggestions_to_podlove(names_by_start_ms, replacements=replacements)
             applied += transcript._apply_suggestions_to_dote(names_by_start_ms, replacements=replacements)
-            if transcript.vtt:
-                applied += transcript._apply_suggestions_to_webvtt(names_by_start_ms, replacements=replacements)
+        if vtt_content is not None:
+            applied += stage_webvtt_speaker_changes(
+                transcript, vtt_content, names_by_start_ms, rejected_start_ms, replacements=replacements
+            )
         if applied:
             save_editor_artifacts(transcript, replacements, expected)
     except Exception:
@@ -375,9 +414,10 @@ def save_known_speaker_editor_decisions(
         changed += 1
     if not changed:
         return 0
-    prepare_speaker_application(
+    names, rejected = resolve_speaker_application(
         transcript, [segment for segment in segments if isinstance(segment, dict)], smooth=False
     )
+    validate_speaker_destination_times(transcript, set(names) | rejected, vtt_content=read_editor_webvtt(transcript))
     replacements = StagedFileReplacementGroup()
     try:
         transcript._write_speakers_data(data, replacements=replacements)
@@ -408,6 +448,7 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
     if not cleaned_mapping:
         return False
 
+    vtt_content = read_editor_webvtt(transcript)
     changed_fields = []
     replacements = StagedFileReplacementGroup()
     try:
@@ -421,8 +462,7 @@ def rewrite_speaker_labels(transcript: Transcript, mapping: Mapping[str, str]) -
             transcript._save_json_file("dote", dote_data, replacements=replacements)
             changed_fields.append("dote")
 
-        if transcript.vtt:
-            vtt_content = transcript._load_text_file("vtt")
+        if vtt_content is not None:
             rewritten_vtt_content, vtt_changed = webvtt.rewrite_speakers(vtt_content, cleaned_mapping)
             if vtt_changed:
                 transcript._save_text_file("vtt", rewritten_vtt_content, replacements=replacements)

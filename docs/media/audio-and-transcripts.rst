@@ -543,6 +543,11 @@ so the old prefix does not stay visible, and clearing a suggestion removes the
 prefix like a voice label. Public WebVTT output
 shows mapped prefixes the same way.
 
+Speaker application, renaming and passage speaker edits require any referenced
+WebVTT file to be readable UTF-8 within 10 MiB. If the file is missing,
+unreadable or too large, the edit stops before writing any artifacts. Replace
+the WebVTT file and retry. An unset WebVTT field is allowed.
+
 Editors previewing an unpublished episode are the exception: when a transcript
 request for that episode is authorized by the editor's edit permission (the
 Wagtail preview's player, or the transcript endpoints with ``episode_id`` /
@@ -1534,7 +1539,9 @@ version from the displayed date to bring them back together. The current state
 then becomes the previous version, so restoring can be undone. This is one
 previous version, not a full history. It is deleted with its transcript and has
 no public download URL. The regeneration confirmation names the loss of manual
-text corrections explicitly.
+text corrections explicitly. Restore checks the saved contributor IDs together
+on the transcript's database. A mapping whose contributor no longer exists there
+loses the contributor link and is marked stale for review.
 
 Chapter import limits
 ~~~~~~~~~~~~~~~~~~~~~

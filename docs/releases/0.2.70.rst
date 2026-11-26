@@ -54,6 +54,10 @@ Fixes
 - Ignore invalid speaker suggestion starts before resolving names and reuse
   rounded millisecond identities for matching across formats.
 - Check stored transcript JSON depth without allocating a stack entry per sibling.
+- Refuse cross-format speaker edits before staging files if referenced WebVTT
+  cannot be read as UTF-8 within the 10 MiB editor limit.
+- Batch contributor identity lookups on the transcript's database when restoring
+  its previous version.
 
 - Use the same admitted public episodes for contributor and one-off speaker
   labels when a transcript has no explicit episode context.

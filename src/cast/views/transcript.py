@@ -341,7 +341,7 @@ EditActionHandler = Callable[[HttpRequest, Transcript, editing.SpeakerMappingCon
 
 
 def _applied_passage_count(transcript: Transcript) -> int:
-    names, rejected = services.prepare_speaker_application(
+    names, rejected = services.resolve_speaker_application(
         transcript, transcript.get_speaker_suggestions(), smooth=False
     )
     return len((set(names) | rejected) & set(get_known_speaker_text_by_start_ms(transcript)))
@@ -586,7 +586,7 @@ def edit(request: HttpRequest, transcript_id: int) -> HttpResponse:
                 "artifact_revision": services.artifact_revision(transcript),
                 "invalid_sidecars": invalid_sidecars,
                 "artifact_error": _(
-                    "Invalid transcript JSON or editorial evidence (timestamps or size; 10 MiB per artifact, 30 MiB total). Replace the artifact and reload."
+                    "Invalid transcript JSON, WebVTT or editorial evidence (timestamps or size; 10 MiB per artifact, 30 MiB total). Replace the artifact and reload."
                 ),
             },
             status=400,

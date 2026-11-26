@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from cast.models.transcript import Transcript
 
 
-def get_passages(transcript: Transcript) -> list[dict[str, Any]]:
+def get_passages(transcript: Transcript, *, vtt_content: str | None = None) -> list[dict[str, Any]]:
     """Read public artifacts only, preferring the web-player transcript."""
     data = transcript._load_transcript_json("podlove")
     podlove.validate_edit_times(data)
@@ -41,7 +41,9 @@ def get_passages(transcript: Transcript) -> list[dict[str, Any]]:
         ]
     if not rows and transcript.vtt:
         current: dict[str, Any] | None = None
-        for line, start, payload in webvtt.cue_lines(transcript._load_text_file("vtt")):
+        if vtt_content is None:
+            vtt_content = transcript._load_text_file("vtt")
+        for line, start, payload in webvtt.cue_lines(vtt_content):
             if start is not None:
                 current = {"start_ms": start, "text": "", "speaker": ""}
                 rows.append(current)
@@ -63,23 +65,23 @@ def get_passages(transcript: Transcript) -> list[dict[str, Any]]:
 def change_speaker(transcript: Transcript, start_ms: int, speaker: str) -> None:
     """Change one passage in every stored format and retain its review decision."""
     services.validate_editor_artifacts(transcript)
-    if start_ms not in {row["start_ms"] for row in get_passages(transcript)}:
+    vtt_content = services.read_editor_webvtt(transcript)
+    if start_ms not in {row["start_ms"] for row in get_passages(transcript, vtt_content=vtt_content)}:
         raise ValidationError("This passage no longer exists. Reload the transcript.")
-    services.validate_speaker_destination_times(transcript, {start_ms})
+    services.validate_speaker_destination_times(transcript, {start_ms}, vtt_content=vtt_content)
     expected = services.artifact_state(transcript)
     replacements = StagedFileReplacementGroup()
     try:
-        names = {start_ms: speaker}
+        names = {start_ms: speaker} if speaker else {}
+        rejected = set() if speaker else {start_ms}
         if speaker:
             transcript._apply_suggestions_to_podlove(names, replacements=replacements)
             transcript._apply_suggestions_to_dote(names, replacements=replacements)
-            if transcript.vtt:
-                transcript._apply_suggestions_to_webvtt(names, replacements=replacements)
         else:
-            transcript._clear_suggestions_from_podlove({start_ms}, replacements=replacements)
-            transcript._clear_suggestions_from_dote({start_ms}, replacements=replacements)
-            if transcript.vtt:
-                transcript._clear_suggestions_from_webvtt({start_ms}, replacements=replacements)
+            transcript._clear_suggestions_from_podlove(rejected, replacements=replacements)
+            transcript._clear_suggestions_from_dote(rejected, replacements=replacements)
+        if vtt_content is not None:
+            services.stage_webvtt_speaker_changes(transcript, vtt_content, names, rejected, replacements=replacements)
         sidecar = transcript.speakers_data
         changed = False
         for segment in sidecar.get("segments", []):
