@@ -11,8 +11,8 @@ from urllib.parse import urlsplit, urlunsplit
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.db import connections, router, transaction
-from django.db.models import Exists, F, OuterRef, Q, QuerySet, Subquery, Window
-from django.db.models.functions import RowNumber
+from django.db.models import BigIntegerField, Count, Exists, F, OuterRef, Q, QuerySet, Subquery, Value, Window
+from django.db.models.functions import Coalesce, Mod, RowNumber
 from django.http import HttpResponse, HttpResponseBase
 from django.urls import NoReverseMatch, reverse
 from rest_framework import status
@@ -648,10 +648,9 @@ def _with_upload_lock(user: Any, callback: Callable[[], Response]) -> Response:
 
 @contextmanager
 def _collection_read_snapshot(using: str) -> Iterator[bool]:
-    # Other backends, and PostgreSQL inside a caller's transaction, read page
-    # rows and ancestry in one statement instead. SQLite stays there too: a
-    # transaction with ``transaction_mode="IMMEDIATE"`` would take the write
-    # lock for this GET.
+    # Other backends, and PostgreSQL inside a caller's transaction, read the
+    # count, page rows and ancestry in one statement. A SQLite transaction with
+    # ``transaction_mode="IMMEDIATE"`` would take the write lock for this GET.
     connection = connections[using]
     if connection.vendor == "postgresql" and connection.get_autocommit():
         with transaction.atomic(using=using):
@@ -663,31 +662,58 @@ def _collection_read_snapshot(using: str) -> Iterator[bool]:
 
 
 class _CollectionPageQuery:
-    """Provide Django's paginator with a slice that includes its ancestry."""
+    """Provide the paginator with a count and one preloaded page from the same statement."""
 
     ordered = True
 
-    def __init__(self, permitted: QuerySet[Collection]) -> None:
-        self.permitted = permitted
+    def __init__(
+        self, permitted: QuerySet[Collection], request: Request, paginator: StandardResultsSetPagination
+    ) -> None:
+        page_size = paginator.get_page_size(request)
+        assert page_size is not None
+        requested_page = request.query_params.get(paginator.page_query_param) or "1"
+
+        collections = Collection.objects.using(permitted.db)
+        eligible = collections.filter(pk__in=Subquery(permitted.order_by().values("pk"))).order_by()
+        total_query = eligible.values(group_key=Value(1)).annotate(total=Count("pk")).values("total")
+        total = Coalesce(Subquery(total_query), Value(0))
+        # Window bounds also work on databases that reject LIMIT in an IN subquery.
+        page_ids = eligible.alias(
+            page_row=Window(RowNumber(output_field=BigIntegerField()), order_by=[F("path").asc(), F("id").asc()])
+        )
+        if requested_page in paginator.last_page_strings:
+            # Round the final zero-based index down to a page boundary.
+            last_index = total - 1
+            page_ids = page_ids.filter(page_row__gt=last_index - Mod(last_index, Value(page_size)))
+        else:
+            # Django's paginator still validates the page and produces its usual errors.
+            try:
+                start = (int(requested_page) - 1) * page_size
+            except ValueError:
+                start = -1
+            max_row = 2**63 - 1
+            if 0 <= start < max_row:
+                page_ids = page_ids.filter(page_row__gt=start, page_row__lte=min(start + page_size, max_row))
+            else:
+                page_ids = page_ids.none()
+
+        on_page = Q(pk__in=Subquery(page_ids.values("pk")))
+        descendants = collections.filter(on_page, path__startswith=OuterRef("path"))
+        # Roots carry the count even when the requested page yields no rows.
+        rows = list(
+            collections.filter(Q(depth=1) | Exists(descendants))
+            .annotate(on_page=on_page, page_total=total)
+            .order_by("path", "id")
+        )
+        self.total = rows[0].page_total if rows else 0
+        by_path = {row.path: row for row in rows}
+        self.items = [_collection_item(row, by_path) for row in rows if row.on_page]
 
     def count(self) -> int:
-        return self.permitted.count()
+        return self.total
 
-    def __getitem__(self, bounds: slice) -> list[dict[str, Any]]:
-        # Window bounds also work on databases that reject LIMIT in an IN subquery.
-        collections = Collection.objects.using(self.permitted.db)
-        page_ids = (
-            collections.filter(pk__in=Subquery(self.permitted.order_by().values("pk")))
-            .alias(page_row=Window(RowNumber(), order_by=[F("path").asc(), F("id").asc()]))
-            .filter(page_row__gt=bounds.start, page_row__lte=bounds.stop)
-            .order_by()
-            .values("pk")
-        )
-        on_page = Q(pk__in=Subquery(page_ids))
-        descendants = collections.filter(on_page, path__startswith=OuterRef("path"))
-        rows = list(collections.filter(Exists(descendants)).annotate(on_page=on_page).order_by("path", "id"))
-        by_path = {row.path: row for row in rows}
-        return [_collection_item(row, by_path) for row in rows if row.on_page]
+    def __getitem__(self, _bounds: slice) -> list[dict[str, Any]]:
+        return self.items
 
 
 class EditorMediaCollectionsView(EditorAPIView):
@@ -725,5 +751,6 @@ class EditorMediaCollectionsView(EditorAPIView):
                 }
                 data = [_collection_item(collection, ancestors_by_path) for collection in page]
             else:
-                data = paginator.paginate_queryset(_CollectionPageQuery(queryset), request, view=self)
+                page_query = _CollectionPageQuery(queryset, request, paginator)
+                data = paginator.paginate_queryset(page_query, request, view=self)
         return paginator.get_paginated_response(data)

@@ -175,8 +175,9 @@ On an episode edit page, use the **Contributors** panel to add ordered
 contributors. Each assignment chooses a contributor, a role of **Host** or
 **Guest**, and optionally one of the contributor's links to use for that episode.
 After a contributor is selected, the link field only offers that contributor's
-profile links. New assignments use the contributor's default role and first
-ordered profile link, but editors can still change both fields per episode.
+profile links, read from the same database as the contributor. New assignments
+use the contributor's default role and first ordered profile link. Editors can
+still change both fields per episode.
 Link labels show the contributor's name and service, for example
 ``Guest: Website``.
 The same contributor may appear on an episode under more than one role (for
