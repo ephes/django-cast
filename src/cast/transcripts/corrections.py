@@ -29,7 +29,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Callable, Iterable, Iterator, Sequence
 from dataclasses import dataclass, field
 from typing import Any, cast
@@ -85,13 +85,23 @@ def _save_derived_artifacts(transcript: Transcript, **kwargs: Any) -> None:
 
 
 @dataclass(frozen=True)
+class CorrectionFormatChanges:
+    """Counts of changed public text units in each format."""
+
+    podlove: int = 0
+    dote: int = 0
+    vtt: int = 0
+
+
+@dataclass(frozen=True)
 class CorrectionsResult:
     """Outcome of a corrections run.
 
     ``status`` is ``applied``, ``needs_episode`` (no episode context: the review must
     ask the editor to choose one of ``episodes_using_audio``; nothing was replaced) or
     ``no_segments`` (no Podlove segments to correct). ``changed`` counts Podlove
-    segments whose public text changed.
+    segments whose public text changed. ``format_changes`` also reports changed
+    DOTe lines and WebVTT cues, including on dry runs.
     """
 
     status: str
@@ -99,6 +109,7 @@ class CorrectionsResult:
     approved: int = 0
     proposals: int = 0
     changed: int = 0
+    format_changes: CorrectionFormatChanges = field(default_factory=CorrectionFormatChanges)
 
     @property
     def needs_episode(self) -> bool:
@@ -384,10 +395,6 @@ def _occurrence_key(item: dict[str, Any]) -> tuple[Any, ...]:
     return (item["start_ms"], item["start"], item["end"], item["from"], item["to"])
 
 
-def _overlaps(start: int, end: int, spans: Iterable[tuple[int, int]]) -> bool:
-    return any(start < span_end and span_start < end for span_start, span_end in spans)
-
-
 def _build(data: dict[str, Any], episode: Episode) -> dict[str, Any]:
     """Recompute replacements and proposals from raw text and the stored decisions.
 
@@ -411,7 +418,7 @@ def _build(data: dict[str, Any], episode: Episode) -> dict[str, Any]:
     occurrences = {_occurrence_key(item): item for item in occurrence_decisions}
     decisions = {(normalize_phrase(item["original"]), item["to"]): item for item in data["decisions"]}
     candidates: dict[tuple[Any, ...], dict[str, Any]] = {}
-    applied: dict[int, list[tuple[int, int]]] = {start_ms: [] for start_ms in raw}
+    applied: dict[int, list[tuple[int, int]]] = defaultdict(list)
 
     def add(
         start_ms: int, start: int, end: int, original: str, to: str, source: str, score: float, auto: bool
@@ -435,19 +442,28 @@ def _build(data: dict[str, Any], episode: Episode) -> dict[str, Any]:
         }
 
     def apply_in_order(items: Iterable[dict[str, Any]]) -> None:
-        def priority(item: dict[str, Any]) -> tuple[Any, ...]:
-            key = _occurrence_key(item)
-            return (item["state"] != STATE_APPROVED, key not in occurrences, key)
+        groups: dict[tuple[bool, bool, int], list[dict[str, Any]]] = defaultdict(list)
+        for item in items:
+            if item["state"] in (STATE_APPROVED, STATE_AUTO):
+                priority = (item["state"] != STATE_APPROVED, _occurrence_key(item) not in occurrences)
+                groups[(*priority, item["start_ms"])].append(item)
 
-        for item in sorted(items, key=priority):
-            if item["state"] not in (STATE_APPROVED, STATE_AUTO):
-                continue
-            spans = applied[item["start_ms"]]
-            if _overlaps(item["start"], item["end"], spans):
-                del candidates[_occurrence_key(item)]
-                continue
-            spans.append((item["start"], item["end"]))
-            item["applied"] = True
+        for (_automatic, _transcript_wide, start_ms), group in sorted(groups.items()):
+            spans = applied[start_ms]
+            accepted: list[tuple[int, int]] = []
+            earlier = 0
+            # Both sequences are in text order. Once a previous span ends at
+            # or before this start it cannot overlap any later candidate.
+            for item in sorted(group, key=_occurrence_key):
+                start, end = item["start"], item["end"]
+                while earlier < len(spans) and spans[earlier][1] <= start:
+                    earlier += 1
+                if (earlier < len(spans) and spans[earlier][0] < end) or (accepted and start < accepted[-1][1]):
+                    del candidates[_occurrence_key(item)]
+                    continue
+                accepted.append((start, end))
+                item["applied"] = True
+            applied[start_ms] = sorted(spans + accepted)
 
     for auto in find_replacements(segments, glossary):
         add(auto.start_ms, auto.start, auto.end, auto.original, auto.to, auto.source, 1.0, True)
@@ -542,14 +558,20 @@ def _prepare_correction_destinations(
     return "", 0
 
 
-def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str], *, dry_run: bool = False) -> int:
+def _write(
+    transcript: Transcript, data: dict[str, Any], texts: dict[int, str], *, dry_run: bool = False
+) -> CorrectionFormatChanges:
     """Count changes after admission and stage the sidecar and public files on apply."""
     podlove_data, podlove_counts = _admit_correction_artifacts(transcript)
     dote_data = transcript._load_transcript_json("dote") if texts else {}
     vtt_content, cues_changed = _prepare_correction_destinations(transcript, texts, podlove_counts, dote_data)
-    changed = podlove.set_texts(podlove_data, texts)
+    changes = CorrectionFormatChanges(
+        podlove=podlove.set_texts(podlove_data, texts),
+        dote=dote.set_texts(dote_data, texts),
+        vtt=cues_changed,
+    )
     if dry_run:
-        return changed
+        return changes
     expected = services.artifact_state(transcript)
     if not transcript.source_fingerprint:
         transcript.mark_artifacts_received()
@@ -567,13 +589,13 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str], 
         if data != transcript.corrections_data:
             transcript._write_corrections_data(data, replacements=replacements)
             changed_fields.append("corrections")
-        if changed:
+        if changes.podlove:
             transcript._write_transcript_json("podlove", podlove_data, replacements=replacements)
             changed_fields.append("podlove")
-        if dote.set_texts(dote_data, texts):
+        if changes.dote:
             transcript._write_transcript_json("dote", dote_data, replacements=replacements)
             changed_fields.append("dote")
-        if cues_changed:
+        if changes.vtt:
             transcript._save_text_file("vtt", vtt_content, replacements=replacements)
             changed_fields.append("vtt")
         if changed_fields:
@@ -584,7 +606,7 @@ def _write(transcript: Transcript, data: dict[str, Any], texts: dict[int, str], 
         raise
     if not changed_fields:
         transcript.source_fingerprint = expected["source_fingerprint"]
-    return changed
+    return changes
 
 
 def _current_episode(transcript: Transcript, episode: Episode | None) -> Episode | None:
@@ -612,14 +634,15 @@ def _commit(transcript: Transcript, state: _State, *, dry_run: bool = False) -> 
     }
     corrected |= {int(start) for start in data.get("manual_texts", {})}
     texts = corrected_texts(data, corrected)
-    changed = _write(transcript, data, texts, dry_run=dry_run)
+    changes = _write(transcript, data, texts, dry_run=dry_run)
     states = [item["state"] for segment in data["segments"] for item in segment["replacements"]]
     return CorrectionsResult(
         STATUS_APPLIED,
         automatic=states.count(STATE_AUTO),
         approved=states.count(STATE_APPROVED),
         proposals=sum(item["state"] == STATE_OPEN for item in data["proposals"]),
-        changed=changed,
+        changed=changes.podlove,
+        format_changes=changes,
     )
 
 
@@ -664,7 +687,7 @@ def apply_transcript_corrections(transcript: Transcript) -> int:
     if not _is_current(data, transcript.source_fingerprint):
         return 0
     corrected = [segment["start_ms"] for segment in data["segments"] if segment["replacements"]]
-    return _write(transcript, data, corrected_texts(data, corrected))
+    return _write(transcript, data, corrected_texts(data, corrected)).podlove
 
 
 def set_corrections_episode(transcript: Transcript, episode: Episode) -> CorrectionsResult:

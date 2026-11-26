@@ -890,7 +890,9 @@ counts. So an approved occurrence or original stays replaced when its glossary
 entry is removed, and a rejected one stays unchanged also when the glossary
 later lists it as a variant. Rejected replacements are listed but never
 applied. Approved replacements are applied before automatic ones; an automatic
-replacement that overlaps an approved one is dropped.
+replacement that overlaps an approved one is dropped. For each segment, the
+review checks spans in text order within each priority group. Replacements
+can touch at their endpoints.
 
 After every Voxhelm import (admin request, queued completion or
 ``generate_transcripts``), the glossary runs automatically. A failure in this
@@ -942,6 +944,9 @@ write database, including when other databases contain identical IDs and tree
 paths. Read/write routing for selection, glossary validation and corrections must
 agree on that alias. Split routing is refused before opening transcript artifacts;
 ``--dry-run`` performs the same preflight and writes no artifacts.
+Each summary reports ``changed`` for Podlove segments, ``dote_changed`` for
+DOTe lines and ``vtt_changed`` for WebVTT cues. A dry run includes repairs to
+DOTe or WebVTT even if the Podlove text is already correct.
 The ``--all`` run reads batches of up to 100 transcripts in primary-key order.
 It captures the highest primary key at startup and leaves later higher IDs for
 the next run.

@@ -102,7 +102,8 @@ class Command(BaseCommand):
                 continue
             self.stdout.write(
                 f"transcript {transcript.pk}: {result.status} automatic={result.automatic} "
-                f"approved={result.approved} proposals={result.proposals} changed={result.changed}"
+                f"approved={result.approved} proposals={result.proposals} changed={result.changed} "
+                f"dote_changed={result.format_changes.dote} vtt_changed={result.format_changes.vtt}"
             )
         if dry_run:
             self.stdout.write("dry run, nothing written")
