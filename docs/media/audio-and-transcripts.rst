@@ -890,7 +890,9 @@ counts. So an approved occurrence or original stays replaced when its glossary
 entry is removed, and a rejected one stays unchanged also when the glossary
 later lists it as a variant. Rejected replacements are listed but never
 applied. Approved replacements are applied before automatic ones; an automatic
-replacement that overlaps an approved one is dropped.
+replacement that overlaps an approved one is dropped. For each segment, the
+review checks spans in text order within each priority group. Replacements
+can touch at their endpoints.
 
 After every Voxhelm import (admin request, queued completion or
 ``generate_transcripts``), the glossary runs automatically. A failure in this

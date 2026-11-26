@@ -318,6 +318,8 @@ Fixes
 Internal
 ~~~~~~~~
 
+- Sweep accepted glossary spans in text order within each correction priority
+  group to avoid quadratic overlap checks in dense transcript segments.
 - Reuse original token lengths across overlapping fuzzy glossary candidate
   windows.
 - Compute digit sequences and domain classification once per fuzzy glossary

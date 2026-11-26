@@ -41,7 +41,7 @@ from cast.transcripts.corrections import (
     reject_automatic_replacement,
     set_corrections_episode,
 )
-from cast.transcripts.glossary import episode_terms, phrase_spans
+from cast.transcripts.glossary import EffectiveGlossary, Replacement, episode_terms, phrase_spans
 from cast.voxhelm import VoxhelmTranscriptService
 from tests.factories import EpisodeFactory
 from tests.transcripts.corrections_helpers import (
@@ -432,6 +432,57 @@ def test_approved_occurrence_wins_over_another_target_of_the_span(transcript, po
     assert public_texts(transcript)[0][10000] == "Johnny said Gunicorn is fast."
     remaining = [item["to"] for item in transcript.corrections_data["proposals"] if item["start_ms"] == 10000]
     assert remaining == ["Johnny"]
+
+
+def test_dense_applied_spans_preserve_priority_with_subquadratic_comparisons(mocker):
+    comparisons = 0
+
+    class Offset(int):
+        def __lt__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            return super().__lt__(other)
+
+        def __le__(self, other):
+            nonlocal comparisons
+            comparisons += 1
+            return super().__le__(other)
+
+    raw = "alpha beta alpha. " + "alpha " * 512
+    automatic = [
+        Replacement(1000, Offset(start), Offset(end), "alpha", "A", "show")
+        for start, end in phrase_spans(raw, "alpha")
+    ]
+    # This edit starts exactly at the end of the preceding automatic edit.
+    automatic.append(Replacement(1000, Offset(16), Offset(17), ".", "!", "show"))
+    mocker.patch.object(corrections, "find_replacements", return_value=automatic)
+    mocker.patch.object(corrections, "find_proposals", return_value=[])
+    mocker.patch.object(corrections, "effective_glossary", return_value=(EffectiveGlossary(language="en"), "test"))
+    data = {
+        "segments": [{"start_ms": 1000, "raw_text": raw}],
+        "decisions": [
+            {"original": "beta alpha", "to": "loses", "state": STATE_APPROVED},
+            {"original": "alpha beta", "to": "also loses", "state": STATE_APPROVED},
+        ],
+        "occurrence_decisions": [
+            {
+                "start_ms": 1000,
+                "start": Offset(0),
+                "end": Offset(10),
+                "from": "alpha beta",
+                "to": "wins",
+                "state": STATE_APPROVED,
+                "source": "decision",
+                "score": 1.0,
+            }
+        ],
+    }
+
+    built = corrections._build(data, mocker.Mock(pk=1))
+
+    assert corrections.corrected_texts(built) == {1000: "wins A! " + "A " * 512}
+    assert [item["to"] for item in built["proposals"]] == ["wins"]
+    assert comparisons < 16 * len(automatic)
 
 
 # --- glossary additions ----------------------------------------------------------------------
