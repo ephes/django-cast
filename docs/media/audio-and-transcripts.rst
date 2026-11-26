@@ -1328,14 +1328,19 @@ Size derivation (``audio.save(duration=False, cache_file_sizes=True)``) reconcil
 every format with its current file and stores the file name alongside its size.
 Cleared, missing and unreadable formats lose their previous cached size; other
 metadata is preserved. A cached size is used without a storage request only when
-its file name matches the current field. Legacy sizes without file identities
-fall back to storage until the next derivation. Missing or unreadable files report
-zero bytes. Replacing bytes under an unchanged storage name requires running size
-derivation to refresh the cached length, as does removing a file outside Django.
-No automatic sweep of existing rows is performed, so after upgrading each
-feed render or player request issues one storage size request per legacy format
-until that audio is derived again (``audio.save(duration=False,
-cache_file_sizes=True)``); on remote storage this can be one HEAD request each.
+its file name matches the current field. Otherwise (for example a legacy size
+without a file identity) the size is read from storage, and a successful read of
+a stored (not pending) file is cached with the file name it was read from. That
+write runs after the surrounding transaction commits, in its own short
+transaction: it locks the audio row, only writes while the row still holds that
+file name and has no size bound to it yet, keeps the other metadata and sends no
+save signals. If it fails, the size is simply read again next time. So after
+upgrading, each legacy format costs one storage size request (one HEAD on remote
+storage) on its first successful feed render or player request, not on every
+one. A failed lookup reports zero bytes and is not cached. Replacing bytes under
+an unchanged storage name requires running size derivation
+(``audio.save(duration=False, cache_file_sizes=True)``) to refresh the cached
+length, as does removing a file outside Django.
 
 
 Voice-reference selection freshness
