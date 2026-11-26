@@ -24,6 +24,12 @@ The action probes storage first and then writes only the ``size`` and
 Titles, replaced files and other metadata saved by an editor while the action
 runs are kept.
 
+Running the action is optional for sizes cached before they were bound to a
+file name: the first feed render or player request that reads such a size from
+storage caches it. The action fills all sizes at once, and it is the way to
+fill them when audios are read from a database the router does not write to
+(see :doc:`/media/audio-and-transcripts`).
+
 .. image:: ../images/cache_file_sizes_admin_action.png
    :width: 800
    :alt: Show the admin action to update the file size cache

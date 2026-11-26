@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import Storage
-from django.db import models, router, transaction
+from django.db import DatabaseError, models, router, transaction
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -398,18 +398,77 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         return changed
 
     def get_file_size(self, audio_format: str) -> int:
-        """Return a size bound to the current file name, without I/O on a cache hit."""
+        """Return a size bound to the current file name, without I/O on a cache hit.
+
+        A miss reads the size from storage once and remembers it with the file name,
+        so the next feed render or player request does not ask the storage again.
+        Sizes cached before they were bound to file names heal on first use.
+        """
         file_field = getattr(self, audio_format)
         if not file_field:
             return 0
+        if not getattr(file_field, "_committed", True):
+            # A pending upload reports its own byte count; it is neither looked up
+            # in nor written to the cache, which describes the stored file.
+            try:
+                return file_field.size
+            except (OSError, ValueError):
+                return 0
         cached_size = self.data.get("size", {}).get(audio_format)
         cached_name = self.data.get("size_file_names", {}).get(audio_format)
         if cached_size is not None and cached_name == file_field.name:
             return cached_size
         try:
-            return file_field.size
+            size = file_field.size
         except (OSError, ValueError):
             return 0
+        self._remember_file_size(audio_format, file_field.name, size)
+        return size
+
+    def _remember_file_size(self, audio_format: str, file_name: str, size: int) -> None:
+        """Cache one storage-read size for the file name it was read from.
+
+        The database write runs after the surrounding transaction commits, in its
+        own short transaction on the database the audio was loaded from (skipped
+        when the router sends writes elsewhere, e.g. a read replica), so it can
+        neither fail nor lock rows for the request that rendered the feed. It only
+        writes while the row is unchanged since this instance was loaded or saved
+        (same ``modified`` revision, so no derivation ran in between), still holds
+        that file name and has no size bound to it yet. A row locked by another
+        transaction is skipped instead of waited for. The write keeps the other
+        metadata and sends no save signals. A skipped or failed write only costs
+        the cache; the size is read from storage again next time.
+        """
+        self.data.setdefault("size", {})[audio_format] = size
+        self.data.setdefault("size_file_names", {})[audio_format] = file_name
+        using, pk, revision = self._state.db, self.pk, self.modified
+        if pk is None or using is None or revision is None:
+            return
+        if router.db_for_write(Audio, instance=self) != using:
+            return  # Read from a replica (or routed elsewhere): never redirect the write.
+        connection = transaction.get_connection(using)
+        if not connection.in_atomic_block and not connection.get_autocommit():
+            return  # Manual transaction management: no commit callback available.
+
+        def store() -> None:
+            try:
+                with transaction.atomic(using=using):
+                    rows = Audio.objects.using(using).filter(pk=pk, modified=revision, **{audio_format: file_name})
+                    stored = rows.select_for_update(skip_locked=True).values_list("data", flat=True).first()
+                    if not isinstance(stored, dict):
+                        return
+                    sizes, names = stored.get("size"), stored.get("size_file_names")
+                    sizes = sizes if isinstance(sizes, dict) else {}
+                    names = names if isinstance(names, dict) else {}
+                    if sizes.get(audio_format) is not None and names.get(audio_format) == file_name:
+                        return
+                    stored["size"] = {**sizes, audio_format: size}
+                    stored["size_file_names"] = {**names, audio_format: file_name}
+                    rows.update(data=stored)
+            except DatabaseError:
+                logger.warning("Could not cache the %s file size of audio %s", audio_format, pk, exc_info=True)
+
+        transaction.on_commit(store, using=using, robust=True)
 
     def save(self, *args: Any, **kwargs: Any) -> None:
         duration = kwargs.pop("duration", _SAVE_OPTION_UNSET)
