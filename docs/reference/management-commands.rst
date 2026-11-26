@@ -294,8 +294,10 @@ Regenerate poster images for all videos from the video files. Requires
 ``ffmpeg`` to be installed. The command keeps going if one video fails and
 prints a final ``processed=<n> errors=<n>`` summary. It counts and scans videos
 on the write database selected by Django's router for ``Video`` and publishes
-posters on that same database. The scan fetches rows in primary-key order in
-batches, with a single count for the progress display.
+posters on that same database. A single startup query sets the progress total
+and highest primary key. The scan reads pages of up to 200 rows in primary-key
+order and closes each page's cursor before generating posters. Higher IDs are
+picked up on a later run.
 
 A video counts as failed when creating its poster raises an error (for
 example ``ffmpeg`` fails or is missing), when no poster results although one
@@ -307,7 +309,10 @@ If at least one poster could not be recalculated, the command then exits with
 ``CommandError`` (non-zero status). The other videos have still been
 processed and saved, so a failed run is a partial success: fix the reported
 videos and run the command again. With no errors, or no videos at all, it
-exits successfully.
+exits successfully. If progress, a diagnostic or the summary cannot be written
+or flushed, it exits with a command error identifying the failed output and the
+number of attempted and failed videos. It stops before processing another video
+and keeps posters already published. The progress bar is shown on a terminal.
 
 .. code-block:: bash
 

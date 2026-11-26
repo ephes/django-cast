@@ -1123,8 +1123,9 @@ def test_media_replace_warns_when_staged_replacement_cleanup_fails(mocker):
 def _stub_videos(mocker, videos):
     manager = mocker.Mock()
     queryset = manager.using.return_value.order_by.return_value
-    queryset.count.return_value = len(videos)
-    queryset.iterator.return_value = iter(videos)
+    queryset.aggregate.return_value = {"last_pk": videos[-1].pk if videos else None, "total": len(videos)}
+    if videos:
+        mocker.patch("cast.management.commands.recalc_video_posters._video_pages", return_value=iter(videos))
     mocker.patch("cast.management.commands.recalc_video_posters.Video.objects", manager)
     mocker.patch("cast.management.commands.recalc_video_posters.track", side_effect=lambda iterable, **_: iterable)
 
@@ -1753,39 +1754,61 @@ def test_refresh_retains_verified_recovery_after_partial_final_write(mocker):
 
 
 @pytest.mark.django_db
-def test_recalc_video_posters_streams_ordered_batches(video, mocker):
+def test_recalc_video_posters_closes_bounded_pages_before_publication(video, mocker, tmp_path):
     from cast.management.commands import recalc_video_posters
 
     extra_videos = Video.objects.bulk_create(
         [Video(user=video.user, collection=video.collection, original=f"synthetic-{i}.mp4") for i in range(4)]
     )
-    expected = [video.pk, *(item.pk for item in extra_videos)]
-    failures = {expected[1], expected[3]}
-    queryset = Video.objects.using("default").order_by("pk")
-    using = mocker.patch.object(Video.objects, "using")
-    using.return_value.order_by.return_value = queryset
+    initial_ids = [video.pk, *(item.pk for item in extra_videos)]
+    late_pk = initial_ids[-1] + 1
     mocker.patch.object(recalc_video_posters, "VIDEO_BATCH_SIZE", 2)
     progress = mocker.spy(recalc_video_posters, "track")
+    storage = FileSystemStorage(location=tmp_path)
+    mocker.patch.object(Video._meta.get_field("poster"), "storage", storage)
+    loaded = []
     seen = []
-    uncached = []
+    cursor_states = []
+    cursors = []
+    original_cursor = connection.cursor
+    original_from_db = Video.from_db
 
-    def publish(item):
-        seen.append(item.pk)
-        uncached.append(queryset._result_cache is None)
-        if item.pk in failures:
-            raise RuntimeError("synthetic failure")
+    def cursor():
+        result = original_cursor()
+        cursors.append(mocker.spy(result, "close"))
+        return result
 
-    mocker.patch.object(Video, "publish_missing_poster", autospec=True, side_effect=publish)
-    output, errors = StringIO(), StringIO()
-    with pytest.raises(CommandError, match="2 of 5 video posters"):
-        call_command("recalc_video_posters", stdout=output, stderr=errors)
+    def from_db(cls, db, field_names, values):
+        item = original_from_db(db, field_names, values)
+        if item.pk != initial_ids[-1]:  # The deletion also loads its target.
+            loaded.append(item.pk)
+        return item
 
-    assert seen == expected
-    assert all(uncached)
-    assert progress.call_args.kwargs["total"] == len(expected)
-    assert "processed=5 errors=2" in output.getvalue()
-    for pk in failures:
-        assert f"error recalculating poster for video {pk}:" in errors.getvalue()
+    def generate(item):
+        cursor_states.append(all(close.called for close in cursors))
+        seen.append((item.pk, list(loaded)))
+        if item.pk == video.pk:
+            Video.objects.bulk_create(
+                [Video(pk=late_pk, user=video.user, collection=video.collection, original="late.mp4")]
+            )
+            Video.objects.filter(pk=initial_ids[-1]).delete()
+        item.poster.save(f"{item.pk}.jpg", ContentFile(b"synthetic poster"), save=False)
+
+    mocker.patch.object(connection, "cursor", side_effect=cursor)
+    mocker.patch.object(Video, "from_db", classmethod(from_db))
+    mocker.patch.object(Video, "_create_poster", generate)
+    output = StringIO()
+    call_command("recalc_video_posters", stdout=output, stderr=StringIO())
+
+    assert cursor_states and all(cursor_states)
+    assert seen == [
+        (pk, initial_ids[:2] if index < 2 else initial_ids[:4]) for index, pk in enumerate(initial_ids[:4])
+    ]
+    assert progress.call_args.kwargs["total"] == len(initial_ids)
+    assert "processed=4 errors=0" in output.getvalue()
+    posters = dict(Video.objects.values_list("pk", "poster"))
+    assert not posters[late_pk]
+    assert all(storage.exists(posters[pk]) for pk in initial_ids[:4])
 
 
 @pytest.mark.parametrize("sink", ["callback", "logger"])

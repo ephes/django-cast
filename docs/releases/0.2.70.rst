@@ -56,6 +56,11 @@ Fixes
 - Glossary application reports completed, changed and failed transcript
   counts and dry-run status if an output stream fails.
 
+- Poster backfill closes each bounded inventory page before generating
+  posters and leaves IDs above its startup limit for the next run.
+- Poster backfill preserves the attempted and failed video counts in its
+  command error when progress, diagnostics or the final summary fail.
+
 - Reapplying stored transcript corrections restores manual-only passage edits
   in Podlove, DOTe and WebVTT.
 
