@@ -96,11 +96,12 @@ Oversized, growing or delayed streams can exhaust the budget during
 comparison, verification or transfer and cause an explicit path error. A
 digest is only accepted if the complete stream's byte count matches the
 size reported by storage when available. Backends without size metadata
-still use bounded reads, and so do streams that decode a stored content
-encoding, whose reported size is the encoded length. Such streams are
-recognized by the ``content_encoding`` of their remote object handle
-(``obj`` for S3, ``blob`` for Google Cloud, as in django-storages); other
-backends must report the size of the bytes they return. A refused comparison never counts as unchanged.
+(``size()`` raises ``NotImplementedError``) still use bounded reads; any
+other size lookup failure refuses the path. Streams that decode a
+gzip-encoded object also skip the extent check, since their reported size is
+the encoded length: django-storages S3 files (``obj``) on a storage with
+``gzip`` enabled, and Google Cloud files (``blob``), which are always decoded
+on download. Other backends must report the size of the bytes they return. A refused comparison never counts as unchanged.
 The deadline is checked around synchronous reads; configure backend I/O timeouts
 as well, since Python cannot interrupt an individual blocked storage call.
 Save reads use the same byte ceiling and size-scaled time allowance for both

@@ -357,8 +357,8 @@ Options:
     reading and positioning the stream counts, not the backend's upload work
     between reads.
     Exceeding it reports a path error. Digests also require agreement with
-    the reported object size when available, except for S3 or Google Cloud
-    streams that decode a stored content encoding such as gzip.
+    the reported object size when available, except for gzip-decoded S3 or
+    Google Cloud streams. A failed size lookup reports a path error.
     See :doc:`../operations/backup` for inventory limits, synchronous I/O
     limitations and the same-host publication concurrency contract.
 

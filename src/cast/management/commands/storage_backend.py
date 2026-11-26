@@ -46,9 +46,11 @@ class MediaReadBudget:
     @staticmethod
     def object_allowance(storage: Storage, path: str) -> tuple[int | None, int]:
         """The reported object size (if usable) and the seconds a full read may take."""
+        # Only a backend without sizes reads without an extent check; a failed lookup refuses the read.
+        size_of = getattr(storage, "size", None)
         try:
-            size = storage.size(path)
-        except Exception:  # An unknown size keeps the base deadline.
+            size = size_of(path) if callable(size_of) else None
+        except NotImplementedError:
             size = None
         expected_size = size if type(size) is int and size >= 0 else None
         # Beyond the byte ceiling more time cannot help: such a read is refused anyway.
@@ -177,23 +179,27 @@ def is_media_staging_key(path: str) -> bool:
     return re.search(r"\.django-cast-(?:refresh|replace)-[0-9a-f]{32}(?:_[A-Za-z0-9]+)?\.tmp\Z", path) is not None
 
 
-# Remote object handles of opened storage files: S3 (``obj``) and Google Cloud (``blob``).
-REMOTE_OBJECT_ATTRIBUTES = ("obj", "blob")
+def has_gzip_encoding(handle: Any) -> bool:
+    encoding = getattr(handle, "content_encoding", None)
+    return isinstance(encoding, str) and encoding.strip().lower() == "gzip"
 
 
-def is_transparently_decoded(stream: Any) -> bool:
-    """Whether an opened stream decodes a stored content encoding (e.g. gzip on S3 or Google Cloud)."""
-    for attribute in REMOTE_OBJECT_ATTRIBUTES:
-        encoding = getattr(getattr(stream, attribute, None), "content_encoding", None)
-        if isinstance(encoding, str) and encoding.strip().lower() not in ("", "identity"):
-            return True
-    return False
+def is_transparently_decoded(storage: Storage, stream: Any) -> bool:
+    """
+    Whether an opened stream returns gzip-decoded bytes of a gzip-encoded object.
+
+    django-storages' S3 files (``obj``) decode only on storages with ``gzip``
+    enabled; Google Cloud files (``blob``) are always decoded on download.
+    """
+    if has_gzip_encoding(getattr(stream, "blob", None)):
+        return True
+    return getattr(storage, "gzip", False) is True and has_gzip_encoding(getattr(stream, "obj", None))
 
 
 def bounded_media_chunks(storage: Storage, path: str, budget: MediaReadBudget) -> Generator[bytes, None, None]:
     budget.check_time()
     with storage.open(path, "rb") as in_f:
-        if budget.expected_size is not None and is_transparently_decoded(in_f):
+        if budget.expected_size is not None and is_transparently_decoded(storage, in_f):
             budget.expected_size = None  # The reported size is the encoded length, not the decoded bytes.
         while True:
             chunk = budget.read_chunk(in_f)

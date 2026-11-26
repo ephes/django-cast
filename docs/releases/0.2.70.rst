@@ -58,8 +58,8 @@ Fixes
   whose modification time could not be determined. Creation time alone can
   establish age when the backend explicitly lacks modification timestamps.
 - Reject media sync digests when the complete read disagrees with the reported
-  object size (not for S3 or Google Cloud streams decoded from a stored
-  content encoding such as gzip). Apply independent byte and read-time budgets to the reads that
+  object size (not for gzip-decoded S3 or Google Cloud streams); a failed
+  size lookup now refuses the path instead of skipping that check. Apply independent byte and read-time budgets to the reads that
   supply both staging and final saves; backend upload time between those reads
   is not charged.
 

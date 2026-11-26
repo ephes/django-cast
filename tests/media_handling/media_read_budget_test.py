@@ -184,13 +184,18 @@ def test_refresh_requires_complete_reported_source_extent(reported_size):
         assert f"read 6 bytes, expected {reported_size}" in errors[0]
 
 
-@pytest.mark.parametrize("handle", ["obj", "blob"])
+@pytest.mark.parametrize(
+    "handle,gzip_storage,decoded",
+    [("obj", True, True), ("obj", False, False), ("blob", False, True)],
+)
 @pytest.mark.parametrize("encoding", ["gzip", "identity", None])
-def test_extent_check_skips_streams_decoded_from_their_stored_encoding(encoding, handle):
+def test_extent_check_skips_streams_decoded_from_their_stored_encoding(encoding, handle, gzip_storage, decoded):
     class Obj:
         content_encoding = encoding
 
     class EncodedStorage(StubOverwriteStorage):
+        gzip = gzip_storage
+
         # Like S3/Google Cloud with gzip: size() is the stored (encoded) length, open() yields decoded bytes.
         def size(self, name):
             return super().size(name) + 20
@@ -207,13 +212,27 @@ def test_extent_check_skips_streams_decoded_from_their_stored_encoding(encoding,
     errors = []
     result = media.sync_media_files(source, target, refresh_changed=True, report_error=errors.append)
 
-    if encoding == "gzip":
+    if encoding == "gzip" and decoded:
         assert (result.refreshed, result.errors) == (1, 0)
         assert target._files[path] == b"<svg>new</svg>"
     else:
         assert (result.refreshed, result.errors) == (0, 1)
         assert any("media extent mismatch" in message for message in errors)
         assert target._files[path] == b"<svg>old</svg>"
+
+
+def test_failed_size_lookup_refuses_the_digest_instead_of_skipping_the_extent_check():
+    class FlakySizeSource(StubOverwriteStorage):
+        def size(self, name):
+            raise OSError("transient size lookup failure")
+
+    source = FlakySizeSource({"media": b"abcdef"})
+    target = StubOverwriteStorage()
+    errors = []
+    result = media.sync_media_files(source, target, report_error=errors.append)
+    assert (result.copied, result.errors) == (0, 1)
+    assert any("transient size lookup failure" in message for message in errors)
+    assert target._files == {}
 
 
 def test_matching_final_digest_cannot_hide_truncated_final_extent(mocker):
