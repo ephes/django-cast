@@ -1,13 +1,13 @@
 """Glossary application selects and preflights synthetic database rows."""
 
 from io import StringIO
-from types import SimpleNamespace
 
 import pytest
 from django.core.management import CommandError, call_command
 from django.db import connections
 
 from cast.models import Audio, Episode, Podcast, Transcript
+from cast.transcripts.corrections import CorrectionsResult
 from tests.repository.database_test import independent_podcasts, refuse_default  # noqa: F401
 
 pytestmark = pytest.mark.usefixtures("independent_podcasts")
@@ -34,7 +34,7 @@ def test_podcast_selection_binds_transcripts_before_refresh(settings, monkeypatc
 
     def refresh(transcript, *, dry_run):
         seen.append((transcript._state.db, transcript.audio.title, dry_run))
-        return SimpleNamespace(status="synthetic", automatic=0, approved=0, proposals=0, changed=False)
+        return CorrectionsResult(status="synthetic")
 
     monkeypatch.setattr(command, "refresh_transcript_corrections", refresh)
     with connections["default"].execute_wrapper(refuse_default):

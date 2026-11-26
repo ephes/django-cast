@@ -147,6 +147,7 @@ def test_refresh_corrects_all_formats_and_keeps_raw_text(transcript):
     assert result.status == STATUS_APPLIED
     assert result.automatic == 3  # John, Gunacorn, John's
     assert result.changed == 2
+    assert result.format_changes == corrections.CorrectionFormatChanges(podlove=2, dote=2, vtt=2)
     assert result.proposals >= 1
     podlove_texts, dote_texts, vtt = public_texts(transcript)
     assert podlove_texts[10000] == dote_texts[10000] == "Jon said Gunicorn is fast."
@@ -869,6 +870,32 @@ def test_command_dry_run(transcript, capsys):
 
 
 @pytest.mark.django_db
+@pytest.mark.parametrize(("stale_dote", "stale_vtt"), [(True, False), (False, True), (True, True)])
+def test_command_reports_repairs_with_already_correct_podlove(transcript, capsys, stale_dote, stale_vtt):
+    refresh_transcript_corrections(transcript)
+    corrected = file_bytes(transcript)
+    if stale_dote:
+        transcript._write_transcript_json("dote", dote_data())
+    if stale_vtt:
+        transcript._save_text_file("vtt", vtt_content())
+    transcript.save(preserve_source_fingerprint=True)
+    stale = file_bytes(transcript)
+    arguments = ("--transcript", str(transcript.pk))
+    expected = f"changed=0 dote_changed={2 * stale_dote} vtt_changed={2 * stale_vtt}"
+
+    call_command("apply_transcript_glossary", *arguments, "--dry-run")
+    assert expected in capsys.readouterr().out
+    assert file_bytes(transcript) == stale
+
+    call_command("apply_transcript_glossary", *arguments)
+    assert expected in capsys.readouterr().out
+    assert file_bytes(transcript) == corrected
+
+    call_command("apply_transcript_glossary", *arguments)
+    assert "changed=0 dote_changed=0 vtt_changed=0" in capsys.readouterr().out
+
+
+@pytest.mark.django_db
 def test_command_reports_failures_and_continues(transcript, mocker, capsys):
     class UnprintableError(RuntimeError):
         def __str__(self) -> str:
@@ -1432,7 +1459,7 @@ def test_failed_legacy_commit_restores_missing_identity(transcript, mocker):
 def test_legacy_noop_write_does_not_change_in_memory_identity(transcript):
     Transcript.objects.filter(pk=transcript.pk).update(source_fingerprint="")
     transcript.refresh_from_db()
-    assert corrections._write(transcript, transcript.corrections_data, {}) == 0
+    assert corrections._write(transcript, transcript.corrections_data, {}) == corrections.CorrectionFormatChanges()
     assert transcript.source_fingerprint == ""
 
 

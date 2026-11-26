@@ -51,6 +51,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- Report DOTe and WebVTT text changes in glossary previews and bulk application,
+  including repairs when the Podlove segment count is zero.
+
 - Keep a verified ``media_replace`` recovery copy if an overwrite raises,
   including on cancellation or failure while closing the staging reader.
 - Limit media replacement and sync staging cleanup to the requested key and
