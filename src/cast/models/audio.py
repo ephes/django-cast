@@ -407,6 +407,13 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         file_field = getattr(self, audio_format)
         if not file_field:
             return 0
+        if not getattr(file_field, "_committed", True):
+            # A pending upload reports its own byte count; it is neither looked up
+            # in nor written to the cache, which describes the stored file.
+            try:
+                return file_field.size
+            except (OSError, ValueError):
+                return 0
         cached_size = self.data.get("size", {}).get(audio_format)
         cached_name = self.data.get("size_file_names", {}).get(audio_format)
         if cached_size is not None and cached_name == file_field.name:
@@ -415,33 +422,36 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             size = file_field.size
         except (OSError, ValueError):
             return 0
-        # An uncommitted upload reports its own byte count, not the stored file's.
-        if file_field._committed:
-            self._remember_file_size(audio_format, file_field.name, size)
+        self._remember_file_size(audio_format, file_field.name, size)
         return size
 
     def _remember_file_size(self, audio_format: str, file_name: str, size: int) -> None:
         """Cache one storage-read size for the file name it was read from.
 
         The database write runs after the surrounding transaction commits, in its
-        own short transaction, so it can neither fail nor lock rows for the request
-        that rendered the feed. It locks the audio row, writes only while the row
-        still holds that file name and has no size bound to it yet (derivation may
-        have stored a fresher one meanwhile), keeps the other metadata and sends no
-        save signals. A failed write only costs the cache.
+        own short transaction on the database the audio was loaded from, so it can
+        neither fail nor lock rows for the request that rendered the feed. It only
+        writes while the row is unchanged since this instance was loaded or saved
+        (same ``modified`` revision, so no derivation ran in between), still holds
+        that file name and has no size bound to it yet. A row locked by another
+        transaction is skipped instead of waited for. The write keeps the other
+        metadata and sends no save signals. A skipped or failed write only costs
+        the cache; the size is read from storage again next time.
         """
         self.data.setdefault("size", {})[audio_format] = size
         self.data.setdefault("size_file_names", {})[audio_format] = file_name
-        if self.pk is None:
+        using, pk, revision = self._state.db, self.pk, self.modified
+        if pk is None or using is None or revision is None:
             return
-        using = router.db_for_write(Audio, instance=self)
-        pk = self.pk
+        connection = transaction.get_connection(using)
+        if not connection.in_atomic_block and not connection.get_autocommit():
+            return  # Manual transaction management: no commit callback available.
 
         def store() -> None:
             try:
                 with transaction.atomic(using=using):
-                    rows = Audio.objects.using(using).filter(pk=pk, **{audio_format: file_name})
-                    stored = rows.select_for_update().values_list("data", flat=True).first()
+                    rows = Audio.objects.using(using).filter(pk=pk, modified=revision, **{audio_format: file_name})
+                    stored = rows.select_for_update(skip_locked=True).values_list("data", flat=True).first()
                     if not isinstance(stored, dict):
                         return
                     sizes, names = stored.get("size"), stored.get("size_file_names")

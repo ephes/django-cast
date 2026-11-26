@@ -5,6 +5,7 @@ queries when rendering posts.
 """
 
 from copy import deepcopy
+from datetime import UTC, datetime
 
 import pytest
 from wagtail.images.models import Image, Rendition
@@ -597,3 +598,14 @@ def test_blog_cache_refuses_colliding_integer_and_json_keys(blog_data):
     blog_data["images"] = {1: image, "1": image}
     with pytest.raises(ValueError, match="duplicate"):
         BlogIndexContext.create_from_cachable_data(data=blog_data)
+
+
+def test_audio_round_trip_keeps_the_modified_revision():
+    # The size cache write only matches the row revision the audio was read at.
+    modified = datetime(2026, 11, 26, 12, 30, 15, 123456, tzinfo=UTC)
+    audio = Audio(id=1, collection=None, title="Some audio", data={}, m4a=StubFile("audio.m4a"), modified=modified)
+
+    serialized = serialize_audio(audio)
+
+    assert deserialize_audio(serialized).modified == modified
+    assert deserialize_audio({**serialized, "modified": modified.isoformat()}).modified == modified

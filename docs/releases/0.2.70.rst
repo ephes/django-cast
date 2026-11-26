@@ -67,8 +67,10 @@ Fixes
   per uncached feed on a 70-episode podcast). A size read from storage is now
   stored with its file name the first time, so these audios heal on first use
   without a data migration. The write runs after the request's transaction
-  commits, only while the audio still has that file and no size bound to it,
-  and sends no save signals.
+  commits, on the database the audio was read from, only while the audio is
+  unchanged since it was read (no derivation in between), still has that file
+  and no size bound to it. It skips a locked row instead of waiting, never
+  caches a pending upload's size, and sends no save signals.
 
 - Preserve literal arrows (``-->``) in WebVTT text when manually correcting a
   passage, matching the stored Podlove and DOTe text.

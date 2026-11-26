@@ -94,9 +94,11 @@ Wagtail view restrictions continue to exclude private episodes. Selection uses
 the stored file field without a storage existence request per entry. Size
 metadata is refreshed by normal audio derivation. A size not yet bound to the
 current file name is read from storage and, when that read succeeds, cached, so
-later feed renders do not issue a storage request per enclosure. A failed lookup
-reports zero bytes and is retried on the next render; a cached size stays in use
-until derivation refreshes it (see :doc:`/media/audio-and-transcripts`).
+later feed renders do not issue a storage request per enclosure. A lookup that
+fails because the file is missing or unreadable (``OSError``/``ValueError``)
+reports zero bytes and is retried on the next render; other storage errors
+propagate. A cached size stays in use until derivation refreshes it (see
+:doc:`/media/audio-and-transcripts`).
 
 Feed Fields
 ===========

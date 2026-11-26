@@ -65,6 +65,8 @@ def serialize_audio(audio: "Audio") -> dict[str, Any]:
         **_database_fields(audio),
         "id": audio.pk,
         "duration": audio.duration,
+        # The revision guards the size cache write (see ``Audio._remember_file_size``).
+        "modified": audio.modified,
         "title": audio.title,
         "subtitle": audio.subtitle,
         "data": audio.data,
@@ -84,6 +86,8 @@ def deserialize_audio(data: dict[str, Any]) -> "Audio":
     audio_data = data.copy()
     if "duration" in audio_data:
         audio_data["duration"] = Audio._meta.get_field("duration").to_python(audio_data["duration"])
+    if "modified" in audio_data:
+        audio_data["modified"] = Audio._meta.get_field("modified").to_python(audio_data["modified"])
     return _model_from_data(Audio, audio_data)
 
 

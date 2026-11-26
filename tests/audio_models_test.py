@@ -359,6 +359,85 @@ class TestAudioModel:
 
         assert audio.data["size_file_names"] == {"m4a": audio.m4a.name}
 
+    def test_remembered_size_skips_a_row_saved_meanwhile(self, audio, django_capture_on_commit_callbacks):
+        # Derivation saves the row (new ``modified``) and may have cleared the size
+        # because the file vanished; a stale read must not write the old size back.
+        stale = Audio.objects.get(pk=audio.pk)
+        stale.data = {}
+        current = Audio.objects.get(pk=audio.pk)
+        current.data = {}
+        current.save()
+        assert current.modified != stale.modified
+
+        with django_capture_on_commit_callbacks(execute=True):
+            stale._remember_file_size("m4a", audio.m4a.name, 42)
+
+        assert Audio.objects.get(pk=audio.pk).data == {}
+
+    def test_remembered_sizes_of_one_instance_share_its_revision(self, audio, django_capture_on_commit_callbacks):
+        Audio.objects.filter(pk=audio.pk).update(data={})
+        reader = Audio.objects.get(pk=audio.pk)
+
+        with django_capture_on_commit_callbacks(execute=True):
+            reader._remember_file_size("m4a", audio.m4a.name, 42)
+            reader._remember_file_size("m4a", audio.m4a.name, 43)
+
+        # The first write does not bump ``modified``; the second sees a bound size.
+        assert Audio.objects.get(pk=audio.pk).data["size"] == {"m4a": 42}
+
+    def test_pending_upload_ignores_a_cached_size_with_the_same_name(self, audio, m4a_audio, mocker):
+        reader = Audio.objects.get(pk=audio.pk)
+        reader.m4a = m4a_audio  # a pending upload, not yet in storage
+        reader.data = {"size": {"m4a": 1}, "size_file_names": {"m4a": reader.m4a.name}}
+        remember = mocker.spy(Audio, "_remember_file_size")
+
+        assert reader.get_file_size("m4a") == m4a_audio.size
+        assert remember.call_count == 0
+
+    def test_pending_upload_without_readable_size_reports_zero(self, audio, m4a_audio, mocker):
+        reader = Audio.objects.get(pk=audio.pk)
+        reader.m4a = m4a_audio
+        mocker.patch.object(type(reader.m4a), "size", new_callable=mocker.PropertyMock, side_effect=OSError)
+
+        assert reader.get_file_size("m4a") == 0
+
+    def test_remembered_size_is_written_to_the_source_database(
+        self, audio, mocker, django_capture_on_commit_callbacks
+    ):
+        # A write router must not redirect the cache write to another database.
+        Audio.objects.filter(pk=audio.pk).update(data={})
+        reader = Audio.objects.get(pk=audio.pk)
+        mocker.patch("django.db.router.db_for_write", return_value="elsewhere")
+
+        with django_capture_on_commit_callbacks(using=reader._state.db, execute=True) as callbacks:
+            reader._remember_file_size("m4a", audio.m4a.name, 42)
+
+        assert len(callbacks) == 1
+        assert Audio.objects.get(pk=audio.pk).data["size"] == {"m4a": 42}
+
+    def test_remembered_size_does_not_wait_for_a_locked_row(self, audio, mocker, django_capture_on_commit_callbacks):
+        Audio.objects.filter(pk=audio.pk).update(data={})
+        reader = Audio.objects.get(pk=audio.pk)
+        select_for_update = mocker.spy(type(Audio.objects.all()), "select_for_update")
+
+        with django_capture_on_commit_callbacks(execute=True):
+            reader._remember_file_size("m4a", audio.m4a.name, 42)
+
+        assert select_for_update.call_args.kwargs == {"skip_locked": True}
+
+    def test_remembered_size_is_skipped_under_manual_transactions(self, audio, mocker):
+        # on_commit() raises outside an atomic block when autocommit is off.
+        connection = SimpleNamespace(in_atomic_block=False, get_autocommit=lambda: False)
+        mocker.patch("cast.models.audio.transaction.get_connection", return_value=connection)
+        on_commit = mocker.patch("cast.models.audio.transaction.on_commit")
+        reader = Audio.objects.get(pk=audio.pk)
+        reader.data = {}
+
+        assert reader.get_file_size("m4a") == audio.m4a.size
+
+        on_commit.assert_not_called()
+        assert reader.data["size_file_names"] == {"m4a": audio.m4a.name}
+
     def test_save_without_cache_file_sizes(self, audio, mocker):
         mocker.patch("cast.models.audio.TimeStampedModel.save")
         audio.data = expected_data = {}
