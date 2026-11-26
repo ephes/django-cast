@@ -1492,7 +1492,9 @@ def test_media_stale_age_boundary(mocker, settings, capsys, delete, seconds):
     assert f"skipped-too-young={int(seconds < 0)}" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("kind", ["unsupported", "missing", "none", "naive", "created", "recent_creation"])
+@pytest.mark.parametrize(
+    "kind", ["unsupported", "missing", "none", "naive", "created", "recent_creation", "no_creation"]
+)
 def test_media_stale_storage_timestamps(mocker, kind):
     storage = StubWalkStorage({})
     cutoff = timezone.now() - timedelta(days=7)
@@ -1508,10 +1510,14 @@ def test_media_stale_storage_timestamps(mocker, kind):
     elif kind == "created":
         mocker.patch.object(storage, "get_modified_time", side_effect=NotImplementedError)
         mocker.patch.object(storage, "get_created_time", return_value=old)
+    elif kind == "no_creation":
+        mocker.patch.object(storage, "get_created_time", return_value=None)
     else:
         mocker.patch.object(storage, "get_created_time", return_value=cutoff + timedelta(seconds=1))
 
-    assert MediaStaleCommand.is_old_enough(storage, "cast_audio/file.mp3", cutoff) == (kind in {"naive", "created"})
+    assert MediaStaleCommand.is_old_enough(storage, "cast_audio/file.mp3", cutoff) == (
+        kind in {"naive", "created", "no_creation"}
+    )
 
 
 def test_media_stale_unknown_age_is_reported(mocker, capsys):
@@ -1781,3 +1787,57 @@ def test_sync_continues_when_error_reporting_fails(mocker):
     assert (result.copied, result.errors) == (1, 1)
     assert target._files == {"good.mp4": b"good"}
     report.assert_called_once_with("error syncing bad.mp4: unreadable source")
+
+
+@pytest.mark.parametrize("delete", [False, True])
+def test_media_stale_preserves_reserved_recovery_keys(mocker, capsys, delete):
+    orphan = "cast_audio/old.django-cast-refresh-example.tmp"
+    stages = {
+        f"cast_audio/active.mp3.django-cast-refresh-{'a' * 32}.tmp",
+        f"cast_audio/active.mp3.django-cast-replace-{'b' * 32}_generated.tmp",
+    }
+    storage = StubOverwriteStorage({key: b"synthetic bytes" for key in (orphan, *stages)})
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(storage, None)
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+    mocker.patch.object(MediaStaleCommand, "is_referenced", return_value=False)
+    size = mocker.spy(storage, "size")
+
+    call_command("media_stale", delete=delete)
+
+    assert storage.deleted == ([orphan] if delete else [])
+    assert stages <= storage._files.keys()
+    size.assert_called_once_with(orphan)
+    output = capsys.readouterr().out
+    assert "candidates=1" in output
+    assert "skipped-reserved=2" in output
+    for stage in stages:
+        assert f"Kept reserved media staging key: {stage}" in output
+
+
+@pytest.mark.parametrize("modified", ["failed", "failed-on-recheck", "missing-value", "unsupported"])
+def test_media_stale_uses_creation_only_when_modification_is_unsupported(mocker, capsys, modified):
+    path = "cast_audio/old.mp3"
+    now = timezone.now()
+    old = now - timedelta(days=8)
+    storage = StubOverwriteStorage({path: b"synthetic bytes"})
+    mocker.patch.object(storage, "get_created_time", return_value=old)
+    if modified == "failed":
+        mocker.patch.object(storage, "get_modified_time", side_effect=OSError("metadata request failed"))
+    elif modified == "failed-on-recheck":
+        mocker.patch.object(storage, "get_modified_time", side_effect=[old, OSError("metadata request failed")])
+    elif modified == "missing-value":
+        mocker.patch.object(storage, "get_modified_time", return_value=None)
+    else:
+        mocker.patch.object(storage, "get_modified_time", side_effect=NotImplementedError)
+    mocker.patch(
+        "cast.management.commands.media_stale.get_production_and_backup_storage", return_value=(storage, None)
+    )
+    mocker.patch.object(MediaStaleCommand, "get_models_paths", return_value=set())
+    mocker.patch.object(MediaStaleCommand, "is_referenced", return_value=False)
+
+    call_command("media_stale", delete=True)
+
+    assert storage.deleted == ([path] if modified == "unsupported" else [])
+    assert f"skipped-too-young={int(modified != 'unsupported')}" in capsys.readouterr().out

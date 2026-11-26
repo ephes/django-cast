@@ -54,6 +54,9 @@ Fixes
 - Count verified media sync copies and refreshes even if stage cleanup fails.
   Reporting failures no longer interrupt recovery cleanup or mask the
   original storage error.
+- Keep reserved media staging keys out of stale-media deletion and skip files
+  whose modification time could not be determined. Creation time alone can
+  establish age when the backend explicitly lacks modification timestamps.
 
 - Roll back editor post and episode creation if preparing the response fails,
   so the original slug can be retried.

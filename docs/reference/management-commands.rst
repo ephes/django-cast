@@ -536,8 +536,11 @@ Options:
 
 Only files at least ``CAST_MEDIA_STALE_MIN_AGE_DAYS`` old (default: 7 days)
 are candidates. The command uses the newest available storage modification or
-creation timestamp; a backend without either timestamp leaves the file untouched
-and reports its age as unknown. Naive timestamps use the Django default timezone.
+creation timestamp. If modification timestamps are explicitly unsupported
+(``NotImplementedError``), a creation timestamp alone can establish age. A failed
+modification lookup or missing modification value leaves the file untouched
+and reports its age as unknown, even if the creation timestamp is old.
+Naive timestamps use the Django default timezone.
 The setting must be a non-negative integer; ``0`` removes the age delay.
 The age boundary is inclusive. The command completes the storage listing
 before requesting sizes and only requests sizes for stale candidates.
@@ -552,9 +555,13 @@ became referenced are skipped. No database rows are deleted. This reduces the
 race window but cannot make a storage deletion atomic with a concurrent upload
 or database write; schedule cleanup when uploads are quiet and retain backups.
 
+Reserved refresh and legacy replacement staging keys are kept and reported
+by name. Inspect these keys before removing them manually.
+
 The command prints candidate paths, their total size in MB, and counts for
-``candidates``, ``deleted``, ``skipped-too-young`` (including unknown ages), and
-``skipped-newly-referenced``. The last count applies when using ``--delete``.
+``candidates``, ``deleted``, ``skipped-reserved``, ``skipped-too-young`` (including
+unknown ages), and ``skipped-newly-referenced``. The last count applies when using
+``--delete``.
 
 Reference Site
 ==============

@@ -113,7 +113,9 @@ To also delete them:
     python manage.py media_stale --delete
 
 ``media_stale`` only considers files at least 7 days old by default
-(``CAST_MEDIA_STALE_MIN_AGE_DAYS``). Unknown storage ages are skipped.
+(``CAST_MEDIA_STALE_MIN_AGE_DAYS``). Unknown storage ages are skipped, including
+files with failed modification-time lookups. Reserved media staging keys are
+reported and kept for manual inspection.
 Deletion re-checks age and database references for each file and reports skipped
 counts; omit ``--delete`` for the default dry run. See
 :doc:`/reference/management-commands` for details.
