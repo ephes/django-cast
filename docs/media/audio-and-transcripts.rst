@@ -1328,9 +1328,10 @@ Size derivation (``audio.save(duration=False, cache_file_sizes=True)``) reconcil
 every format with its current file and stores the file name alongside its size.
 Cleared, missing and unreadable formats lose their previous cached size; other
 metadata is preserved. A cached size is used without a storage request only when
-its file name matches the current field. Otherwise (for example a legacy size
-without a file identity) the size is read from storage, and a successful read of
-a stored (not pending) file is cached with the file name it was read from. A
+its file name matches the current field and the size is a nonnegative integer.
+Malformed size or file-name metadata and legacy sizes without a file identity
+trigger a storage lookup. A valid size read from a stored file is cached with
+the file name it was read from. A
 pending upload always reports its own byte count and is never cached. The cache
 write runs after the surrounding transaction commits, in its own short
 transaction on the database the audio was loaded from; an audio read from a

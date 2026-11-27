@@ -51,6 +51,9 @@ Security and hardening
 Fixes
 ~~~~~
 
+- RSS enclosure and player size lookups repair malformed cached audio sizes
+  and file-name metadata on the first successful storage lookup.
+
 - Chapter synchronization now writes separate chapter instances and leaves the
   caller's chapter marks unchanged. Retrying a batch after a rolled-back write
   no longer reuses rolled-back primary keys, which could overwrite an unrelated

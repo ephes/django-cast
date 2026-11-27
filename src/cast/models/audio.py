@@ -7,7 +7,7 @@ from copy import deepcopy
 from datetime import time, timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, localcontext
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Optional, Protocol, TypeGuard
 
 from django.contrib.auth import get_user_model
 from django.core.files.storage import Storage
@@ -397,6 +397,24 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         self.data = data
         return changed
 
+    @staticmethod
+    def _size_metadata(data: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
+        sizes, names = data.get("size"), data.get("size_file_names")
+        return sizes if isinstance(sizes, dict) else {}, names if isinstance(names, dict) else {}
+
+    @staticmethod
+    def _valid_file_size(size: object) -> TypeGuard[int]:
+        return isinstance(size, int) and not isinstance(size, bool) and size >= 0
+
+    @classmethod
+    def _cached_file_size(
+        cls, sizes: dict[str, Any], names: dict[str, Any], audio_format: str, file_name: str
+    ) -> int | None:
+        size = sizes.get(audio_format)
+        if names.get(audio_format) == file_name and cls._valid_file_size(size):
+            return size
+        return None
+
     def get_file_size(self, audio_format: str) -> int:
         """Return a size bound to the current file name, without I/O on a cache hit.
 
@@ -414,13 +432,15 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
                 return file_field.size
             except (OSError, ValueError):
                 return 0
-        cached_size = self.data.get("size", {}).get(audio_format)
-        cached_name = self.data.get("size_file_names", {}).get(audio_format)
-        if cached_size is not None and cached_name == file_field.name:
+        sizes, names = self._size_metadata(self.data)
+        cached_size = self._cached_file_size(sizes, names, audio_format, file_field.name)
+        if cached_size is not None:
             return cached_size
         try:
             size = file_field.size
         except (OSError, ValueError):
+            return 0
+        if not self._valid_file_size(size):
             return 0
         self._remember_file_size(audio_format, file_field.name, size)
         return size
@@ -439,8 +459,9 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
         metadata and sends no save signals. A skipped or failed write only costs
         the cache; the size is read from storage again next time.
         """
-        self.data.setdefault("size", {})[audio_format] = size
-        self.data.setdefault("size_file_names", {})[audio_format] = file_name
+        sizes, names = self._size_metadata(self.data)
+        self.data["size"] = {**sizes, audio_format: size}
+        self.data["size_file_names"] = {**names, audio_format: file_name}
         using, pk, revision = self._state.db, self.pk, self.modified
         if pk is None or using is None or revision is None:
             return
@@ -457,10 +478,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
                     stored = rows.select_for_update(skip_locked=True).values_list("data", flat=True).first()
                     if not isinstance(stored, dict):
                         return
-                    sizes, names = stored.get("size"), stored.get("size_file_names")
-                    sizes = sizes if isinstance(sizes, dict) else {}
-                    names = names if isinstance(names, dict) else {}
-                    if sizes.get(audio_format) is not None and names.get(audio_format) == file_name:
+                    sizes, names = self._size_metadata(stored)
+                    if self._cached_file_size(sizes, names, audio_format, file_name) is not None:
                         return
                     stored["size"] = {**sizes, audio_format: size}
                     stored["size_file_names"] = {**names, audio_format: file_name}

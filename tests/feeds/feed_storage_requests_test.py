@@ -88,3 +88,51 @@ def test_healed_feed_query_count_does_not_grow_with_episodes(
 
     assert two_episodes > 0
     assert three_episodes == two_episodes
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("sizes", "names"),
+    [
+        (None, {"m4a": "current"}),
+        ([], {"m4a": "current"}),
+        ({"m4a": 10}, None),
+        ({"m4a": 10}, []),
+        ({"m4a": "10"}, {"m4a": "current"}),
+        ({"m4a": True}, {"m4a": "current"}),
+        ({"m4a": -1}, {"m4a": "current"}),
+    ],
+)
+def test_feed_heals_invalid_size_metadata(
+    client, podcast, audio, mocker, django_capture_on_commit_callbacks, sizes, names
+):
+    (episode,) = _legacy_sized_episodes(podcast, audio, 1)
+    legacy = episode.podcast_audio
+    current_name = legacy.m4a.name
+    other_name = "cast_audio/other.mp3"
+    if isinstance(names, dict):
+        names = {"m4a": current_name, "mp3": other_name}
+    if isinstance(sizes, dict):
+        sizes = {**sizes, "mp3": 0}
+    Audio.objects.filter(pk=legacy.pk).update(data={"size": sizes, "size_file_names": names, "other": "kept"})
+    expected_size = audio.m4a.size
+    storage_size = mocker.spy(FileSystemStorage, "size")
+
+    cache.clear()
+    feed_url = reverse("cast:podcast_feed_rss", kwargs={"slug": podcast.slug, "audio_format": "m4a"})
+    with django_capture_on_commit_callbacks(execute=True) as callbacks:
+        response = client.get(feed_url)
+    assert response.status_code == 200
+    assert feedparser.parse(response.content).entries[0].enclosures[0].length == str(expected_size)
+    assert len(callbacks) == 1
+    legacy.refresh_from_db()
+    assert legacy.data == {
+        "size": {**(sizes or {}), "m4a": expected_size},
+        "size_file_names": {**(names or {}), "m4a": current_name},
+        "other": "kept",
+    }
+
+    player = client.get(reverse("cast:api:audio_podlove_detail", kwargs={"pk": legacy.pk}))
+    assert player.status_code == 200
+    assert player.json()["audio"][0]["size"] == str(expected_size)
+    assert storage_size.call_count == 1

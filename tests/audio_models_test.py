@@ -277,6 +277,13 @@ class TestAudioModel:
         audio.mp3 = None
         assert audio.get_file_size("mp3") == 0
 
+    def test_valid_zero_cached_size_skips_storage(self, audio, mocker):
+        audio.data = {"size": {"m4a": 0}, "size_file_names": {"m4a": audio.m4a.name}}
+        storage_size = mocker.spy(FileSystemStorage, "size")
+
+        assert audio.get_file_size("m4a") == 0
+        storage_size.assert_not_called()
+
     def test_unbound_cached_size_heals_after_one_storage_read(self, audio, mocker, django_capture_on_commit_callbacks):
         # Sizes cached before 0.2.68 carry no file name and used to cost one
         # storage request (an S3 HEAD) per feed item on every render.
@@ -875,3 +882,17 @@ def test_duration_skips_storage_without_http_url_or_local_path(audio, mocker, ur
 
     assert audio.duration == timedelta(seconds=1)
     probe.assert_called_once_with(local_file.path)
+
+
+@pytest.mark.django_db
+def test_invalid_storage_size_is_not_remembered(audio, mocker, django_capture_on_commit_callbacks):
+    Audio.objects.filter(pk=audio.pk).update(data={})
+    audio.refresh_from_db()
+    mocker.patch.object(audio.m4a.storage, "size", return_value=True)
+
+    with django_capture_on_commit_callbacks(execute=True) as callbacks:
+        assert audio.get_file_size("m4a") == 0
+
+    assert callbacks == []
+    audio.refresh_from_db()
+    assert audio.data == {}
