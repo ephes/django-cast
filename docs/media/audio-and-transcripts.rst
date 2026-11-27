@@ -286,6 +286,10 @@ responses are still served through django-cast views that authorize the related
 episode/audio and sanitize public speaker labels, but the stored artifact
 content itself is publishable for public episodes.
 
+The Podlove JSON and PodcastIndex endpoints require a JSON object at the top
+level of the stored Podlove or DOTe artifact. Arrays, null, and scalar values
+return HTTP 400. An empty object is served as an empty JSON object.
+
 Authorization serves an object only when it is anchored to a live episode/post
 whose Wagtail view restrictions the request satisfies (the *public path*), or
 when the requesting user has ``can_edit`` on a referencing page (the *editor

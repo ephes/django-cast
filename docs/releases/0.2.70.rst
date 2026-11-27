@@ -55,6 +55,8 @@ Fixes
   and file-name metadata on the first successful storage lookup.
 - Django admin refreshes the player duration when an audio file is replaced
   or cleared.
+- Podlove JSON and PodcastIndex transcript endpoints return HTTP 400 for
+  stored artifacts whose top-level JSON value is not an object.
 
 - Chapter synchronization now writes separate chapter instances and leaves the
   caller's chapter marks unchanged. Retrying a batch after a rolled-back write

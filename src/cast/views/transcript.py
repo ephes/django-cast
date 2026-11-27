@@ -881,6 +881,14 @@ def _read_transcript_artifact(field: FieldFile) -> str | None:
         return None
 
 
+def _read_transcript_json_object(field: FieldFile) -> dict[str, Any]:
+    with field.storage.open(field.name or "", "rb") as file:
+        data = parsing.read_json_artifact(file)
+    if not isinstance(data, dict):
+        raise parsing.TranscriptArtifactError("Expected a transcript JSON object.")
+    return data
+
+
 def _speaker_episode_for_request(request: HttpRequest, *, transcript: Transcript, granting_page: Any) -> Any | None:
     """Return the live ``episode_id`` anchor, or an editor's unpublished preview anchor."""
     return public_episode_from_request(request, transcript=transcript) or editor_speaker_preview_episode(
@@ -896,8 +904,7 @@ def podlove_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     )
     if transcript.podlove:
         try:
-            with transcript.podlove.storage.open(transcript.podlove.name or "", "rb") as file:
-                data = parsing.read_json_artifact(file)
+            data = _read_transcript_json_object(transcript.podlove)
         except OSError:
             return HttpResponse("Podlove file missing", status=404)
         except (json.JSONDecodeError, parsing.TranscriptArtifactError):
@@ -918,8 +925,7 @@ def podcastindex_transcript_json(request: HttpRequest, pk: int) -> HttpResponse:
     if not transcript.dote:
         return HttpResponse("podcastindex JSON file not available", status=404)
     try:
-        with transcript.dote.storage.open(transcript.dote.name or "", "rb") as file:
-            dote_data = parsing.read_json_artifact(file)
+        dote_data = _read_transcript_json_object(transcript.dote)
     except OSError:
         return HttpResponse("podcastindex JSON file missing", status=404)
     except (json.JSONDecodeError, parsing.TranscriptArtifactError):

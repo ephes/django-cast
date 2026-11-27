@@ -5,7 +5,8 @@ from django.core.files.base import ContentFile
 from django.urls import reverse
 
 from cast.devdata import create_transcript
-from cast.models import Contributor, EpisodeContributor, TranscriptSpeakerMapping
+from cast.models import Contributor, EpisodeContributor, Transcript, TranscriptSpeakerMapping
+from cast.views import transcript as transcript_views
 
 
 class TestGetTranscriptAsJson:
@@ -465,3 +466,33 @@ class TestGetTranscriptAsJson:
         assert [segment.get("speaker") for segment in data["transcripts"]] == [None, None]
         assert "Speaker 1" not in response.content.decode("utf-8")
         assert "Speaker 2" not in response.content.decode("utf-8")
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(("field", "route"), [("podlove", "podlove"), ("dote", "podcastindex")])
+@pytest.mark.parametrize("payload", [b"null", b"[]", b'["cue"]', b"42", b"{}"])
+@pytest.mark.parametrize("with_mapping", [False, True])
+def test_public_transcript_json_requires_an_object(client, episode, mocker, field, route, payload, with_mapping):
+    transcript = create_transcript(audio=episode.podcast_audio)
+    artifact = getattr(transcript, field)
+    artifact.save("legacy.json", ContentFile(payload), save=False)
+    Transcript.objects.filter(pk=transcript.pk).update(**{field: artifact.name})
+    if with_mapping:
+        TranscriptSpeakerMapping.objects.create(
+            transcript=transcript,
+            speaker_label="Speaker 1",
+            display_name="Guest Voice",
+            review_state=TranscriptSpeakerMapping.ReviewState.APPROVED,
+            source_artifact_fingerprint=transcript.transcript_artifact_fingerprint(),
+        )
+    resolve_speakers = mocker.spy(transcript_views, "_speaker_episode_for_request")
+
+    response = client.get(reverse(f"cast:{route}-transcript-json", kwargs={"pk": transcript.pk}))
+
+    if payload == b"{}":
+        assert response.status_code == 200
+        assert response.json() == {}
+    else:
+        assert response.status_code == 400
+        assert response.content == f"Invalid JSON format in {field} file".encode()
+        resolve_speakers.assert_not_called()
