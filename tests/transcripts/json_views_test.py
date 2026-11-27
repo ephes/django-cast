@@ -1,4 +1,5 @@
 import json
+import sys
 
 import pytest
 from django.core.files.base import ContentFile
@@ -470,9 +471,21 @@ class TestGetTranscriptAsJson:
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(("field", "route"), [("podlove", "podlove"), ("dote", "podcastindex")])
-@pytest.mark.parametrize("payload", [b"null", b"[]", b'["cue"]', b"42", b"9" * 4301, b"{}"])
+@pytest.mark.parametrize(
+    "payload", [b"null", b"[]", b'["cue"]', b"42", b"9" * 4301, b'{"start": ' + b"9" * 4301 + b"}", b"{}"]
+)
 @pytest.mark.parametrize("with_mapping", [False, True])
 def test_public_transcript_json_requires_an_object(client, episode, mocker, field, route, payload, with_mapping):
+    # Pin Python's default digit limit so oversized integers fail while parsing.
+    previous_limit = sys.get_int_max_str_digits()
+    sys.set_int_max_str_digits(4300)
+    try:
+        _assert_public_transcript_json_requires_an_object(client, episode, mocker, field, route, payload, with_mapping)
+    finally:
+        sys.set_int_max_str_digits(previous_limit)
+
+
+def _assert_public_transcript_json_requires_an_object(client, episode, mocker, field, route, payload, with_mapping):
     transcript = create_transcript(audio=episode.podcast_audio)
     artifact = getattr(transcript, field)
     artifact.save("legacy.json", ContentFile(payload), save=False)
