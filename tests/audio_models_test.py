@@ -247,6 +247,16 @@ class TestAudioModel:
         assert audio.refresh_file_size_cache(using="default") is False
         assert Audio.objects.get(pk=audio.pk).modified == modified
 
+    def test_refresh_file_size_cache_repairs_null_size_maps(self, audio):
+        Audio.objects.filter(pk=audio.pk).update(data={"size": None, "size_file_names": None, "keep": 1})
+
+        assert audio.refresh_file_size_cache() is True
+
+        audio.refresh_from_db()
+        assert audio.data["keep"] == 1
+        assert audio.data["size_file_names"] == {"m4a": audio.m4a.name}
+        assert audio.data["size"] == {"m4a": audio.m4a.size}
+
     def test_refresh_file_size_cache_replaces_non_object_metadata(self, audio):
         Audio.objects.filter(pk=audio.pk).update(data=["legacy"])
 

@@ -381,8 +381,8 @@ class Audio(CollectionMember, index.Indexed, TimeStampedModel):  # type: ignore[
             current = rows.values(*self.audio_formats, "data").get()
             stored_data = current["data"] if isinstance(current["data"], dict) else {}
             data = deepcopy(stored_data)
-            sizes = data.setdefault("size", {})
-            names = data.setdefault("size_file_names", {})
+            sizes, names = (dict(metadata) for metadata in self._size_metadata(data))
+            data["size"], data["size_file_names"] = sizes, names
             for audio_format, (name, size) in probes.items():
                 if (current[audio_format] or "") != name:
                     continue  # replaced meanwhile; the replacing save owns that size

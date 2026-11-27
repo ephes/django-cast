@@ -470,7 +470,7 @@ class TestGetTranscriptAsJson:
 
 @pytest.mark.django_db
 @pytest.mark.parametrize(("field", "route"), [("podlove", "podlove"), ("dote", "podcastindex")])
-@pytest.mark.parametrize("payload", [b"null", b"[]", b'["cue"]', b"42", b"{}"])
+@pytest.mark.parametrize("payload", [b"null", b"[]", b'["cue"]', b"42", b"9" * 4301, b"{}"])
 @pytest.mark.parametrize("with_mapping", [False, True])
 def test_public_transcript_json_requires_an_object(client, episode, mocker, field, route, payload, with_mapping):
     transcript = create_transcript(audio=episode.podcast_audio)

@@ -52,11 +52,14 @@ Fixes
 ~~~~~
 
 - RSS enclosure and player size lookups repair malformed cached audio sizes
-  and file-name metadata on the first successful storage lookup.
+  and file-name metadata on the first successful storage lookup. The Django
+  admin "cache file sizes" action also repairs null size maps instead of
+  failing.
 - Django admin refreshes the player duration when an audio file is replaced
   or cleared.
 - Podlove JSON and PodcastIndex transcript endpoints return HTTP 400 for
-  stored artifacts whose top-level JSON value is not an object.
+  stored artifacts whose top-level JSON value is not an object, including
+  integers above Python's digit limit.
 - The public WebVTT endpoint rejects files above 10 MiB and invalid UTF-8
   before rewriting speaker labels.
 

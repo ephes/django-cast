@@ -52,6 +52,11 @@ def read_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
         raise TranscriptArtifactError(
             "Invalid transcript JSON encoding or nesting. Replace the artifact and reload."
         ) from error
+    except json.JSONDecodeError:
+        raise
+    except ValueError as error:
+        # For example an integer above Python's digit limit.
+        raise TranscriptArtifactError("Invalid transcript JSON value. Replace the artifact and reload.") from error
 
 
 def load_json_artifact(file: Any, *, max_bytes: int | None = None) -> Any:
