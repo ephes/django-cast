@@ -1321,6 +1321,15 @@ supported; invalid timestamps return no match and cannot select a correction
 destination. A cue whose timing a player accepts but whose hour field exceeds that
 range is still sanitized and has its speaker labels listed.
 
+Audio duration in Django admin
+------------------------------
+
+Replacing or clearing an audio file in Django admin refreshes duration from
+the available formats using the same derivation as the Wagtail audio editor.
+Clearing the last format clears the stored duration. A metadata-only edit
+preserves an existing duration. If the duration probe fails, the database
+changes to the audio are rolled back.
+
 Audio size metadata
 -------------------
 

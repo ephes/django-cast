@@ -119,6 +119,8 @@ class AudioAdmin(AdminUserMixin, ModelAdmin):
     actions = [cache_file_sizes]
 
     def save_model(self, request: "HttpRequest", obj: Audio, form: "Form", change: bool) -> None:
+        if change and set(form.changed_data).intersection(Audio.audio_formats):
+            obj.duration = None
         save_audio_with_derivations(obj)
 
 

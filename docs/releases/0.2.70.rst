@@ -53,6 +53,8 @@ Fixes
 
 - RSS enclosure and player size lookups repair malformed cached audio sizes
   and file-name metadata on the first successful storage lookup.
+- Django admin refreshes the player duration when an audio file is replaced
+  or cleared.
 
 - Chapter synchronization now writes separate chapter instances and leaves the
   caller's chapter marks unchanged. Retrying a batch after a rolled-back write

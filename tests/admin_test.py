@@ -1,9 +1,11 @@
+from datetime import timedelta
+
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AnonymousUser, Permission
 from django.contrib.contenttypes.models import ContentType
 from django.db import connection
-from django.test import RequestFactory
+from django.test import RequestFactory, override_settings
 from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
@@ -16,7 +18,9 @@ from cast.admin import (
     retrain,
 )
 from cast.models import Audio, Contributor, ContributorLink, EpisodeContributor, SpamFilter, Video
+from cast.models.audio import AudioDurationProbeError
 from cast.wagtail_hooks import ContributorMenuItem, register_contributor_menu_item
+from tests.audio_views_test import minimal_mp3_upload
 
 
 def test_spamfilter_model_admin():
@@ -147,6 +151,54 @@ def test_audio_model_admin_uses_derivation_service(mocker, audio):
     audio_admin.save_model(None, audio, None, False)
 
     save_audio.assert_called_once_with(audio)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("action", ["replace", "clear", "rename", "failed-probe"])
+def test_audio_admin_change_refreshes_player_duration(admin_client, episode, mocker, action):
+    audio = episode.podcast_audio
+    audio.m4a = None
+    audio.mp3 = minimal_mp3_upload("original.mp3")
+    audio.duration = timedelta(seconds=7)
+    audio.save()
+    original = audio.mp3.name
+    original_title = audio.title
+    probe = mocker.patch.object(Audio, "_get_audio_duration", return_value=timedelta(seconds=12))
+    form_data = {"title": "Edited audio", "user": audio.user_id, "data": "{}"}
+    if action in {"replace", "failed-probe"}:
+        form_data["mp3"] = minimal_mp3_upload("replacement.mp3")
+    elif action == "clear":
+        form_data["mp3-clear"] = "on"
+
+    with override_settings(ROOT_URLCONF="tests.spamfilter_admin_urls"):
+        url = reverse("admin:cast_audio_change", args=(audio.pk,))
+        if action == "failed-probe":
+            probe.side_effect = OSError("probe failed")
+            with pytest.raises(AudioDurationProbeError):
+                admin_client.post(url, form_data)
+        else:
+            assert admin_client.post(url, form_data).status_code == 302
+
+    audio.refresh_from_db()
+    if action == "replace":
+        assert audio.mp3.name != original
+        probe.assert_called_once_with(audio.mp3.path)
+    elif action == "clear":
+        assert not audio.mp3
+        probe.assert_not_called()
+    else:
+        assert audio.mp3.name == original
+        if action == "rename":
+            assert audio.title == "Edited audio"
+            probe.assert_not_called()
+        else:
+            assert audio.title == original_title
+            probe.assert_called_once()
+
+    player_url = reverse("cast:api:audio_podlove_detail", kwargs={"pk": audio.pk})
+    response = admin_client.get(player_url)
+    assert response.status_code == 200
+    assert response.json()["duration"] == {"replace": "0:00:12", "clear": ""}.get(action, "0:00:07")
 
 
 def test_admin_user_mixin():
