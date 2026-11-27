@@ -872,15 +872,6 @@ def chooser_upload(request: AuthenticatedHttpRequest) -> HttpResponse:
     return _views.chooser_upload(request)
 
 
-def _read_transcript_artifact(field: FieldFile) -> str | None:
-    """Return the artifact content or None if the field has a name but no file in storage."""
-    try:
-        with field.open("r") as file:
-            return cast(str, file.read())
-    except OSError:
-        return None
-
-
 def _read_transcript_json_object(field: FieldFile) -> dict[str, Any]:
     with field.storage.open(field.name or "", "rb") as file:
         data = parsing.read_json_artifact(file)
@@ -952,9 +943,19 @@ def webvtt_transcript(request: HttpRequest, pk: int) -> HttpResponse:
         request, transcript=transcript, explicit_anchor_id=request.GET.get("episode_id")
     )
     if transcript.vtt:
-        content = _read_transcript_artifact(transcript.vtt)
-        if content is None:
+        try:
+            with transcript.vtt.storage.open(transcript.vtt.name or "", "rb") as file:
+                content = parsing.read_bounded_artifact(
+                    file,
+                    max_bytes=parsing.MAX_EDITOR_WEBVTT_BYTES,
+                    limit_message="Stored WebVTT exceeds 10 MiB.",
+                ).decode("utf-8")
+        except OSError:
             return HttpResponse("WebVTT file missing", status=404)
+        except (UnicodeDecodeError, parsing.TranscriptArtifactError):
+            return HttpResponse("Invalid WebVTT file", status=400)
+        # Keep the universal newlines of the former text-mode read.
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
         episode = _speaker_episode_for_request(request, transcript=transcript, granting_page=granting_page)
         content = apply_public_speaker_mapping_to_webvtt_content(content, transcript, episode=episode)
         content = sanitize_webvtt_content(

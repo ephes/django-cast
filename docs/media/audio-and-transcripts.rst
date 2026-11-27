@@ -289,6 +289,9 @@ content itself is publishable for public episodes.
 The Podlove JSON and PodcastIndex endpoints require a JSON object at the top
 level of the stored Podlove or DOTe artifact. Arrays, null, and scalar values
 return HTTP 400. An empty object is served as an empty JSON object.
+The WebVTT endpoint accepts UTF-8 files up to and including 10 MiB. Larger files
+and invalid UTF-8 return HTTP 400 before speaker labels are processed. A missing
+WebVTT file returns HTTP 404.
 
 Authorization serves an object only when it is anchored to a live episode/post
 whose Wagtail view restrictions the request satisfies (the *public path*), or

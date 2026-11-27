@@ -1,4 +1,5 @@
 import json
+from io import BytesIO, TextIOWrapper
 
 import pytest
 from django.core.files.base import ContentFile
@@ -6,6 +7,8 @@ from django.urls import reverse
 
 from cast.devdata import create_transcript
 from cast.models import Contributor, EpisodeContributor
+from cast.transcripts import parsing
+from cast.views import transcript as transcript_views
 
 
 class TestGetTranscriptAsPodcastIndexJson:
@@ -258,3 +261,49 @@ class TestGetTranscriptAsWebVtt:
         assert "Unmapped speaker" in content
         assert "Speaker 2" not in content
         assert "Voice span speaker" in content
+
+    @pytest.mark.parametrize("case", ["at-limit", "oversized", "invalid-utf8"])
+    def test_public_webvtt_admission_before_speaker_rewriting(self, client, episode, mocker, case):
+        cue = "WEBVTT\r\n\r\n00:00:00.620 --> 00:00:05.160\rGrüße!\r\n"
+        encoded = cue.encode("utf-8")
+        limit = len(encoded)
+        mocker.patch.object(parsing, "MAX_EDITOR_WEBVTT_BYTES", limit)
+        payload = {"at-limit": encoded, "oversized": encoded + b"x", "invalid-utf8": b"WEBVTT\n\n\xff"}[case]
+        transcript = create_transcript(audio=episode.podcast_audio, vtt="WEBVTT\n")
+        reads = []
+
+        class ShortReads(BytesIO):
+            def read(self, size):
+                chunk = super().read(min(size, 7))
+                reads.append((size, len(chunk)))
+                return chunk
+
+        def open_artifact(name, mode):
+            assert name == transcript.vtt.name
+            if mode == "r":
+                return TextIOWrapper(BytesIO(payload), encoding="utf-8")
+            # Only the admission read is under test. The speaker-label code
+            # can reopen a valid artifact after admission.
+            return BytesIO(payload) if reads else ShortReads(payload)
+
+        storage_open = mocker.patch.object(transcript.vtt.storage, "open", side_effect=open_artifact)
+        rewrite = mocker.spy(transcript_views, "apply_public_speaker_mapping_to_webvtt_content")
+
+        response = client.get(reverse("cast:webvtt-transcript", kwargs={"pk": transcript.pk}))
+
+        if case == "at-limit":
+            assert response.status_code == 200
+            assert response.content == cue.replace("\r\n", "\n").replace("\r", "\n").encode("utf-8")
+            rewrite.assert_called_once()
+            assert storage_open.call_args_list[0].args == (transcript.vtt.name, "rb")
+        else:
+            assert response.status_code == 400
+            assert response.content == b"Invalid WebVTT file"
+            rewrite.assert_not_called()
+            storage_open.assert_called_once_with(transcript.vtt.name, "rb")
+
+        remaining = limit + 1
+        for requested, returned in reads:
+            assert 0 < requested <= remaining
+            remaining -= returned
+        assert sum(returned for _, returned in reads) == len(payload)
